@@ -1,0 +1,202 @@
+@using MagicAssistant.Core.Services.CardSearch
+@inject ICardSearchService CardSearch
+
+<div class="tree-view-container">
+    @if (_loading)
+    {
+        <div class="tree-loading">Loading cards...</div>
+    }
+    else if (_error != null)
+    {
+        <div class="tree-error">
+            <span>@_error</span>
+            <button @onclick="RetryLoad">Retry</button>
+        </div>
+    }
+    else if (_cards == null || !_cards.Any())
+    {
+        <div class="tree-empty">No cards to display.</div>
+    }
+    else
+    {
+        @* ── Group selector ── *@
+        <div class="tree-toolbar">
+            <span class="toolbar-label">Group by:</span>
+            <button class="group-btn @(_groupBy == "color" ? "active" : "")"
+                    @onclick="OnColorGroup">Color</button>
+            <button class="group-btn @(_groupBy == "type" ? "active" : "")"
+                    @onclick="OnTypeGroup">Type</button>
+            <button class="group-btn @(_groupBy == "set" ? "active" : "")"
+                    @onclick="OnSetGroup">Set</button>
+        </div>
+
+        @* ── Tree groups ── *@
+        <div class="tree-groups">
+            @foreach (var group in _groups)
+            {
+                <div class="tree-group">
+                    <div class="group-header" @onclick="() => ToggleGroup(group.Key)">
+                        <span class="expand-icon">@(_expandedGroups.Contains(group.Key) ? "▾" : "▸")</span>
+                        <span class="group-color-dot" style="background:@GetColorHex(group.Key);"></span>
+                        <span class="group-name">@group.Key</span>
+                        <span class="group-count">(@group.Value.Count)</span>
+                    </div>
+
+                    @if (_expandedGroups.Contains(group.Key))
+                    {
+                        <div class="group-cards">
+                            @foreach (var card in group.Value)
+                            {
+                                <div class="tree-card @(!_selectedCardId.HasValue || _selectedCardId.Value == card.Id ? "" : "selected")"
+                                     @onclick="() => OnCardClicked.InvokeAsync(card)">
+                                    <span class="card-name">@card.Name</span>
+                                    <span class="card-cmc">@card.CmcText</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ── Summary ── *@
+        <div class="tree-summary">
+            <span>@_cards.Count cards in @_groups.Count groups</span>
+        </div>
+    }
+</div>
+
+@code {
+    private ICollection<MagicCard>? _cards;
+    private Dictionary<string, List<MagicCard>> _groups = new();
+    private HashSet<string> _expandedGroups = new();
+    private string _groupBy = "color";
+    private bool _loading;
+    private string? _error;
+    private Guid? _selectedCardId;
+
+    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+    [Parameter] public Guid? SelectedCardId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCards();
+    }
+
+    protected override void OnParametersSet()
+    {
+        _selectedCardId = SelectedCardId;
+    }
+
+    private async Task LoadCards()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var allCards = await CardSearch.GetAllAsync(500);
+            _cards = allCards;
+            ApplyGrouping();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyGrouping()
+    {
+        if (_cards == null || !_cards.Any())
+        {
+            _groups = new Dictionary<string, List<MagicCard>>();
+            return;
+        }
+
+        var dict = new Dictionary<string, List<MagicCard>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var card in _cards)
+        {
+            string key = _groupBy switch
+            {
+                "color" => card.ColorType ?? "Colorless",
+                "type"  => GetPrimaryType(card.Type),
+                "set"   => card.SetCode ?? "Unknown",
+                _       => "Uncategorized"
+            };
+
+            if (!dict.TryGetValue(key, out var list))
+            {
+                list = new List<MagicCard>();
+                dict[key] = list;
+            }
+            list.Add(card);
+        }
+
+        // Sort groups by count descending
+        _groups = dict.OrderByDescending(g => g.Value.Count)
+                      .ToDictionary(g => g.Key, g => g.Value, StringComparer.OrdinalIgnoreCase);
+
+        // Expand all groups initially
+        _expandedGroups = new HashSet<string>(_groups.Keys);
+    }
+
+    private static string GetPrimaryType(string? typeLine)
+    {
+        if (string.IsNullOrEmpty(typeLine)) return "Unknown";
+        
+        // Extract the primary type (first word before " - " or ":")
+        var separatorPos = Math.Max(
+            typeLine.IndexOf(" - ", StringComparison.OrdinalIgnoreCase),
+            typeLine.IndexOf(" :", StringComparison.OrdinalIgnoreCase)
+        );
+        
+        if (separatorPos > 0)
+            return typeLine[..separatorPos].Trim();
+        return typeLine.Trim();
+    }
+
+    private void SetGroupBy(string groupBy)
+    {
+        _groupBy = groupBy;
+        ApplyGrouping();
+        StateHasChanged();
+    }
+
+    // Explicit parameterless overloads for Razor @onclick bindings
+    private void OnColorGroup() => SetGroupBy("color");
+    private void OnTypeGroup() => SetGroupBy("type");
+    private void OnSetGroup() => SetGroupBy("set");
+
+    private void ToggleGroup(string key)
+    {
+        if (_expandedGroups.Contains(key))
+            _expandedGroups.Remove(key);
+        else
+            _expandedGroups.Add(key);
+        StateHasChanged();
+    }
+
+    private async Task RetryLoad()
+    {
+        await LoadCards();
+        StateHasChanged();
+    }
+
+    private static string GetColorHex(string colorType)
+    {
+        return colorType.ToLowerInvariant() switch
+        {
+            "w" or "monow" => "#ffffff",
+            "u" or "monou" => "#5bc0de",
+            "b" or "monob" => "#888",
+            "r" or "monor" => "#e74c3c",
+            "g" or "monog" => "#2ecc71",
+            "colorless" or "c" => "#666",
+            _ => "#f0ad4e"  // multi-color default
+        };
+    }
+}

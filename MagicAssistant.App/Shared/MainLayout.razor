@@ -1,0 +1,255 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject KbRefreshService KbRefresh
+@using MagicAssistant.App.Services
+@using MagicAssistant.Data.Model.NavigatorNodes
+
+<div class="app-layout">
+    <div class="header">
+        <span class="title">⚔ Magic Assistant</span>
+        <span class="subtitle">— Card Organizer</span>
+    </div>
+
+    @* ── Dialogs (render only when visible) *@
+    @if (_showSyncDialog) { <SyncKnowledgeBase IsOpen="@_showSyncDialog" IsOpenChanged="@(v => _showSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
+    @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
+    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
+    @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
+    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_selectedDeckId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
+    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_selectedDeckId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
+
+    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
+    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_selectedDeckId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
+    @if (_showLocationPicker) { <LocationPickerDialog IsOpen="@_showLocationPicker" OnSelected="OnLocationSelected" IsOpenChanged="@(v => _showLocationPicker = v)" /> }
+    @if (_showDeckFilterDialog) { <DeckFilterDialog IsOpen="@_showDeckFilterDialog" OnFilterApplied="OnDeckFilterApplied" IsOpenChanged="@(v => _showDeckFilterDialog = v)" /> }
+    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_selectedDeckId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
+    
+
+    @* ── Main Grid ── *@
+    <div class="main-grid">
+        <div class="panel-left">
+            <DecksNavigator
+                OnDeckSelected="OnDeckSelected"
+                OnOpenProperties="@(async n => await OnOpenPropertiesFromNav(n))"
+                OnShowAllCards="OnShowKB" />
+            @* TODO: Fix NullReferenceException in child components *@
+        </div>
+
+        <div class="panel-center">
+            <Toolbar
+                OnImportDeck="@(e => _showImportDialog = true)"
+                OnLegacyImportDeck="@(e => _showLegacyImportDialog = true)"
+                OnExportDeck="@(e => _showExportDialog = true)"
+                OnSyncKB="@(e => _showSyncDialog = true)"
+                ViewMode="@_viewMode"
+                OnViewModeChanged="@(vm => _viewMode = vm)" />
+
+            <SearchControl
+                OnSearchCompleted="OnGlobalSearchCompleted"
+                OnResultCountChanged="OnGlobalSearchResultCount"
+                InDeckView="false" />
+
+            <div style="height:4px"></div>
+
+            @if (_selectedDeckId != null)
+            {
+                <TabBar ActiveTab="@ActiveTab" OnTabSelected="@(tab => ActiveTab = tab)" />
+            }
+
+            <div class="content-area" @key="_selectedDeckId">
+                @if (_selectedDeckId != null)
+                {
+                    @RenderDeckContent()
+                }
+                else
+                {
+                    @RenderKBContent()
+                }
+            </div>
+
+            <div class="status-bar">
+                <span>@_statusText</span>
+            </div>
+        </div>
+
+        <div class="panel-right">
+            <CardDescriptionView CardId="@_selectedCardId" ShowBack="@_selectedCardShowBack" />
+            <hr class="divider" />
+            <PrintingsView CardId="@_selectedCardId" OnPrintingSelected="@(c => OnCardSelected(c.Id))" OnPrintingSideChanged="OnCardSideChanged" />
+            <hr class="divider" />
+            <InstancesView CardId="@_selectedCardId" OnDeckSelected="OnDeckSelectedFromInstance" />
+        </div>
+    </div>
+</div>
+
+@code {
+    // ── Navigation State ──
+    private string _viewMode = "list";
+    private int? _selectedDeckId;
+    private Guid? _selectedCardId;
+    private bool? _selectedCardShowBack;
+    private string ActiveTab = "cards";
+    private string _statusText = "Ready";
+
+    // ── Dialog Visibility (state-based pattern) ──
+    private bool _showSyncDialog;
+    private bool _showSelectedSetSyncDialog;
+    private string _selectedSetForSync = string.Empty;
+    private int _kbRefreshTrigger;
+    private bool _showImportDialog;
+    private bool _showLegacyImportDialog;
+    private bool _showExportDialog;
+    private bool _showEditCardDialog;
+
+    private bool _showFilterDialog;
+    private bool _showSplitDialog;
+    private bool _showLocationPicker;
+    private bool _showDeckFilterDialog;
+    private bool _showEditDeckPropertiesDialog;
+
+    // ── Dialog Data ──
+    private MagicCardPhysical? _editCardTarget;
+
+    private MagicCardPhysical? _splitCardTarget;
+
+    /// <summary>Central filter/sort state shared between KBCardsListControl and CardFilterDialog.</summary>
+    private readonly FilterViewModel _filterViewModel = new();
+
+    // ── Navigation ──
+    private void OnCardSelected(Guid? cardId) => _selectedCardId = cardId;
+    private void OnCardSelectedNonNullable(Guid cardId) => _selectedCardId = cardId;
+    private void OnCardSideChanged((Guid cardId, bool showBack) e)
+    {
+        if (e.cardId == _selectedCardId)
+        {
+            _selectedCardShowBack = e.showBack;
+        }
+    }
+    private void OnDeckSelected(int deckId)
+    {
+        _selectedDeckId = deckId;
+        ActiveTab = "cards";
+        InvokeAsync(StateHasChanged);
+    }
+    private void OnDeckSelectedFromInstance(int deckId) => OnDeckSelected(deckId);
+
+    /// <summary>Switch center panel to Knowledge Base view.</summary>
+    private void OnShowKB()
+    {
+        _selectedDeckId = null;
+        _selectedCardId = null;
+    }
+
+    private async Task OnOpenPropertiesFromNav(NavigatorNodeBase node)
+    {
+        _selectedDeckId = node.Id;
+        _showEditDeckPropertiesDialog = true;
+    }
+
+    // ── Toolbar Actions ──
+    // ── Dialog Openers ──
+    private void OpenEditCard(MagicCardPhysical card) { _editCardTarget = card; _showEditCardDialog = true; }
+
+    private void OpenSplit(MagicCardPhysical card) { _splitCardTarget = card; _showSplitDialog = true; }
+
+    // ── Lifecycle (Microsoft Learn: subscribe in OnInitialized, unsubscribe in Dispose) ──
+    protected override void OnInitialized()
+    {
+        KbRefresh.Subscribe(OnKbRefresh);
+    }
+
+    /// <summary>
+    /// Canonical Blazor pattern (Microsoft Learn):
+    /// "In the event a component must be updated based on an external event,
+    /// use InvokeAsync to dispatch code execution to Blazor's synchronization context."
+    /// The InvokeAsync is called HERE (in the subscriber), not in the background task.
+    /// </summary>
+    private async Task OnKbRefresh()
+    {
+        await InvokeAsync(() =>
+        {
+            _statusText = "Sync completed";
+            _kbRefreshTrigger++;  // Trigger KBCardsListControl to reload
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        KbRefresh.Unsubscribe(OnKbRefresh);
+    }
+
+    // ── Dialog Callbacks ──
+    private async Task OnSyncKBCompleted()
+    {
+        await InvokeAsync(() =>
+        {
+            _statusText = "Sync completed";
+            _kbRefreshTrigger++;
+            StateHasChanged();
+        });
+    }
+    private void OnOpenSyncDialog(string setCode)
+    {
+        _selectedSetForSync = setCode;
+        _showSelectedSetSyncDialog = true;
+    }
+    private void OnImportCompleted() { _statusText = "Import completed"; }
+    private void OnLegacyImportCompleted() { _statusText = "Legacy import completed"; }
+    private void OnExportCompleted() { _statusText = "Export completed"; }
+    private void OnEditCardSaved(MagicCardPhysical? card) { _statusText = "Card updated"; StateHasChanged(); }
+
+
+    private void OnSplitDone() { _statusText = "Card split"; StateHasChanged(); }
+    private void OnLocationSelected(LocationResult result) => _statusText = $"Location: {result.DeckId}";
+    private void OnDeckFilterApplied(DeckFilterResult result) => _statusText = "Deck filter applied";
+    private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
+    // ── Global Search ──
+    private void OnGlobalSearchCompleted(string query) => _statusText = $"Search: \"{query}\"";
+    private void OnGlobalSearchResultCount(int count) => _statusText = $"{count} result(s) found";
+
+    // ── Content Rendering (RenderFragment with Razor syntax — per Microsoft docs) ──
+    private RenderFragment RenderDeckContent() => @<div>
+        @switch (ActiveTab)
+        {
+            case "curve": <ManaCurvePage DeckId="@_selectedDeckId!.Value" /> break;
+            case "colors": <SpellColourPage DeckId="@_selectedDeckId!.Value" /> break;
+            case "creatures": <CreaturePage DeckId="@_selectedDeckId!.Value" /> break;
+            case "types": <TypePage DeckId="@_selectedDeckId!.Value" /> break;
+            case "abilities": <AbilityPage DeckId="@_selectedDeckId!.Value" /> break;
+            case "info": <InfoPage DeckId="@_selectedDeckId!.Value" /> break;
+            case "legality": <DeckLegalityPage DeckId="@_selectedDeckId!.Value" /> break;
+            case "collector": <CollectorView /> break;
+            default:
+                <DeckView DeckId="@_selectedDeckId!.Value"
+                          OnCardSelected="OnCardSelectedNonNullable"
+                          OnEditCard="OpenEditCard"
+                          OnSplitCard="OpenSplit"
+                          OnOpenDeckFilter="@(() => _showDeckFilterDialog = true)"
+                          OnOpenLocationPicker="@(() => _showLocationPicker = true)" />
+                break;
+        }
+    </div>;
+
+    private RenderFragment RenderKBContent()
+    {
+        return @<div>
+            @switch (_viewMode)
+            {
+                case "gallery":
+                    <KBCardsGalleryControl OnCardClicked="@(c => OnCardSelected(c.Id))" OnCardSideChanged="OnCardSideChanged" SelectedCardId="@_selectedCardId" />
+                    break;
+                case "tree":
+                    <KBCardsTreeView OnCardClicked="@(c => OnCardSelected(c.Id))" SelectedCardId="@_selectedCardId" />
+                    break;
+                default:
+                    <KBCardsListControl FilterViewModel="@_filterViewModel"
+                                        OnCardSelected="OnCardSelected"
+                                        OnOpenFilter="@(() => _showFilterDialog = true)"
+                                        OnOpenSync="OnOpenSyncDialog"
+                                        RefreshTrigger="@_kbRefreshTrigger" />
+                    break;
+            }
+        </div>;
+    }
+}

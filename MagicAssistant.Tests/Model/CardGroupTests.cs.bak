@@ -1,0 +1,332 @@
+using MagicAssistant.Data.Model;
+
+namespace MagicAssistant.Tests.Model;
+
+[TestFixture]
+public class CardGroupTests
+{
+    #region Basic Construction & Children Management
+
+    [Test]
+    public void Constructor_SetsNameAndGroupByField()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.Name, Is.EqualTo("Rarity"));
+        Assert.That(group.GroupByField, Is.EqualTo(MagicCardField.Rarity));
+    }
+
+    [Test]
+    public void Constructor_UsesCustomLabelWhenProvided()
+    {
+        var group = new CardGroup(MagicCardField.Rarity, "My Custom Label");
+
+        Assert.That(group.Name, Is.EqualTo("My Custom Label"));
+        Assert.That(group.Label, Is.EqualTo("My Custom Label"));
+    }
+
+    [Test]
+    public void Children_CanBeAdded()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        var card1 = new MagicCard { Name = "Card 1" };
+        var card2 = new MagicCard { Name = "Card 2" };
+
+        group.Add(card1);
+        group.Add(card2);
+
+        Assert.That(group.Children.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AddRange_AddsMultipleCards()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        var cards = new List<IMagicCard>
+        {
+            new MagicCard { Name = "Card 1" },
+            new MagicCard { Name = "Card 2" },
+            new MagicCard { Name = "Card 3" }
+        };
+
+        group.AddRange(cards);
+
+        Assert.That(group.Children.Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Remove_RemovesExistingCard()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        var card1 = new MagicCard { Id = Guid.NewGuid(), Name = "Card 1" };
+        var card2 = new MagicCard { Id = Guid.NewGuid(), Name = "Card 2" };
+
+        group.Add(card1);
+        group.Add(card2);
+
+        var result = group.Remove(card1);
+
+        Assert.That(result, Is.True);
+        Assert.That(group.Children.Count, Is.EqualTo(1));
+        Assert.That(group.Children, Does.Not.Contain(card1));
+    }
+
+    [Test]
+    public void Remove_ReturnsFalseForNonExistingCard()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        var card1 = new MagicCard {Id = Guid.NewGuid(), Name = "Card 1" };
+        var unknownCard = new MagicCard {Id = Guid.NewGuid(), Name = "Unknown" };
+
+        group.Add(card1);
+
+        var result = group.Remove(unknownCard);
+
+        Assert.That(result, Is.False);
+        Assert.That(group.Children.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Children_ReturnsReadOnlyList()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        var card = new MagicCard { Name = "Card 1" };
+        group.Add(card);
+
+        var children = group.Children;
+
+        Assert.Throws<NotSupportedException>(() =>
+        {
+            ((IList<IMagicCard>)children).Clear();
+        });
+    }
+
+    #endregion
+
+    #region ICard.Count semantics — BUG: returns child count instead of total copies
+
+    /// <summary>
+    /// ICard.Count is supposed to represent the number of copies.
+    /// For MagicCardPhysical, Count = physical copies (1-4).
+    /// For CardGroup, Count should be the SUM of all children's copies,
+    /// NOT the number of distinct children.
+    /// 
+    /// BUG: CardGroup.Count returns _children.Count (number of children),
+    /// which is semantically wrong. It should return Sum(c => c.Count) or
+    /// delegate to GetOwnTotal() for consistency.
+    /// </summary>
+    [Test]
+    public void Count_ShouldSumAllChildrenCopies_NotReturnChildCount()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        var physical1 = new MagicCardPhysical(new MagicCard { Name = "Card 1" }) { Count = 3 };
+        var physical2 = new MagicCardPhysical(new MagicCard { Name = "Card 2" }) { Count = 4 };
+
+        group.Add(physical1);
+        group.Add(physical2);
+
+        // Expected: 7 (3 + 4 copies total)
+        // Actual bug: returns 2 (number of children)
+        Assert.That(group.Count, Is.EqualTo(7),
+            $"BUG IN CardGroup.Count: Expected 7 (total copies = 3+4), got {group.Count} (child count). " +
+            "CardGroup.Count returns _children.Count instead of Sum(c => c.Count). " +
+            "This breaks ICard.Count semantics — Count should mean 'total copies', not 'number of unique children'.");
+    }
+
+    [Test]
+    public void Count_ShouldBeZeroForEmptyGroup()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.Count, Is.EqualTo(0));
+    }
+
+    #endregion
+
+    #region UniqueCount — BUG: always returns 1 instead of actual unique card count
+
+    /// <summary>
+    /// UniqueCount should represent the number of unique/distinct cards in the group.
+    /// For a CardGroup with 3 children, UniqueCount should be 3.
+    /// 
+    /// BUG: CardGroup.UniqueCount is hardcoded to return 1 regardless of how many
+    /// children are in the group. This makes it useless for any grouping operation.
+    /// </summary>
+    [Test]
+    public void UniqueCount_ShouldReturnActualNumberOfUniqueChildren()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        group.Add(new MagicCard { Name = "Card 1" });
+        group.Add(new MagicCard { Name = "Card 2" });
+        group.Add(new MagicCard { Name = "Card 3" });
+
+        // Expected: 3 unique cards in the group
+        // Actual bug: returns 1 (hardcoded)
+        Assert.That(group.UniqueCount, Is.EqualTo(3),
+            $"BUG IN CardGroup.UniqueCount: Expected 3, got {group.UniqueCount}. " +
+            "CardGroup.UniqueCount is hardcoded to return 1. " +
+            "It should return unique _children.Count to reflect actual unique cards in the group (without repeated).");
+    }
+
+    [Test]
+    public void UniqueCount_ShouldBeZeroForEmptyGroup()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        // BUG: returns 1 even for empty group
+        Assert.That(group.UniqueCount, Is.EqualTo(0),
+            $"BUG IN CardGroup.UniqueCount: Expected 0 for empty group, got {group.UniqueCount}. " +
+            "Hardcoded return of 1 is wrong even when there are no children.");
+    }
+
+    #endregion
+
+    #region Aggregation Methods (GetOwnCount / GetOwnTotal / GetOwnTotalAll / GetOwnUnique)
+
+    [Test]
+    public void GetOwnCount_SumsOwnedCopiesFromPhysicalCards()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        var owned1 = new MagicCardPhysical(new MagicCard { Name = "Card 1" }) { Count = 3, IsOwn = true };
+        var owned2 = new MagicCardPhysical(new MagicCard { Name = "Card 2" }) { Count = 4, IsOwn = true };
+        var borrowed = new MagicCardPhysical(new MagicCard { Name = "Card 3" }) { Count = 2, IsOwn = false };
+
+        group.Add(owned1);
+        group.Add(owned2);
+        group.Add(borrowed);
+
+        // owned1: 3 (IsOwn=true, Count=3), owned2: 4 (IsOwn=true, Count=4), borrowed: 0 (IsOwn=false)
+        Assert.That(group.GetOwnCount(), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void GetOwnTotal_DelegatesToBaseCard()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        var card1 = new MagicCard { Name = "Card 1" };
+        var card2 = new MagicCard { Name = "Card 2" };
+        // Set OwnTotal via properties (simulating what ReconciliationService does)
+        card1.OwnTotal = 5;
+        card2.OwnTotal = 3;
+
+        var physical1 = new MagicCardPhysical(card1) { Count = 2 };
+        var physical2 = new MagicCardPhysical(card2) { Count = 1 };
+
+        group.Add(physical1);
+        group.Add(physical2);
+
+        // GetOwnTotal delegates to Card.GetOwnTotal() which reads OwnTotal property
+        Assert.That(group.GetOwnTotal(), Is.EqualTo(8));
+    }
+
+    [Test]
+    public void GetOwnUnique_SumsUniqueOwnedInstances()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        var owned1 = new MagicCardPhysical(new MagicCard { Name = "Card 1" }) { Count = 3, IsOwn = true };
+        var owned2 = new MagicCardPhysical(new MagicCard { Name = "Card 2" }) { Count = 2, IsOwn = true };
+        var borrowed = new MagicCardPhysical(new MagicCard { Name = "Card 3" }) { Count = 1, IsOwn = false };
+
+        group.Add(owned1);
+        group.Add(owned2);
+        group.Add(borrowed);
+
+        // owned1: 1 (IsOwn=true), owned2: 1 (IsOwn=true), borrowed: 0 (IsOwn=false)
+        Assert.That(group.GetOwnUnique(), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AggregationMethods_ReturnZeroForEmptyGroup()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.GetOwnCount(), Is.EqualTo(0));
+        Assert.That(group.GetOwnTotal(), Is.EqualTo(0));
+        Assert.That(group.GetOwnTotalAll(), Is.EqualTo(0));
+        Assert.That(group.GetOwnUnique(), Is.EqualTo(0));
+    }
+
+    #endregion
+
+    #region ICard Property Semantics
+
+    [Test]
+    public void IsPhysical_ShouldBeFalse()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.IsPhysical, Is.False);
+    }
+
+    [Test]
+    public void IsSideboard_ShouldBeFalse()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.IsSideboard, Is.False);
+    }
+
+    [Test]
+    public void Location_ShouldBeNoWhere()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.Location, Is.EqualTo(Location.NoWhere));
+    }
+
+    #endregion
+
+    #region IEnumerable<IMagicCard> — Enumeration
+
+    [Test]
+    public void GetEnumerator_IteratesOverChildren()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        var card1 = new MagicCard { Name = "Card 1" };
+        var card2 = new MagicCard { Name = "Card 2" };
+
+        group.Add(card1);
+        group.Add(card2);
+
+        var names = group.Select(c => c.Name).ToList();
+
+        Assert.That(names, Is.EquivalentTo(new[] { "Card 1", "Card 2" }));
+    }
+
+    [Test]
+    public void GetEnumerator_SupportsMultipleIterations()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+        group.Add(new MagicCard { Name = "Card 1" });
+        group.Add(new MagicCard { Name = "Card 2" });
+
+        var firstPass = group.ToList();
+        var secondPass = group.ToList();
+
+        Assert.That(secondPass.Count, Is.EqualTo(firstPass.Count));
+    }
+
+    #endregion
+
+    #region Label Mutability
+
+    [Test]
+    public void Label_CanBeChangedAfterConstruction()
+    {
+        var group = new CardGroup(MagicCardField.Rarity);
+
+        Assert.That(group.Label, Is.EqualTo("Rarity"));
+
+        group.Label = "Common Cards";
+
+        Assert.That(group.Label, Is.EqualTo("Common Cards"));
+        Assert.That(group.Name, Is.EqualTo("Common Cards"));
+    }
+
+    #endregion
+}

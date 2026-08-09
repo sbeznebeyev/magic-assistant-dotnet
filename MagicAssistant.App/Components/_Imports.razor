@@ -1,0 +1,23 @@
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using MagicAssistant.App
+@using MagicAssistant.App.Shared
+@using MagicAssistant.Data.Model
+@using MagicAssistant.Data.Model.NavigatorNodes
+@using MagicAssistant.Data.Model.Legality
+@using MagicAssistant.Data.Contracts
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
+@using MagicAssistant.Http.Contracts
+@using MagicAssistant.Http.Dtos
+@using MagicAssistant.Core
+@using MagicAssistant.Core.Services.CardResolve
+@using MagicAssistant.Core.Services.CardSearch
+@using MagicAssistant.Core.Services.DeckAnalysis
+@using MagicAssistant.Core.Services.DeckCard
+@using MagicAssistant.Core.Services.DeckImportExport
+@using MagicAssistant.Core.Services.DeckManagement
+@using MagicAssistant.Core.Services.KnowledgeBaseSync
+
+@using MagicAssistant.Core.Analysis
+@using MagicAssistant.App.Components.Dialogs
+@using MagicAssistant.App.Components.Controls

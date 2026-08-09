@@ -1,0 +1,229 @@
+@inject ICardSearchService CardSearch
+
+<div class="printings-view">
+    <div class="section-header">
+        <span>Printings</span>
+        @if (_printings != null && _printings.Any())
+        {
+            <span class="count-badge">@_printings.Count</span>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="view-loading">Loading...</div>
+    }
+    else if (_cardName != null && _printings!.Count == 0)
+    {
+        <div class="view-empty">No printings found for "@_cardName"</div>
+    }
+    else if (!CardId.HasValue)
+    {
+        <div class="view-hint">Select a card to see all printings</div>
+    }
+    else
+    {
+        @* ── Filter bar ── *@
+        @if (_printings != null && _printings.Count > 5)
+        {
+            <div class="filter-bar">
+                <input @bind="_filterText" @oninput="OnFilterInput"
+                       placeholder="Filter by set..."
+                       class="filter-input" />
+                @if (!string.IsNullOrEmpty(_filterText))
+                {
+                    <button class="clear-btn" @onclick="ClearFilter">✕</button>
+                }
+            </div>
+        }
+
+        <div class="printings-list">
+            @foreach (var card in _displayPrintings)
+            {
+                var isDouble = card.Has2Faces;
+                <div class="printing-row @(card.Id == CardId ? "current" : "")">
+
+                    @* Front image (always clickable) *@
+                    <div class="printing-img-wrap" @onclick="@(() => SelectPrintingSide(card, false))">
+                        @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(card, true)))
+                        {
+                            <div class="printing-img">
+                                <img src="@ImageHelper.GetImageUrl(card, true)" alt="front" loading="lazy" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="printing-img-placeholder">?</div>
+                        }
+                    </div>
+
+                    @* Back image (double-sided) or empty placeholder (single-sided) *@
+                    @if (isDouble)
+                    {
+                        <div class="printing-img-wrap" @onclick="@(() => SelectPrintingSide(card, true))">
+                            @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(card, false)))
+                            {
+                                <div class="printing-img printing-img-back">
+                                    <img src="@ImageHelper.GetImageUrl(card, false)" alt="back" loading="lazy" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="printing-img-placeholder">?</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="printing-img-empty"></div>
+                    }
+
+                    @* Info — click selects card with front side *@
+                    <div class="printing-info" @onclick="@(() => SelectPrintingSide(card, false))">
+                        <div class="printing-name">@card.Name</div>
+                        <div class="printing-meta">
+                            @if (!string.IsNullOrEmpty(card.SetCode))
+                            {
+                                <span class="meta-set" title="Set">@card.SetCode</span>
+                            }
+                            @if (!string.IsNullOrEmpty(card.Rarity))
+                            {
+                                <span class="meta-rarity @(GetRarityClass(card.Rarity))">
+                                    @card.Rarity
+                                </span>
+                            }
+                            @if (card.CmcNumber > 0)
+                            {
+                                <span class="meta-cmc">@card.CmcText</span>
+                            }
+                            @if (!string.IsNullOrEmpty(card.Language))
+                            {
+                                <span class="meta-lang" title="Language">@card.Language.ToUpperInvariant()</span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Collector number *@
+                    @if (!string.IsNullOrEmpty(card.CollectorNumber))
+                    {
+                        <div class="printing-num">@card.CollectorNumber</div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_displayPrintings!.Count != _printings!.Count)
+        {
+            <div class="filter-result">
+                Showing @_displayPrintings.Count of @_printings.Count
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<MagicCard> _printings = new();
+    private List<MagicCard> _displayPrintings = new();
+    private bool _loading;
+    private string? _cardName;
+    private string _filterText = "";
+
+    [Parameter] public Guid? CardId { get; set; }
+    [Parameter] public EventCallback<MagicCard> OnPrintingSelected { get; set; }
+    [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnPrintingSideChanged { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!CardId.HasValue)
+        {
+            _printings = new();
+            _displayPrintings = new();
+            _cardName = null;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            // Get the base card to find its name
+            var baseCard = await CardSearch!.GetCardByIdAsync(CardId.Value);
+            if (baseCard != null)
+            {
+                _cardName = baseCard.Name;
+                // Get all printings by name
+                _printings = (await CardSearch.GetPrintingsAsync(_cardName!))
+                    .OrderBy(c => c.SetCode ?? "")
+                    .ToList();
+            }
+            else
+            {
+                _printings = new();
+            }
+
+            ApplyFilter();
+        }
+        catch
+        {
+            _printings = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnFilterInput(ChangeEventArgs e)
+    {
+        _filterText = e.Value?.ToString() ?? "";
+        ApplyFilter();
+        StateHasChanged();
+    }
+
+    private void ClearFilter()
+    {
+        _filterText = "";
+        ApplyFilter();
+        StateHasChanged();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_filterText))
+        {
+            _displayPrintings = _printings;
+        }
+        else
+        {
+            var q = _filterText.ToLowerInvariant();
+            _displayPrintings = _printings.Where(c =>
+                (c.SetCode != null && c.SetCode.ToLowerInvariant().Contains(q)) ||
+                (c.Rarity != null && c.Rarity.ToLowerInvariant().Contains(q)) ||
+                (c.Language != null && c.Language.ToLowerInvariant().Contains(q))
+            ).ToList();
+        }
+    }
+
+    private async Task SelectPrinting(MagicCard card)
+    {
+        await OnPrintingSelected.InvokeAsync(card);
+    }
+
+    private async Task SelectPrintingSide(MagicCard card, bool showBack)
+    {
+        // Выбираем печать + передаём сторону в CardDescriptionView
+        await OnPrintingSelected.InvokeAsync(card);
+        await OnPrintingSideChanged.InvokeAsync((card.Id, showBack));
+    }
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+}

@@ -1,0 +1,43 @@
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+
+@* App.razor — root component for Blazor Web App (.NET 10 modern approach) *@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Magic Assistant — Card Organizer</title>
+    <base href="/" />
+
+    <!-- Bootstrap 5 -->
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- Site CSS (global overrides) -->
+    <link rel="stylesheet" href="css/site.css" />
+
+    <!-- Blazor scoped CSS (auto-generated .razor.css files) -->
+    @* Microsoft .NET 10 template uses @Assets with the project namespace *@
+    <link href="@Assets["MagicAssistant.App.styles.css"]" rel="stylesheet" />
+
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <!-- Blazor enhanced navigation + interactive components -->
+    <script src="_framework/blazor.web.js"></script>
+
+    <!-- Bootstrap JS (dropdowns, modals, etc.) -->
+    <script src="lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Site JS (custom helpers) -->
+    <script src="js/site.js"></script>
+</body>
+</html>

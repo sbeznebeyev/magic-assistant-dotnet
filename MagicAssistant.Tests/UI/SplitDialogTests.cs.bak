@@ -1,0 +1,240 @@
+using Bunit;
+using MagicAssistant.App.Components.Dialogs;
+using Microsoft.AspNetCore.Components;
+
+namespace MagicAssistant.Tests.UI;
+
+/// <summary>
+/// Tests for SplitDialog — splits a card pile between main deck and sideboard.
+/// </summary>
+[TestFixture]
+public class SplitDialogTests : BaseUiTest
+{
+    private static MagicCardPhysical CreateCard(int count) => new(
+        new MagicCard { Id = Guid.NewGuid(), Name = "Test Card", SetCode = "m19" },
+        Location.FromPath("deck1"), true) { Count = count };
+
+    [Test]
+    public void NotVisible_RendersNothing()
+    {
+        var cut = Ctx.Render<SplitDialog>(p => p.Add(d => d.IsOpen, false));
+        Assert.That(cut.Markup, Does.Not.Contain("split-dialog-overlay"));
+    }
+
+    [Test]
+    public void Visible_RendersOverlay()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.Find(".split-dialog-overlay"), Is.Not.Null);
+    }
+
+    [Test]
+    public void Shows_CardNameAndCount_InPreview()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.Markup, Does.Contain("Test Card"));
+        Assert.That(cut.Markup, Does.Contain("× 4 in deck"));
+    }
+
+    [Test]
+    public void DefaultMainCount_EqualsTotalCount()
+    {
+        var card = CreateCard(5);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.Find("input[type='number']").GetAttribute("value"), Is.EqualTo("5"));
+    }
+
+    [Test]
+    public void IncrementButton_IncreasesMainCount()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        cut.Find("input[type='number']").Input("2");
+        cut.FindAll(".count-btn")[1].Click(); // + button
+        Assert.That(cut.Find("input[type='number']").GetAttribute("value"), Is.EqualTo("3"));
+    }
+
+    [Test]
+    public void DecrementButton_Disabled_AtZero()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        cut.Find("input[type='number']").Input("0");
+        Assert.That(cut.FindAll(".count-btn")[0].GetAttribute("disabled"), Is.Not.Null);
+    }
+
+    [Test]
+    public void IncrementButton_Disabled_AtMax()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.FindAll(".count-btn")[1].GetAttribute("disabled"), Is.Not.Null);
+    }
+
+    [Test]
+    public void SplitButton_Disabled_WhenAllInMain()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.Find(".btn-split").GetAttribute("disabled"), Is.Not.Null);
+    }
+
+    [Test]
+    public void SplitButton_Enabled_WhenBothSidesHaveCards()
+    {
+        var card = CreateCard(4);
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        cut.Find("input[type='number']").Input("2");
+        var splitBtn = cut.Find(".btn-split");
+        Assert.That(splitBtn, Is.Not.Null);
+        var disabledAttr = splitBtn.GetAttribute("disabled");
+        Assert.That(disabledAttr?.Equals("true", StringComparison.OrdinalIgnoreCase), Is.False);
+    }
+
+    [Test]
+    public async Task ClickSplit_CallsSplitCardAsync()
+    {
+        var card = CreateCard(4);
+        DeckCard.Setup(s => s.SplitCardAsync("deck1", card.Id, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MagicCardPhysical?)new MagicCardPhysical(
+                new MagicCard { Id = card.Id, Name = "Test Card" },
+                Location.FromPath("deck1_sb"), true) { Count = 2 });
+
+        bool splitDone = false;
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+            p.Add(d => d.OnSplitDone, EventCallback.Factory.Create(new object(), () => splitDone = true));
+        });
+
+        cut.Find("input[type='number']").Input("2");
+        cut.Find(".btn-split").Click();
+        await Task.Yield();
+
+        DeckCard.Verify(s => s.SplitCardAsync("deck1", card.Id, 2, It.IsAny<CancellationToken>()), Times.Once());
+        Assert.That(splitDone, Is.True);
+    }
+
+    [Test]
+    public async Task ClickCancel_FiresIsOpenChanged()
+    {
+        var card = CreateCard(4);
+        bool cancelled = false;
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+            p.Add(d => d.IsOpenChanged, EventCallback.Factory.Create<bool>(new object(), _ => cancelled = true));
+        });
+
+        cut.Find(".btn-cancel").Click();
+        await Task.Yield();
+        Assert.That(cancelled, Is.True);
+    }
+
+    [Test]
+    public async Task OverlayClick_FiresIsOpenChanged()
+    {
+        var card = CreateCard(4);
+        bool cancelled = false;
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+            p.Add(d => d.IsOpenChanged, EventCallback.Factory.Create<bool>(new object(), _ => cancelled = true));
+        });
+
+        cut.Find(".split-dialog-overlay").Click();
+        await Task.Yield();
+        Assert.That(cancelled, Is.True);
+    }
+
+    [Test]
+    public async Task SplitFailure_DisplaysErrorMessage()
+    {
+        var card = CreateCard(4);
+        DeckCard.Setup(s => s.SplitCardAsync("deck1", card.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Split failed: insufficient cards"));
+
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        cut.Find("input[type='number']").Input("2");
+        cut.Find(".btn-split").Click();
+        await Task.Yield();
+
+        Assert.That(cut.Markup, Does.Contain("split-error"));
+        Assert.That(cut.Markup, Does.Contain("insufficient cards"));
+    }
+
+    [Test]
+    public void NullCard_ShowsEmptyMessage()
+    {
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, (MagicCardPhysical?)null);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.Markup, Does.Contain("No card selected"));
+    }
+}

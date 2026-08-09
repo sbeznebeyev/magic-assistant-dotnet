@@ -1,0 +1,169 @@
+@*
+    ManaCurvePage — Professional mana curve visualization (pure CSS bars)
+    Mirrors Java: ui.views.analyzers.ManaCurvePage + CardStoreUtils.buildManaCurveStats
+    
+    Features:
+    - Interactive vertical bar chart (pure CSS, no Chart.js dependency)
+    - Hover tooltips with detailed card counts and percentages
+    - Average/median CMC indicators
+    - Smooth CSS animations
+    - Responsive design
+*@
+
+<div class="mana-curve-page">
+    <div class="section-header">
+        <span>Mana Curve</span>
+        @if (_loading) { <span class="loading-indicator">Loading...</span> }
+    </div>
+
+    <div class="analysis-content">
+        @if (_error != null)
+        {
+            <div class="error-state">
+                <span>⚠ @_error</span>
+                <button class="retry-btn" @onclick="Reload">Retry</button>
+            </div>
+        }
+        else if (_loading && _curve == null)
+        {
+            <div class="loading-state">Loading mana curve...</div>
+        }
+        else if (_curve != null && _totalNonLand > 0)
+        {
+            @* ── Bar Chart (Pure CSS) ── *@
+            <div class="chart-container">
+                <div class="chart-area">
+                    @for (int i = 0; i < 8; i++)
+                    {
+                        var count = i < _curve.Length ? _curve[i] : 0;
+                        var pct = _maxBar > 0 ? (double)count / _maxBar * 100 : 0;
+                        var hue = 210 + (i * 15);
+                        <div class="bar-column" style="--bar-height: @pct%; --bar-hue: @hue;">
+                            @if (count > 0)
+                            {
+                                <div class="bar-tooltip">
+                                    <span class="tooltip-cmc">CMC @(_labels[i])</span>
+                                    <span class="tooltip-count">@count card@(count != 1 ? "s" : "")</span>
+                                    <span class="tooltip-pct">(@((double)count / _totalNonLand * 100).ToString("F1")%)</span>
+                                </div>
+                            }
+                            <div class="bar-fill"></div>
+                            <div class="bar-label">@_labels[i]</div>
+                            <div class="bar-value">@(count > 0 ? count.ToString() : "")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* ── Summary Stats ── *@
+            <div class="summary-stats">
+                <div class="stat-card">
+                    <div class="stat-value">@_averageCmc.ToString("F2")</div>
+                    <div class="stat-label">Average CMC</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">@_medianCmc.ToString("F1")</div>
+                    <div class="stat-label">Median CMC</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">@_totalNonLand</div>
+                    <div class="stat-label">Non-Land Cards</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">@_peakCmcLabel</div>
+                    <div class="stat-label">Peak CMC</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <span>No mana curve data available.</span>
+                <span>Add non-land cards to your deck to see the curve.</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private int[]? _curve;
+    private double _averageCmc;
+    private double _medianCmc;
+    private int _totalNonLand;
+    private int _maxBar;
+    private string _peakCmcLabel = "—";
+    private bool _loading;
+    private string? _error;
+
+    private static readonly string[] _labels = { "0", "1", "2", "3", "4", "5", "6", "7+" };
+
+    [Parameter] public int DeckId { get; set; }
+    [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
+    [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DeckId <= 0) return;
+        await LoadAnalysis();
+    }
+
+    private async Task LoadAnalysis()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            if (cards.Count == 0)
+            {
+                _curve = Array.Empty<int>();
+                _totalNonLand = 0;
+            }
+            else
+            {
+                var result = AnalysisService.Analyze(cards);
+                BuildChartData(result);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Reload() => await LoadAnalysis();
+
+    private void BuildChartData(DeckAnalysisResult result)
+    {
+        var curve = result.ManaCurve;
+        _curve = new int[8];
+        Array.Copy(curve, _curve, Math.Min(curve.Length, 8));
+
+        _totalNonLand = _curve.Sum();
+        _maxBar = _curve.Max();
+
+        var peakIdx = Array.IndexOf(_curve, _maxBar);
+        _peakCmcLabel = _labels[Math.Min(peakIdx, 7)];
+        _averageCmc = CalculateAverageCmc(_curve);
+        _medianCmc = CalculateMedianCmc(_curve);
+    }
+
+    private static double CalculateAverageCmc(int[] curve)
+    {
+        var total = curve.Sum();
+        if (total == 0) return 0;
+        var weightedSum = 0;
+        for (int i = 0; i < Math.Min(curve.Length, 8); i++)
+            weightedSum += i * curve[i];
+        return (double)weightedSum / total;
+    }
+
+    private static double CalculateMedianCmc(int[] curve)
+    {
+        var cards = new List<int>();
+        for (int i = 0; i < Math.Min(curve.Length, 8); i++)
+            for (int j = 0; j < curve[i]; j++)
+                cards.Add(i);
+        if (cards.Count == 0) return 0;
+        cards.Sort();
+        var mid = cards.Count / 2;
+        return cards.Count % 2 == 0 ? (cards[mid - 1] + cards[mid]) / 2.0 : cards[mid];
+    }
+}

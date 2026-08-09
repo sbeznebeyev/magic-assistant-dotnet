@@ -1,0 +1,275 @@
+using MagicAssistant.Core.Services.CardResolve;
+using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.Model;
+
+namespace MagicAssistant.Core.Services.DeckCard;
+
+/// <summary>
+/// Vertical slice: card operations within decks.
+/// Handles adding, removing, moving, updating, and splitting cards in deck contexts.
+/// 
+/// Uses CardResolveService for batch resolution of KB cards.
+/// </summary>
+public class DeckCardService : IDeckCardService
+{
+    private readonly ICollectionStore _collectionStore;
+    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardResolveService _resolveService;
+
+    public DeckCardService(
+        ICollectionStore collectionStore,
+        ICardStore<MagicCardPhysical> cardStore,
+        ICardResolveService resolveService)
+    {
+        _collectionStore = collectionStore;
+        _cardStore = cardStore;
+        _resolveService = resolveService;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  CRUD operations
+    // ═══════════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public async Task<bool> CopyCardsAsync(
+        int deckId, ICollection<IMagicCard> cards, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+        if (cards == null || !cards.Any())
+            return true;
+
+        var location = Location.FromId(deckId, deckId.ToString(), false);
+        var physicals = new List<MagicCardPhysical>();
+
+        foreach (var card in cards)
+        {
+            var baseCard = card.GetBase();
+            bool isOwn = card is MagicCardPhysical mcp ? mcp.IsOwn : true;
+
+            physicals.Add(new MagicCardPhysical(baseCard, location, isOwn)
+            {
+                Count = card.Count,
+            });
+        }
+
+        return await _cardStore.AddAllAsync(physicals, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<ICollection<MagicCardPhysical>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+        if (cardIds == null || !cardIds.Any())
+            return Array.Empty<MagicCardPhysical>();
+
+        // Delegate to CardResolveService for batch resolution
+        return await _resolveService.MaterializeFromIdsAsync(deckId, cardIds, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> RemoveCardsAsync(int deckId, ICollection<Guid> cardIds, bool removeSideboard = false, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+        if (cardIds == null || !cardIds.Any())
+            return 0;
+
+        var removed = 0;
+        var deckIdStr = deckId.ToString();
+
+        foreach (var cardId in cardIds)
+        {
+            var existing = await _collectionStore.GetCardsAsync(cardId, ct);
+            var matching = existing.FirstOrDefault(e => e.Location.Id == deckIdStr && e.Card.Id == cardId);
+            if (matching == null)
+                continue;
+
+            await _cardStore.RemoveAsync(matching, ct);
+            removed++;
+        }
+
+        return removed;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> MoveCardsAsync(int sourceDeckId, ICollection<Guid> cardIds, int targetDeckId, CancellationToken ct = default)
+    {
+        if (sourceDeckId <= 0)
+            throw new ArgumentException("Invalid source deck ID.", nameof(sourceDeckId));
+        if (targetDeckId <= 0)
+            throw new ArgumentException("Invalid target deck ID.", nameof(targetDeckId));
+        if (sourceDeckId == targetDeckId)
+            throw new ArgumentException("Source and target must differ.", nameof(targetDeckId));
+        if (cardIds == null || !cardIds.Any())
+            return 0;
+
+        // Get existing cards from source deck
+        var sourceCards = await _collectionStore.GetDeckCardsAsync(sourceDeckId, ct);
+        var toMove = sourceCards
+            .Where(c => cardIds.Contains(c.Id))
+            .ToList();
+
+        if (!toMove.Any())
+            return 0;
+
+        var targetLocation = Location.FromId(targetDeckId, targetDeckId.ToString(), false);
+        int moved = 0;
+
+        foreach (var card in toMove)
+        {
+            // Remove from source
+            await _cardStore.RemoveAsync(card, ct);
+
+            // Add to target with new location
+            card.SetLocation(targetLocation);
+            await _cardStore.AddAsync(card, ct);
+            moved++;
+        }
+
+        return moved;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> UpdateCardAsync(int deckId, Guid cardId, Dictionary<MagicCardField, object?> updates, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+        if (updates == null || !updates.Any())
+            return false;
+
+        var existing = await _collectionStore.GetCardsAsync(cardId, ct);
+        var matching = existing.FirstOrDefault(e => e.Location.RawId == deckId && e.Card.Id == cardId);
+        if (matching == null)
+            return false;
+
+        var fieldsToUpdate = new List<MagicCardField>();
+
+        foreach (var (field, value) in updates)
+        {
+            switch (field)
+            {
+                case MagicCardField.Count when value is int count:
+                    matching.Count = count;
+                    fieldsToUpdate.Add(field); break;
+                case MagicCardField.IsOwn when value is bool isOwn:
+                    matching.IsOwn = isOwn;
+                    fieldsToUpdate.Add(field); break;
+                case MagicCardField.Price when value is float price:
+                    matching.Price = price;
+                    fieldsToUpdate.Add(field); break;
+                case MagicCardField.Comment when value is string comment:
+                    matching.Comment = comment;
+                    fieldsToUpdate.Add(field); break;
+                case MagicCardField.Special when value is string special:
+                    matching.SpecialTags = special;
+                    fieldsToUpdate.Add(field); break;
+                case MagicCardField.Custom when value is string custom:
+                    matching.Custom = custom;
+                    fieldsToUpdate.Add(field); break;
+            }
+        }
+
+        if (!fieldsToUpdate.Any())
+            return true;
+
+        return await _cardStore.UpdateAsync(matching, fieldsToUpdate, ct);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Split operations
+    // ═══════════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public async Task<MagicCardPhysical?> SplitCardAsync(int deckId, Guid cardId, int rightCount, CancellationToken ct = default)
+    {
+        if (rightCount <= 0)
+            return null;
+
+        var deckIdStr = deckId.ToString();
+        var existing = await _collectionStore.GetCardsAsync(cardId, ct);
+        var matching = existing.FirstOrDefault(e => e.Location.Id == deckIdStr && e.Card.Id == cardId);
+        if (matching == null)
+            return null;
+
+        var total = matching.Count;
+        if (rightCount >= total)
+            return null; // nothing to split
+
+        var leftCount = total - rightCount;
+        var location = Location.FromId(deckId, deckIdStr, false);
+
+        // Create right part FIRST (before modifying original count)
+        var rightPart = new MagicCardPhysical(matching.Card, location, matching.IsOwn)
+        {
+            Count = rightCount,
+            Price = matching.Price,
+            Comment = matching.Comment,
+            SpecialTags = matching.SpecialTags,
+            Custom = matching.Custom,
+        };
+
+        // Update original to left count
+        matching.Count = leftCount;
+        await _cardStore.UpdateAsync(matching, new[] { MagicCardField.Count }, ct);
+
+        // Add right part
+        await _cardStore.AddAsync(rightPart, ct);
+
+        return rightPart;
+    }
+
+    /// <inheritdoc />
+    public async Task<ICollection<MagicCardPhysical>> SplitCardsAsync(
+        ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default)
+    {
+        var expanded = _resolveService.ExpandGroups(cards);
+        var result = new List<MagicCardPhysical>();
+
+        foreach (var card in expanded)
+        {
+            if (card is MagicCardPhysical mcp && !string.IsNullOrEmpty(mcp.Location.Id))
+            {
+                if (int.TryParse(mcp.Location.Id, out var locId))
+                {
+                    var split = await SplitCardAsync(locId, mcp.Id, rightCount, ct);
+                    if (split != null)
+                        result.Add(split);
+                }
+            }
+            else if (card is MagicCard mc)
+            {
+                for (var i = 0; i < rightCount; i++)
+                {
+                    var clone = (MagicCard)mc.Clone();
+                    result.Add(new MagicCardPhysical(clone, Location.NoWhere, true));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Read operations
+    // ═══════════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+
+        return _collectionStore.GetDeckCardsAsync(deckId, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+
+        return _collectionStore.GetDeckWithSideboardAsync(deckId, ct);
+    }
+}

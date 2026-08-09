@@ -1,0 +1,156 @@
+@using MagicAssistant.Core.Services.DeckCard
+@inject IDeckCardService DeckCardService
+
+@if (!IsOpen) return;
+
+<div class="split-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+    <div class="split-dialog-box" @onclick:stopPropagation>
+        @* ── Header ── *@
+        <div class="split-header">
+            <span class="split-title">Split Card Pile</span>
+            <button class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
+        </div>
+
+        @if (_card == null)
+        {
+            <div class="split-empty">No card selected.</div>
+        }
+        else
+        {
+            @* ── Card preview ── *@
+            <div class="split-preview">
+                <span class="preview-name">@_card.Name</span>
+                <span class="preview-count">× @_totalCount in deck</span>
+            </div>
+
+            @* ── Split form ── *@
+            <div class="split-form">
+                @* Main deck count ── *@
+                <div class="form-row">
+                    <label class="form-label">Main Deck</label>
+                    <div class="count-control">
+                        <button class="count-btn" @onclick="() => ChangeMain(-1)" disabled="@(_mainCount <= 0)">−</button>
+                        <input type="number" min="0" max="@_totalCount" @bind="_mainCount" @bind:event="oninput"
+                               class="count-input" />
+                        <button class="count-btn" @onclick="() => ChangeMain(1)" disabled="@(_mainCount >= _totalCount)">+</button>
+                    </div>
+                </div>
+
+                @* Sideboard count ── *@
+                <div class="form-row">
+                    <label class="form-label">Sideboard</label>
+                    <div class="count-control">
+                        <span class="count-value sb">@_sideCount</span>
+                    </div>
+                </div>
+
+                @* Visual indicator ── *@
+                <div class="split-bar-wrap">
+                    <div class="split-bar">
+                        <div class="split-main" style="width: @(_totalCount > 0 ? (double)_mainCount / _totalCount * 100 : 0)%"></div>
+                        <div class="split-side" style="width: @(_totalCount > 0 ? (double)_sideCount / _totalCount * 100 : 0)%"></div>
+                    </div>
+                </div>
+
+                @* Error ── *@
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="split-error">@_error</div>
+                }
+            </div>
+
+            @* ── Footer ── *@
+            <div class="split-footer">
+                <button class="btn-split" @onclick="OnSplit" disabled="@(_invalid || _saving)">
+                    @(_saving ? "Splitting..." : "Split")
+                </button>
+                <button class="btn-cancel" @onclick="Close" disabled="@_saving">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private MagicCardPhysical? _card;
+    private int _totalCount = 0;
+    private int _mainCount = 0;
+    private bool _saving;
+    private string? _error;
+    private bool _invalid => _mainCount <= 0 || _sideCount <= 0;
+
+    // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter] public MagicCardPhysical? Card { get; set; }
+    [Parameter] public int? DeckId { get; set; }
+    [Parameter] public EventCallback OnSplitDone { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen && Card != _card)
+            LoadCard(Card);
+    }
+
+    private void LoadCard(MagicCardPhysical? card)
+    {
+        _card = card;
+        if (card == null) return;
+
+        _totalCount = card.Count;
+        _mainCount = _totalCount;
+        _error = null;
+    }
+
+    private void ChangeMain(int delta)
+    {
+        var newCount = _mainCount + delta;
+        if (newCount >= 0 && newCount <= _totalCount)
+            _mainCount = newCount;
+    }
+
+    private int _sideCount => _totalCount - _mainCount;
+
+    private async Task OnSplit()
+    {
+        if (_card == null || !DeckId.HasValue) return;
+        if (_invalid) return;
+
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            var rightPart = await DeckCardService.SplitCardAsync(DeckId.Value, _card.Id, _sideCount);
+
+            // Note: sideboard is now a separate child node with NodeType=Sideboard,
+            // SplitCardAsync handles this internally via the service layer.
+
+            await OnSplitDone.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ── Close helpers ──
+    private async Task Close()
+    {
+        if (_saving) return;
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task OnOverlayClick() => await Close();
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            _ = Close();
+    }
+}

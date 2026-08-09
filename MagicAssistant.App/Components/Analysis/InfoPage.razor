@@ -1,0 +1,219 @@
+@*
+    InfoPage — Deck summary statistics with visual cards and progress indicators
+    Mirrors Java: ui.views.analyzers.InfoPage + CardStoreUtils basic stats
+    
+    Features:
+    - 8 stat cards with visual indicators
+    - Color identity badges with MTG color coding
+    - Land/Creature progress bars
+    - Mana curve mini-chart
+    - Error handling and loading states
+*@
+
+<div class="info-page">
+    <div class="section-header">
+        <span>Deck Info</span>
+        @if (_loading) { <span class="loading-indicator">Loading...</span> }
+    </div>
+
+    <div class="analysis-content">
+        @if (_error != null)
+        {
+            <div class="error-state">
+                <span>⚠ @_error</span>
+                <button class="retry-btn" @onclick="Reload">Retry</button>
+            </div>
+        }
+        else if (_loading && _stats == null)
+        {
+            <div class="loading-state">Loading deck info...</div>
+        }
+        else if (_stats != null)
+        {
+            @* ── Primary Stats Grid ── *@
+            <div class="stats-grid">
+                <div class="stat-card large">
+                    <div class="stat-icon">🃏</div>
+                    <div class="stat-value">@_stats.TotalCards</div>
+                    <div class="stat-label">Total Cards</div>
+                </div>
+                <div class="stat-card large">
+                    <div class="stat-icon">💎</div>
+                    <div class="stat-value">@_stats.TotalManaCost</div>
+                    <div class="stat-label">Total Mana Cost</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔄</div>
+                    <div class="stat-value">@_stats.MaxRepeats</div>
+                    <div class="stat-label">Max Repeats</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🎨</div>
+                    <div class="stat-value">@_stats.ColorCount</div>
+                    <div class="stat-label">Colors</div>
+                </div>
+            </div>
+
+            @* ── Color Identity Badges ── *@
+            <div class="color-identity-section">
+                <span class="section-label">Color Identity:</span>
+                <div class="color-badges">
+                    @foreach (var color in _stats.Colors)
+                    {
+                        <span class="color-badge" style="background: @GetColorHex(color);" title="@GetColorName(color)">
+                            @color
+                        </span>
+                    }
+                    @if (!_stats.Colors.Any())
+                    {
+                        <span class="color-badge colorless">Colorless</span>
+                    }
+                </div>
+            </div>
+
+            @* ── Composition Bars ── *@
+            <div class="composition-section">
+                <div class="comp-row">
+                    <span class="comp-label">🏔️ Lands</span>
+                    <div class="comp-bar-track">
+                        <div class="comp-bar-fill land" style="width: @_stats.LandPercentage%;"></div>
+                    </div>
+                    <span class="comp-value">@_stats.LandCount (@_stats.LandPercentage.ToString("F0")%)</span>
+                </div>
+                <div class="comp-row">
+                    <span class="comp-label">🐉 Creatures</span>
+                    <div class="comp-bar-track">
+                        <div class="comp-bar-fill creature" style="width: @_stats.CreaturePercentage%;"></div>
+                    </div>
+                    <span class="comp-value">@_stats.CreatureCount (@_stats.CreaturePercentage.ToString("F0")%)</span>
+                </div>
+                <div class="comp-row">
+                    <span class="comp-label">✨ Non-Creatures</span>
+                    <div class="comp-bar-track">
+                        <div class="comp-bar-fill noncreature" style="width: @_stats.NonCreaturePercentage%;"></div>
+                    </div>
+                    <span class="comp-value">@_stats.NonCreatureCount (@_stats.NonCreaturePercentage.ToString("F0")%)</span>
+                </div>
+            </div>
+
+            @* ── Additional Info ── *@
+            <div class="additional-info">
+                <div class="info-row">
+                    <span class="info-label">Average CMC:</span>
+                    <span class="info-value">@_stats.AverageCmc.ToString("F2")</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Land Percentage:</span>
+                    <span class="info-value">@_stats.LandPercentage.ToString("F1")%</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Creature Percentage:</span>
+                    <span class="info-value">@_stats.CreaturePercentage.ToString("F1")%</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <span>No deck info available.</span>
+                <span>Add cards to your deck to see statistics.</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private DeckInfoStats? _stats;
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public int DeckId { get; set; }
+    [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
+    [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DeckId <= 0) return;
+        await LoadAnalysis();
+    }
+
+    private async Task LoadAnalysis()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            if (cards.Count == 0)
+            {
+                _stats = null;
+            }
+            else
+            {
+                var result = AnalysisService.Analyze(cards);
+                BuildStats(result);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Reload() => await LoadAnalysis();
+
+    private void BuildStats(DeckAnalysisResult result)
+    {
+        var totalNonLand = result.ManaCurve.Sum();
+        var weightedSum = 0;
+        for (var i = 0; i <= 6; i++)
+            weightedSum += i * result.ManaCurve[i];
+        weightedSum += 7 * result.ManaCurve[7];
+
+        var colorKeys = result.ColorDistribution.Keys.ToList();
+        var landCount = result.LandCount;
+        var creatureCount = result.CreatureCount;
+        var nonCreatureCount = result.NonCreatureCount;
+
+        _stats = new DeckInfoStats
+        {
+            TotalCards = result.TotalCards,
+            TotalManaCost = result.TotalManaCost,
+            MaxRepeats = result.MaxRepeats,
+            ColorCount = colorKeys.Count,
+            Colors = colorKeys.OrderBy(k => k).ToList(),
+            LandCount = landCount,
+            CreatureCount = creatureCount,
+            NonCreatureCount = nonCreatureCount,
+            AverageCmc = totalNonLand > 0 ? (double)weightedSum / totalNonLand : 0,
+            LandPercentage = result.TotalCards > 0 ? (double)landCount / result.TotalCards * 100 : 0,
+            CreaturePercentage = result.TotalCards > 0 ? (double)creatureCount / result.TotalCards * 100 : 0,
+            NonCreaturePercentage = result.TotalCards > 0 ? (double)nonCreatureCount / result.TotalCards * 100 : 0
+        };
+    }
+
+    private static string GetColorHex(string color) => color switch
+    {
+        "W" => "#e8daef", "U" => "#85c1e9", "B" => "#5d6d7e",
+        "R" => "#e74c3c", "G" => "#2ecc71", _ => "#95a5a6"
+    };
+
+    private static string GetColorName(string color) => color switch
+    {
+        "W" => "White", "U" => "Blue", "B" => "Black",
+        "R" => "Red", "G" => "Green", _ => color
+    };
+
+    private class DeckInfoStats
+    {
+        public int TotalCards { get; set; }
+        public int TotalManaCost { get; set; }
+        public int MaxRepeats { get; set; }
+        public int ColorCount { get; set; }
+        public List<string> Colors { get; set; } = new();
+        public int LandCount { get; set; }
+        public int CreatureCount { get; set; }
+        public int NonCreatureCount { get; set; }
+        public double AverageCmc { get; set; }
+        public double LandPercentage { get; set; }
+        public double CreaturePercentage { get; set; }
+        public double NonCreaturePercentage { get; set; }
+    }
+}

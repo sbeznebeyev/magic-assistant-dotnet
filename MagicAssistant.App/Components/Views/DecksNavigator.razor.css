@@ -1,0 +1,513 @@
+/* ── Navigator Container ─────────────────────────────── */
+.navigator {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.navigator-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    font-weight: 600;
+    font-size: 13px;
+    border-bottom: 1px solid #3c3c3c;
+    user-select: none;
+}
+
+.navigator-kb-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    font-weight: 600;
+    font-size: 13px;
+    border-bottom: 1px solid #3c3c3c;
+    user-select: none;
+}
+
+.navigator-show-all {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid #3c3c3c;
+}
+
+.btn-show-all {
+    background: #0078d4;
+    color: #fff;
+    border: none;
+    border-radius: 16px;
+    padding: 4px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-show-all:hover {
+    background: #1084e8;
+    box-shadow: 0 0 8px rgba(0, 120, 212, 0.5);
+}
+
+.navigator-header .icon-btn {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+}
+
+.navigator-header .icon-btn:hover {
+    background: #555;
+    color: #fff;
+}
+
+/* ── Empty / Loading / Error States ──────────────────── */
+.navigator-loading,
+.navigator-empty,
+.navigator-error {
+    padding: 20px 12px;
+    text-align: center;
+    color: #888;
+    font-size: 13px;
+}
+
+.navigator-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #e74c3c;
+}
+
+.navigator-error button {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 2px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+
+/* ── Tree ────────────────────────────────────────────── */
+.tree-root {
+    position: relative;
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+
+
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #ccc;
+    border-left: 2px solid transparent;
+    user-select: none;
+}
+
+::deep .tree-node {
+    padding-left: calc(var(--depth, 0) * 16px + 8px) !important;
+}
+
+::deep .tree-add-label {
+    font-style: italic !important;
+    color: #888 !important;
+}
+
+::deep .tree-add-node:hover .tree-add-label {
+    color: #0078d4 !important;
+}
+
+::deep .tree-toggle {
+    width: 24px !important;
+    font-size: 18px !important;
+}
+
+::deep .tree-spacer {
+    width: 24px !important;
+    min-width: 24px !important;
+    flex-shrink: 0 !important;
+}
+
+::deep .tree-add-btn {
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 50% !important;
+    border: 2px solid #666 !important;
+    background: transparent !important;
+    color: #888 !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    margin-top: -1px !important;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+::deep .tree-add-btn:hover,
+::deep .tree-add-node:hover .tree-add-btn {
+    background: #0078d4 !important;
+    color: #fff !important;
+    border-color: #0078d4 !important;
+    box-shadow: 0 0 12px rgba(0, 120, 212, 0.5) !important;
+}
+
+::deep .tree-add-node {
+    display: flex !important;
+    align-items: center !important;
+    cursor: pointer !important;
+}
+
+.tree-node:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.tree-node.selected {
+    background: rgba(0, 120, 212, 0.2);
+    border-left-color: #0078d4;
+    color: #fff;
+}
+
+
+
+/* Deep selectors for TreeItem children */
+::deep .tree-node.selected {
+    background: rgba(0, 120, 212, 0.2) !important;
+    border-left-color: #0078d4 !important;
+    color: #fff !important;
+}
+
+::deep .tree-node.selected .tree-label {
+    background: #ffa500 !important;
+    color: #000 !important;
+    padding: 2px 8px !important;
+    border-radius: 12px !important;
+    display: inline-block !important;
+}
+
+/* Depth-based indentation via CSS variable */
+.tree-node {
+    padding-left: calc(var(--depth, 0) * 16px + 8px);
+}
+
+.tree-toggle {
+    width: 24px;
+    text-align: center;
+    font-size: 18px;
+    line-height: 1;
+    color: #aaa;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.tree-toggle:hover {
+    color: #fff;
+}
+
+.tree-spacer {
+    width: 24px;
+    flex-shrink: 0;
+}
+
+/* ── NodeType icon (deck-nav-ico classes from site.css) ── */
+.deck-nav-ico {
+    flex-shrink: 0;
+}
+
+.tree-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tree-locked {
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-left: 2px;
+}
+
+.tree-count {
+    font-size: 11px;
+    color: #888;
+    flex-shrink: 0;
+}
+
+/* ── Sideboard (rendered inline under parent deck) ── */
+.tree-sideboard {
+    color: #999 !important;
+    font-style: italic;
+}
+
+::deep .tree-sideboard-label {
+    color: #999 !important;
+}
+
+.tree-sideboard:hover {
+    background: rgba(255, 165, 0, 0.08) !important;
+}
+
+.tree-sideboard.selected {
+    background: rgba(255, 165, 0, 0.2) !important;
+    border-left-color: #ffa500 !important;
+    color: #ffa500 !important;
+}
+
+/* ── More-button (...) — context menu trigger ── */
+
+
+.tree-loading {
+    padding: 4px 8px;
+    padding-left: calc(var(--depth, 0) * 16px + 24px);
+    color: #666;
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* ── Add Node Button ─────────────────────────────────── */
+.tree-add-btn {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #666;
+    background: transparent;
+    color: #888;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin-top: -1px;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tree-add-btn:hover {
+    background: #0078d4;
+    color: #fff;
+    border-color: #0078d4;
+    box-shadow: 0 0 12px rgba(0, 120, 212, 0.5);
+}
+
+.tree-add-label {
+    font-style: italic;
+    color: #888;
+}
+
+.tree-add-node:hover .tree-add-label {
+    color: #0078d4;
+}
+
+/* ── Add Menu (root level) ───────────────────────────── */
+.add-menu-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.add-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 4px 0;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+}
+
+.add-menu button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #ccc;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.add-menu button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+/* ── Add Menu Overlay (click-outside to close) ───────── */
+.add-menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+}
+
+/* ── Context Menu Overlay (click-outside to close) ───── */
+.context-menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+}
+
+/* ── Fixed Context Menu (positioned at click point) ─── */
+.context-menu-fixed {
+    position: fixed;
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 4px 0;
+    min-width: 200px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+}
+
+.context-menu-fixed .context-label {
+    display: block;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #888;
+    border-bottom: 1px solid #3c3c3c;
+    margin-bottom: 2px;
+}
+
+.context-menu-fixed button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #ccc;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.context-menu-fixed button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.context-menu-fixed button.danger {
+    color: #e74c3c;
+}
+
+.context-menu-fixed .context-sep {
+    border: none;
+    border-top: 1px solid #3c3c3c;
+    margin: 2px 0;
+}
+
+/* ── Dialogs ─────────────────────────────────────────── */
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+}
+
+.dialog-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1e1e1e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 320px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #eee;
+}
+
+.dialog-input {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.dialog-input:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.btn-primary {
+    background: #0078d4;
+    color: #fff;
+    border: none;
+    padding: 6px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-primary:disabled {
+    background: #3c3c3c;
+    color: #888;
+    cursor: default;
+}
+
+.btn-secondary {
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 6px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-danger {
+    background: #c0392b;
+    color: #fff;
+    border: none;
+    padding: 6px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.dialog-box p {
+    color: #ccc;
+    font-size: 13px;
+    margin: 8px 0 0;
+}

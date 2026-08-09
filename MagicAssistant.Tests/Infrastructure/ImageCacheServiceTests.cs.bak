@@ -1,0 +1,377 @@
+using System.Net;
+using MagicAssistant.Core;
+using MagicAssistant.Data.Model;
+using MagicAssistant.Http.Dtos;
+
+namespace MagicAssistant.Tests.Infrastructure;
+
+[TestFixture]
+public class ImageCacheServiceTests
+{
+    private readonly string _testDir = Path.Combine(Path.GetTempPath(), $"image-cache-test-{Guid.NewGuid()}");
+    private MockHttpMessageHandler _handler = null!;
+    private HttpClient _httpClient = null!;
+    private ImageCacheService _service;
+
+    [SetUp]
+    public void SetUp()
+    {
+        Directory.CreateDirectory(_testDir);
+        _handler = new MockHttpMessageHandler();
+        _httpClient = new HttpClient(_handler);
+        _service = new ImageCacheService(_testDir, _httpClient);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _httpClient?.Dispose();
+        _handler?.Dispose();
+        if (Directory.Exists(_testDir))
+            Directory.Delete(_testDir, true);
+    }
+
+    // ─── Constructor ───────────────────────────────────────
+
+    [Test]
+    public void Constructor_CreatesImagesDir_IfNotExists()
+    {
+        var subdir = Path.Combine(Path.GetTempPath(), $"new-dir-{Guid.NewGuid()}");
+        try
+        {
+            var service = new ImageCacheService(subdir, _httpClient);
+            Assert.That(Directory.Exists(subdir), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(subdir)) Directory.Delete(subdir, true);
+        }
+    }
+
+    [Test]
+    public void Constructor_SetsImagesDir()
+    {
+        Assert.That(_service.ImagesDir, Is.EqualTo(Path.GetFullPath(_testDir)));
+    }
+
+    // ─── SanitizeCollectorNumber ───────────────────────────
+
+    [Test]
+    public void SanitizeCollectorNumber_KeepsAlphanumeric()
+    {
+        var result = ImageCacheService.SanitizeCollectorNumber("123abc");
+        Assert.That(result, Is.EqualTo("123abc"));
+    }
+
+    [Test]
+    public void SanitizeCollectorNumber_ReplacesSlash()
+    {
+        // BUG in SanitizeCollectorNumber: The Where clause removes '/' before
+        // the Select clause can replace it with '-'. Result is "1234" instead of "1-234".
+        // The fix should swap Where/Select order or handle '/' specially in Where.
+        var result = ImageCacheService.SanitizeCollectorNumber("1/234");
+
+        Assert.That(result, Is.EqualTo("1-234"),
+            "BUG in SanitizeCollectorNumber: Slash '/' must be replaced with '-' (not removed). " +
+            "The current implementation filters '/' via Where(!InvalidFileNameChars.Contains(c)) " +
+            "before Select(c == '/' ? '-' : c) can replace it. The replacement is dead code. " +
+            "Expected '1/234' -> '1-234', got: '" + result + "'.");
+    }
+
+    [Test]
+    public void SanitizeCollectorNumber_KeepsHyphen()
+    {
+        var result = ImageCacheService.SanitizeCollectorNumber("test-name");
+        Assert.That(result, Is.EqualTo("test-name"));
+    }
+
+    [Test]
+    public void SanitizeCollectorNumber_Null_ReturnsZero()
+    {
+        var result = ImageCacheService.SanitizeCollectorNumber(null!);
+        Assert.That(result, Is.EqualTo("0"));
+    }
+
+    [Test]
+    public void SanitizeCollectorNumber_OnlyInvalidChars_ReturnsZero()
+    {
+        // BUG: On Linux Path.GetInvalidFileNameChars() only returns ['/'].
+        // Characters like \ : * ? " < > | are NOT filtered, so result is not "0".
+        // The implementation relies on platform-specific behavior.
+        // On Windows this test would pass (all these chars are invalid).
+        // This is a cross-platform bug — the method should use its own hardcoded set of
+        // forbidden chars instead of Path.GetInvalidFileNameChars().
+        var result = ImageCacheService.SanitizeCollectorNumber("\\/:*?\"<>|");
+
+        Assert.That(result, Is.EqualTo("0"),
+            "BUG in SanitizeCollectorNumber (cross-platform): On this platform, " +
+            "Path.GetInvalidFileNameChars() does not include all dangerous chars. " +
+            "Result '" + result + "' should be '0'. The method should use a hardcoded " +
+            "set of forbidden filename characters instead of relying on the OS-specific " +
+            "Path.GetInvalidFileNameChars().");
+    }
+
+    [Test]
+    public void SanitizeCollectorNumber_ReplacesSlashAndRemovesInvalidChars()
+    {
+        // "/" must be replaced with "-"; other invalid chars (e.g. "*", "?") must be removed entirely.
+        var result = ImageCacheService.SanitizeCollectorNumber("1/2*3?4");
+
+        Assert.That(result, Is.EqualTo("1-234"),
+            "BUG in SanitizeCollectorNumber: Slash '/' should be replaced with '-', " +
+            "other invalid chars ('*', '?') should be removed. Expected '1-2*3?4' -> '1-234', " +
+            "got: '" + result + "'. The sanitization logic is incorrect.");
+    }
+
+    // ─── BuildFileName ─────────────────────────────────────
+
+    [Test]
+    public void BuildFileName_CorrectFormat()
+    {
+        var cardId = Guid.NewGuid();
+        var fileName = ImageCacheService.BuildFileName("m19", "42", cardId);
+
+        Assert.That(fileName, Is.EqualTo($"m19/42_{cardId}.png"));
+    }
+
+    [Test]
+    public void BuildFileName_LowercasesSetCode()
+    {
+        var fileName = ImageCacheService.BuildFileName("m19", "1", Guid.NewGuid());
+
+        Assert.That(fileName, Does.StartWith("m19/"));
+    }
+
+    [Test]
+    public void BuildFileName_SanitizesCollectorNumber()
+    {
+        var fileName = ImageCacheService.BuildFileName("m19", "1/234", Guid.NewGuid());
+
+        Assert.That(fileName, Does.Contain("1-234"),
+            "BUG: BuildFileName delegates to SanitizeCollectorNumber which has a slash-replacement bug. " +
+            "Expected '1-234' in filename, got: '" + fileName + "'.");
+    }
+
+    // ─── GetSetFrontDir ─────────────────────────────────────────
+
+    [Test]
+    public void GetSetDir_CreatesDirectory()
+    {
+        var dir = _service.GetSetFrontDir("m19");
+
+        Assert.That(Directory.Exists(dir), Is.True);
+    }
+
+    // ─── GetFullPath / GetFrontFileName ─────────────────────────
+
+    [Test]
+    public void GetFileName_ReturnsCorrectFormat()
+    {
+        var cardId = Guid.NewGuid();
+        var card = new MagicCard
+        {
+            Id = cardId,
+            SetCode = "m19",
+            CollectorNumber = "42"
+        };
+
+        var fileName = _service.GetFrontFileName(card);
+
+        Assert.That(fileName, Is.EqualTo($"m19/42_{cardId}.png"));
+    }
+
+    // ─── FrontImageExists ────────────────────────────────────────────
+
+    [Test]
+    public void Exists_ReturnsFalse_WhenFileDoesNotExist()
+    {
+        var card = new MagicCard
+        {
+            Id = Guid.NewGuid(),
+            SetCode = "m19",
+            CollectorNumber = "1"
+        };
+
+        Assert.That(_service.FrontImageExists(card), Is.False);
+    }
+
+    [Test]
+    public void Exists_ReturnsTrue_WhenFileExists()
+    {
+        var card = new MagicCard
+        {
+            Id = Guid.NewGuid(),
+            SetCode = "m19",
+            CollectorNumber = "1"
+        };
+
+        var fullPath = _service.BuildFrontFullPath(card);
+        // Ensure parent directory exists before writing the file
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, "test");
+
+        Assert.That(_service.FrontImageExists(card), Is.True);
+    }
+
+    // ─── GetExistingCardUidsForSet ─────────────────────────
+
+    [Test]
+    public void GetExistingCardUidsForSet_ReturnsEmpty_WhenNoFiles()
+    {
+        var uids = _service.GetExistingCardUidsForSet("m19");
+
+        Assert.That(uids, Is.Empty);
+    }
+
+    [Test]
+    public void GetExistingCardUidsForSet_ExtractsUidFromFilename()
+    {
+        var cardId = Guid.NewGuid();
+        var dir = Path.Combine(_testDir, "m19");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "1_" + cardId.ToString() + ".png"), "test");
+
+        var uids = _service.GetExistingCardUidsForSet("m19");
+
+        Assert.That(uids, Contains.Item(cardId));
+    }
+
+    [Test]
+    public void GetExistingCardUidsForSet_IgnoresNonPngFiles()
+    {
+        var dir = Path.Combine(_testDir, "m19");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "1_uid-1.txt"), "test");
+
+        var uids = _service.GetExistingCardUidsForSet("m19");
+
+        Assert.That(uids, Is.Empty);
+    }
+
+    // ─── DownloadAsync ─────────────────────────────────────
+
+    [Test]
+    public async Task DownloadAsync_AlreadyExists_ReturnsTrue()
+    {
+        var card = new MagicCard
+        {
+            Id = Guid.NewGuid(),
+            SetCode = "m19",
+            CollectorNumber = "1"
+        };
+
+        // File already exists — must create parent dir first
+        var fullPath = _service.BuildFrontFullPath(card);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, "existing");
+
+        // BUG: DownloadAsync checks 'if (imageUris == null) return false' BEFORE
+        // checking if the file already exists. Even though the file is present on disk,
+        // passing null for imageUris causes an early return of false.
+        // The existence check should come before the null-imageUris guard.
+        var result = await _service.DownloadAsync(card, null!);
+
+        Assert.That(result, Is.True,
+            "BUG in DownloadAsync: When file already exists on disk, the method should return true " +
+            "regardless of whether imageUris is null. The current code checks 'if (imageUris == null) " +
+            "return false' BEFORE checking File.FrontImageExists(fullPath). Swap these two checks.");
+    }
+
+    [Test]
+    public async Task DownloadAsync_NullImageUris_ReturnsFalse()
+    {
+        var card = new MagicCard
+        {
+            Id =Guid.NewGuid(),
+            SetCode = "m19",
+            CollectorNumber = "1"
+        };
+
+        var result = await _service.DownloadAsync(card, null!);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task DownloadAsync_SuccessfulDownload_CreatesFileAndReturnsTrue()
+    {
+        var card = new MagicCard
+        {
+            Id = Guid.NewGuid(),
+            SetCode = "DLT",
+            CollectorNumber = "7"
+        };
+
+        // Use HttpMessageHandler-based mock (HttpClient methods are sealed, Moq can't mock them)
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // minimal PNG header
+        _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(imageBytes)
+        });
+
+        var imageUris = new ImageUrisDto(
+            Normal: "https://example.com/card.png",
+            Png: null,
+            ArtCrop: null,
+            Small: null);
+
+        var result = await _service.DownloadAsync(card, imageUris);
+
+        Assert.That(result, Is.True,
+            "BUG in DownloadAsync: Should return true after successful download. " +
+            "If false, the HTTP call may be failing silently or the file write is broken.");
+
+        var expectedPath = _service.BuildFrontFullPath(card);
+        Assert.That(File.Exists(expectedPath), Is.True,
+            $"BUG in DownloadAsync: File was not created at '{expectedPath}'. " +
+            "The download succeeded but the file was not persisted to disk.");
+    }
+
+    [Test]
+    public async Task DownloadAsync_FallbackToNextUrl_WhenFirstFails()
+    {
+        var card = new MagicCard
+        {
+            Id = Guid.NewGuid(),
+            SetCode = "FLT",
+            CollectorNumber = "3"
+        };
+
+        // First call (Normal URL) fails, second call (Png URL) succeeds
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.BadGateway));
+        _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(imageBytes)
+        });
+
+        var imageUris = new ImageUrisDto(
+            Normal: "https://example.com/normal.png",
+            Png: "https://example.com/png.png",
+            ArtCrop: null,
+            Small: null);
+
+        var result = await _service.DownloadAsync(card, imageUris);
+
+        Assert.That(result, Is.True,
+            "BUG in DownloadAsync fallback logic: Should retry with the next URL " +
+            "(png) when the first URL (normal) fails. If false, the fallback chain is broken.");
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Mock HttpMessageHandler for testing HTTP interactions
+// ═══════════════════════════════════════════════════════
+
+public class MockHttpMessageHandler : HttpMessageHandler
+{
+    public Queue<HttpResponseMessage> Responses { get; } = new();
+    public List<HttpRequestMessage> Requests { get; } = new();
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        Requests.Add(request);
+        var response = Responses.Dequeue();
+        return Task.FromResult(response);
+    }
+}

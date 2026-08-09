@@ -1,0 +1,35 @@
+@* TabBar — deck analysis tab navigation *@
+
+<div class="tab-bar">
+    @foreach (var tab in Tabs)
+    {
+        <button class="@(ActiveTab == tab.Value ? "active" : "")"
+                @onclick="@(() => SelectTab(tab.Value))">
+            @tab.Label
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string ActiveTab { get; set; } = "cards";
+    [Parameter] public EventCallback<string> OnTabSelected { get; set; }
+
+    private static readonly (string Label, string Value)[] Tabs =
+    [
+        ("Cards", "cards"),
+        ("Mana Curve", "curve"),
+        ("Colors", "colors"),
+        ("Creatures", "creatures"),
+        ("Types", "types"),
+        ("Abilities", "abilities"),
+        ("Info", "info"),
+        ("Legality", "legality"),
+        ("Collector", "collector"),
+    ];
+
+    private async Task SelectTab(string tabValue)
+    {
+        ActiveTab = tabValue;
+        await OnTabSelected.InvokeAsync(tabValue);
+    }
+}

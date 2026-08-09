@@ -1,0 +1,140 @@
+@inject IDeckManagementService DeckManagement
+@inject IDeckImportExportService ImportExport
+@inject IJSRuntime JSRuntime
+
+<div class="dialog-overlay" @onclick="OnOverlayClick">
+    <div class="dialog-box" @onclick:stopPropagation="true">
+        <div class="dialog-title">Export Deck</div>
+
+        @if (_exporting)
+        {
+            <div class="dialog-loading">Exporting...</div>
+        }
+        else if (_exported)
+        {
+            <div class="dialog-success">✓ Deck exported successfully</div>
+            <div class="dialog-actions">
+                <button class="btn-secondary" @onclick="Close">Close</button>
+            </div>
+        }
+        else
+        {
+            <div class="form-group">
+                <label>Deck</label>
+                <div class="deck-info">@_deckName</div>
+            </div>
+
+            <div class="form-group">
+                <label>Format</label>
+                <select @bind="_format" class="dialog-select">
+                    <option value="xml">Magic Assistant XML</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>File Name</label>
+                <input type="text" @bind="_fileName" readonly
+                       class="dialog-input" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="dialog-error">@_error</div>
+            }
+
+            <div class="dialog-actions">
+                <button class="btn-primary" @onclick="OnExport">
+                    Export
+                </button>
+                <button class="btn-secondary" @onclick="Close">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string _format = "xml";
+    private string _fileName = "";
+    private string? _deckName;
+    private bool _exporting;
+    private bool _exported;
+    private string? _error;
+
+    [Parameter] public int? DeckId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnExported { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && DeckId != null)
+        {
+            _exporting = false;
+            _exported = false;
+            _error = null;
+
+            try
+            {
+                var deck = await DeckManagement!.GetByIdAsync(DeckId!.Value);
+                _deckName = deck?.Name ?? "Unknown Deck";
+                _fileName = $"{_deckName.Replace(" ", "_")}.xml";
+            }
+            catch (Exception ex)
+            {
+                _error = $"Failed to load deck: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task OnExport()
+    {
+        if (DeckId == null) return;
+
+        _exporting = true;
+        _error = null;
+
+        try
+        {
+            // Export via vertical slice service
+            var xmlContent = await ImportExport.ExportDeckToXmlAsync(DeckId!.Value);
+
+            // Download file via JavaScript
+            await JSRuntime.InvokeVoidAsync("eval", $@"
+                var blob = new Blob([@xmlContent], {{ type: 'application/xml' }});
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '@_fileName';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            ");
+
+            _exported = true;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    private async Task OnCancel()
+    {
+        if (_exporting) return;
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private void OnOverlayClick() => _ = OnCancel();
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+}

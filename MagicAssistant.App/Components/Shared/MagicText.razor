@@ -1,0 +1,54 @@
+@using System.Text.RegularExpressions
+
+@* Inline component that converts {X} mana symbols in card text to <abbr> tags with card-symbol classes. *@
+
+@RenderedContent
+
+@code {
+    [Parameter] public string? Text { get; set; }
+
+    private static readonly Regex SymbolPattern = new(@"\{([^}]+)\}", RegexOptions.Compiled);
+
+    private RenderFragment RenderedContent => builder =>
+    {
+        if (string.IsNullOrEmpty(Text))
+            return;
+
+        var parts = SplitAndReplace(Text!);
+        foreach (var part in parts)
+        {
+            if (part.IsSymbol)
+            {
+                builder.OpenElement(0, "abbr");
+                builder.AddAttribute(1, "class", $"card-symbol card-symbol-{part.Symbol}");
+                builder.AddContent(2, part.Raw);  //part.Raw
+                builder.CloseElement();
+            }
+            else
+            {
+                builder.AddContent(0, part.Text);
+            }
+        }
+    };
+
+    private static (bool IsSymbol, string Text, string Symbol, string Raw)[] SplitAndReplace(string text)
+    {
+        var parts = new List<(bool, string, string, string)>();
+        var lastIndex = 0;
+
+        foreach (Match match in SymbolPattern.Matches(text))
+        {
+            if (match.Index > lastIndex)
+                parts.Add((false, text.Substring(lastIndex, match.Index - lastIndex), string.Empty, string.Empty));
+
+            var symbol = match.Value.Trim('{', '}').Replace("/", string.Empty);
+            parts.Add((true, string.Empty, symbol, match.Value));
+            lastIndex = match.Index + match.Length;
+        }
+
+        if (lastIndex < text.Length)
+            parts.Add((false, text.Substring(lastIndex), string.Empty, string.Empty));
+
+        return parts.ToArray();
+    }
+}

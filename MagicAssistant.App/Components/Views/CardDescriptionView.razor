@@ -1,0 +1,353 @@
+@using MagicAssistant.App.Components.Shared
+@using MagicAssistant.Core.Queries
+@inject ICardSearchService CardSearch
+@inject GetCardSetQueryHandler GetCardSetQuery
+@inject GetCardLanguagesQueryHandler GetCardLanguagesQuery
+
+<div class="card-desc">
+    <div class="card-desc-header">
+        <span>Card Details</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="card-desc-loading">Loading...</div>
+    }
+    else if (_card != null)
+    {
+        @* ── Tabs (double-sided only) ── *@
+        @if (_isDoubleSided)
+        {
+            <div class="card-tabs-area">
+                <button type="button"
+                        class="tab-btn tab-front @(_showBack ? "inactive" : "active")"
+                        @onclick="ToggleFront">front</button>
+                <button type="button"
+                        class="tab-btn tab-back @(_showBack ? "active" : "inactive")"
+                        @onclick="ToggleBack">back</button>
+            </div>
+        }
+
+        @* ── Image ── *@
+        @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(_card, !_showBack)))
+        {
+            <div class="card-image-wrap">
+                <img src="@ImageHelper.GetImageUrl(_card, !_showBack)" alt="@_card.Name" class="card-image" />
+            </div>
+        }
+
+        @* ── Language Toggle Buttons ── *@
+        @if (_availableLanguages.Length > 1)
+        {
+            <div class="card-lang-toggles">
+                @foreach (var lang in _availableLanguages)
+                {
+                    bool isActive = lang.Id == _card.Id;
+                    <button type="button"
+                            class="lang-btn @(isActive ? "active" : "")"
+                            @onclick="() => OnLanguageSelected(lang)"
+                            title="@lang.Language">
+                        @lang.Language.ToUpperInvariant()
+                    </button>
+                }
+            </div>
+        }
+
+        @* ── Name & Cost ── *@
+        <div class="card-name-row">
+            <span class="card-name">@ActiveName</span>
+            <span class="card-cost"><MagicText Text="@ActiveManaCost" /></span>
+        </div>
+
+        @* ── Meta line ── *@
+        <div class="card-meta">
+            @if (!string.IsNullOrEmpty(_card.ColorType))
+            {
+                <span class="meta-item" title="Color Type">@_card.ColorType</span>
+            }
+            @if (!string.IsNullOrEmpty(_card.Rarity))
+            {
+                <span class="meta-item rarity-badge @(GetRarityClass(_card.Rarity))">
+                    @_card.Rarity
+                </span>
+            }
+            @if (_card.CmcNumber > 0)
+            {
+                <span class="meta-item" title="Converted Mana Cost">CMC @_card.CmcText</span>
+            }
+            @if (_isDoubleSided)
+            {
+                <span class="meta-item double-badge">double-sided</span>
+            }
+        </div>
+
+        @* ── Type line ── *@
+        <div class="card-type-line">@ActiveTypeLine</div>
+
+        @* ── Power / Toughness ── *@
+        @if (!string.IsNullOrEmpty(ActivePower) || !string.IsNullOrEmpty(ActiveToughness))
+        {
+            <div class="card-pt">
+                <span class="pt-label">P/T</span>
+                <span class="pt-value">@ActivePower / @ActiveToughness</span>
+            </div>
+        }
+
+        @* ── Oracle Text ── *@
+        @if (!string.IsNullOrEmpty(ActiveOracleText))
+        {
+            <div class="card-oracle"><MagicText Text="@ActiveOracleText" /></div>
+        }
+        else if (_isDoubleSided)
+        {
+            <div class="card-oracle" style="color:#666; font-style:italic;">(no oracle text for this face)</div>
+        }
+
+        @* ── Divider ── *@
+        <hr class="card-sep" />
+
+        @* ── Details Grid ── *@
+        <div class="card-details">
+            <div class="detail-row">
+                <span class="detail-label">Set</span>
+                <span class="detail-value">@(_setDisplayName ?? _card.SetCode ?? "—")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(_card.CollectorNumber))
+            {
+                <div class="detail-row">
+                    <span class="detail-label">#</span>
+                    <span class="detail-value">@_card.CollectorNumber</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_card.Artist))
+            {
+                <div class="detail-row">
+                    <span class="detail-label">Artist</span>
+                    <span class="detail-value">@_card.Artist</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_card.Language))
+            {
+                <div class="detail-row">
+                    <span class="detail-label">Lang</span>
+                    <span class="detail-value">@_card.Language</span>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_card.Usd) || !string.IsNullOrEmpty(_card.UsdFoil))
+            {
+                <div class="detail-row">
+                    <span class="detail-label">Prices</span>
+                    <span class="detail-value prices-info">
+                        <span title="regular card">@FormatPrice(_card.Usd)</span>   <span class="foil-price" title="foil card">@FormatPrice(_card.UsdFoil)</span>
+                    </span>
+                </div>
+            }
+        </div>
+
+        @* ── Rulings ── *@
+        @if (!string.IsNullOrEmpty(_card.Rulings))
+        {
+            <hr class="card-sep" />
+            <div class="card-rulings">
+                <div class="rulings-header">Rulings</div>
+                <pre class="rulings-text">@_card.Rulings</pre>
+            </div>
+        }
+
+        @* ── Legality ── *@
+        @if (!_card.LegalityMap.IsEmpty)
+        {
+            <hr class="card-sep" />
+            <div class="card-legality">
+                <div class="legality-header">Legality</div>
+                <div class="legality-grid">
+                    @foreach (var fmt in _card.Legal.Split(','))
+                    {
+                        <span class="legality-tag legal">@fmt.ToUpper()</span>
+                    }
+                </div>
+            </div>
+        }
+    }
+    else if (CardId.HasValue)
+    {
+        <div class="card-desc-empty">Card not found in knowledge base</div>
+    }
+    else
+    {
+        <div class="card-desc-hint">Select a card to see details</div>
+    }
+</div>
+
+@code {
+    private MagicCard? _card;
+    private bool _loading;
+    private bool _isDoubleSided;
+    private bool _showBack;
+    private string? _setDisplayName;
+    private (string Language, Guid Id)[] _availableLanguages = Array.Empty<(string, Guid)>();
+
+    // ── Active face helpers (double-sided cards) ──
+    private CardFace? ActiveFace => _isDoubleSided && _card?.CardFaces is { Length: >= 2 }
+        ? (_showBack ? _card.CardFaces[1] : _card.CardFaces[0])
+        : null;
+
+    // Scryfall fills PrintedName/PrintedText/PrintedTypeLine for many double-sided cards.
+    // Fall back to base card values if face-specific fields are empty.
+    private string ActiveName => ActiveFace is { } f
+        ? (f.PrintedName ?? f.Name ?? _card?.PrintedName ?? _card?.Name ?? string.Empty)
+        : (_card?.PrintedName ?? _card?.Name ?? string.Empty);
+    private string ActiveManaCost => ActiveFace is { ManaCost: not null } face
+        ? face.ManaCost
+        : (_card?.ManaCost ?? string.Empty);
+    private string ActiveTypeLine => ActiveFace is { } f
+        ? (f.PrintedTypeLine ?? f.TypeLine ?? _card?.PrintedTypeLine ?? _card?.Type ?? "—")
+        : (_card?.PrintedTypeLine ?? _card?.Type ?? "—");
+    private string? ActiveOracleText => ActiveFace is { } f
+        ? (f.PrintedText ?? f.OracleText ?? _card?.PrintedText ?? _card?.OracleText)
+        : _card?.PrintedText ?? _card?.OracleText;
+    private string? ActivePower => ActiveFace?.Power ?? _card?.Power;
+    private string? ActiveToughness => ActiveFace?.Toughness ?? _card?.Toughness;
+
+    private void ToggleFront() => _showBack = false;
+    private void ToggleBack() => _showBack = true;
+
+    // Cache: setCode → CardSet (full name)
+    private readonly Dictionary<string, CardSet> _setCache = new();
+
+    [Parameter] public Guid? CardId { get; set; }
+    [Parameter] public bool? ShowBack { get; set; }
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Если родитель передал сторону — синхронизировать внутреннее состояние
+        if (ShowBack.HasValue)
+        {
+            _showBack = ShowBack.Value;
+        }
+
+        if (!CardId.HasValue)
+        {
+            _card = null;
+            _isDoubleSided = false;
+            _showBack = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _card = await CardSearch.GetCardByIdAsync(CardId.Value);
+            _isDoubleSided = _card?.Has2Faces ?? false;
+            // Load set name from cache or DB
+            await LoadSetNameAsync(_card?.SetCode);
+            // Load available languages for this OracleId
+            if (_card != null)
+            {
+                _availableLanguages = await GetCardLanguagesQuery.Handle(new GetCardLanguagesQuery(_card.OracleId));
+            }
+        }
+        catch
+        {
+            _card = null;
+            _isDoubleSided = false;
+            _setDisplayName = null;
+            _availableLanguages = Array.Empty<(string, Guid)>();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+
+
+    /// <summary>
+    /// Loads full set name from cache or DB and stores in _setDisplayName.
+    /// </summary>
+    private async Task LoadSetNameAsync(string? setCode)
+    {
+        if (string.IsNullOrEmpty(setCode))
+        {
+            _setDisplayName = null;
+            return;
+        }
+
+        if (_setCache.TryGetValue(setCode, out var cardSet))
+        {
+            _setDisplayName = cardSet.Name;
+            return;
+        }
+
+        try
+        {
+            cardSet = await GetCardSetQuery.Handle(new GetCardSetQuery(setCode));
+            if (cardSet != null)
+            {
+                _setCache[setCode] = cardSet;
+                _setDisplayName = cardSet.Name;
+            }
+            else
+            {
+                _setDisplayName = null; // Fallback to setCode in UI
+            }
+        }
+        catch
+        {
+            _setDisplayName = null; // Fallback to setCode in UI
+        }
+    }
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+
+    private static string FormatPrice(string? price)
+    {
+        if (string.IsNullOrWhiteSpace(price)) return "—";
+        return $"{price}$";
+    }
+
+    /// <summary>
+    /// Switch to a different language version of the same card.
+    /// Updates CardId so OnParametersSetAsync reloads the full card data.
+    /// </summary>
+    private async Task OnLanguageSelected((string Language, Guid Id) lang)
+    {
+        if (lang.Id == _card?.Id) return; // already active
+
+        CardId = lang.Id;
+        _showBack = false;
+        _loading = true;
+        try
+        {
+            _card = await CardSearch.GetCardByIdAsync(lang.Id);
+            _isDoubleSided = _card?.Has2Faces ?? false;
+            await LoadSetNameAsync(_card?.SetCode);
+            // Re-load languages (same OracleId, same result — but keep consistent)
+            if (_card != null)
+            {
+                _availableLanguages = await GetCardLanguagesQuery.Handle(new GetCardLanguagesQuery(_card.OracleId));
+            }
+        }
+        catch
+        {
+            _card = null;
+            _isDoubleSided = false;
+            _availableLanguages = Array.Empty<(string, Guid)>();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

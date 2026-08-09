@@ -1,0 +1,40 @@
+.type-page { padding: 12px; }
+
+.section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 600; color: #cdd6f4; margin-bottom: 12px;
+}
+.loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
+
+.type-cards-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px;
+}
+.type-card {
+    background: #1e1e2e; border: 1px solid #313244; border-radius: 8px; padding: 12px;
+    position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+}
+.type-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.type-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--card-accent); border-radius: 8px 8px 0 0;
+}
+.type-icon { font-size: 24px; margin-bottom: 6px; }
+.type-name { font-size: 13px; font-weight: 600; color: #cdd6f4; margin-bottom: 2px; }
+.type-count { font-size: 11px; color: #a6adc8; margin-bottom: 8px; }
+.type-bar-track { height: 6px; background: #313244; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.type-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.type-percent { font-size: 10px; color: #6c7086; text-align: right; }
+
+.summary-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+.stat-card {
+    flex: 1; min-width: 100px; background: #1e1e2e; border: 1px solid #313244;
+    border-radius: 8px; padding: 12px; text-align: center;
+}
+.stat-value { font-size: 20px; font-weight: 700; color: #cdd6f4; }
+.stat-label { font-size: 11px; color: #6c7086; margin-top: 4px; }
+
+.loading-state, .empty-state, .error-state {
+    padding: 24px; text-align: center; color: #6c7086; font-size: 13px;
+}
+.error-state { color: #f38ba8; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.retry-btn { background: #3c3c3c; border: 1px solid #555; color: #ccc; padding: 4px 12px; border-radius: 4px; cursor: pointer; }

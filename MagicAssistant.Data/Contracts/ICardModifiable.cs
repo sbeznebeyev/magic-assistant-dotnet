@@ -1,0 +1,18 @@
+﻿using MagicAssistant.Data.Model;
+
+namespace MagicAssistant.Data.Contracts;
+
+/// <summary>
+/// Interface for modifiable cards (physical instances that can be edited).
+/// Mirrors Java ICardModifiable.
+/// </summary>
+public interface ICardModifiable : IMagicCard
+{
+    bool IsOwn { get; set; }
+    new Location Location { get; set; }
+    float? Price { get; set; }
+    string? Comment { get; set; }
+    string? SpecialTags { get; set; }
+    string? Custom { get; set; }
+    void SetCount(int count);
+}

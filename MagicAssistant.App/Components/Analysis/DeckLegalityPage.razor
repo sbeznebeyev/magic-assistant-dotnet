@@ -1,0 +1,203 @@
+@*
+    DeckLegalityPage — Format legality analysis with visual indicators
+    Mirrors Java: ui.views.analyzers.DeckLegalityPage2
+    
+    Features:
+    - Visual format cards with legal/illegal status
+    - Color-coded badges (green=legal, red=illegal)
+    - Illegal cards list with expand/collapse
+    - Summary stats with progress bar
+    - Error handling and loading states
+*@
+
+<div class="legality-page">
+    <div class="section-header">
+        <span>Format Legality</span>
+        @if (_loading) { <span class="loading-indicator">Loading...</span> }
+    </div>
+
+    <div class="analysis-content">
+        @if (_error != null)
+        {
+            <div class="error-state">
+                <span>⚠ @_error</span>
+                <button class="retry-btn" @onclick="Reload">Retry</button>
+            </div>
+        }
+        else if (_loading && _formats == null)
+        {
+            <div class="loading-state">Loading legality data...</div>
+        }
+        else if (_formats != null && _formats.Any())
+        {
+            @* ── Summary Banner ── *@
+            <div class="summary-banner">
+                <div class="summary-stat">
+                    <div class="summary-value legal">@_legalCount</div>
+                    <div class="summary-label">Legal Formats</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="summary-value illegal">@_illegalCount</div>
+                    <div class="summary-label">Illegal Formats</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="summary-value total">@_formats.Count</div>
+                    <div class="summary-label">Total Checked</div>
+                </div>
+            </div>
+
+            @* ── Legality Progress Bar ── *@
+            <div class="legality-progress">
+                <div class="progress-label">Deck Legality Rate</div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width: @_legalityRate%;"></div>
+                </div>
+                <div class="progress-value">@_legalityRate.ToString("F0")%</div>
+            </div>
+
+            @* ── Format Cards Grid ── *@
+            <div class="format-grid">
+                @foreach (var format in _formats)
+                {
+                    <div class="format-card @(format.IsLegal ? "legal" : "illegal")">
+                        <div class="format-header">
+                            <span class="format-name">@format.FormatName</span>
+                            <span class="legality-badge @(format.IsLegal ? "badge-legal" : "badge-illegal")">
+                                @(format.IsLegal ? "✓ Legal" : "✕ Illegal")
+                            </span>
+                        </div>
+
+                        @if (!format.IsLegal && format.IllegalCards.Any())
+                        {
+                            <div class="illegal-section">
+                                <button class="toggle-btn" @onclick="() => ToggleFormat(format.FormatName)">
+                                    @_expandedFormats.Contains(format.FormatName) ? "▾" : "▸" @format.IllegalCards.Count illegal card@(format.IllegalCards.Count != 1 ? "s" : "")
+                                </button>
+
+                                @if (_expandedFormats.Contains(format.FormatName))
+                                {
+                                    <div class="illegal-cards-list">
+                                        @foreach (var card in format.IllegalCards)
+                                        {
+                                            <span class="illegal-card-tag">@card</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_totalIllegalCards > 0)
+            {
+                <div class="total-illegal">
+                    <span class="total-label">Total unique illegal cards:</span>
+                    <span class="total-value">@_totalIllegalCards</span>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="empty-state">
+                <span>No legality data available.</span>
+                <span>Add cards to your deck to check format legality.</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<FormatLegalityItem>? _formats;
+    private int _totalIllegalCards;
+    private int _legalCount;
+    private int _illegalCount;
+    private double _legalityRate;
+    private HashSet<string> _expandedFormats = new();
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public int DeckId { get; set; }
+    [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DeckId <= 0) return;
+        await LoadLegality();
+    }
+
+    private async Task LoadLegality()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var cards = await CollectionStore.GetDeckCardsAsync(DeckId);
+            if (cards.Count > 0) BuildLegalityData(cards);
+            else _error = "No deck data available.";
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Reload() => await LoadLegality();
+
+    private void BuildLegalityData(ICollection<MagicCardPhysical> cards)
+    {
+        // Enum Format → display name mapping
+        var formatMap = new Dictionary<Format, string>
+        {
+            [Format.Standard] = "Standard",
+            [Format.Pioneer] = "Pioneer",
+            [Format.Modern] = "Modern",
+            [Format.Legacy] = "Legacy",
+            [Format.Vintage] = "Vintage",
+            [Format.Commander] = "Commander",
+            [Format.Brawl] = "Brawl",
+            [Format.Historic] = "Historic",
+            [Format.Pauper] = "Pauper",
+            [Format.FutureStandard] = "Future Standard",
+        };
+
+        _formats = new List<FormatLegalityItem>();
+        var allIllegalCards = new HashSet<string>();
+
+        foreach (var (format, formatName) in formatMap)
+        {
+            var illegalCards = cards
+                .Where(c => !c.Card.LegalityMap.IsLegal(format))
+                .Select(c => c.Card.Name)
+                .Distinct()
+                .ToList();
+
+            _formats.Add(new FormatLegalityItem
+            {
+                FormatName = formatName,
+                IsLegal = illegalCards.Count == 0,
+                IllegalCards = illegalCards
+            });
+
+            allIllegalCards.UnionWith(illegalCards);
+        }
+
+        _totalIllegalCards = allIllegalCards.Count;
+        _legalCount = _formats.Count(f => f.IsLegal);
+        _illegalCount = _formats.Count(f => !f.IsLegal);
+        _legalityRate = _formats.Count > 0 ? (double)_legalCount / _formats.Count * 100 : 0;
+    }
+
+    private void ToggleFormat(string formatName)
+    {
+        if (_expandedFormats.Contains(formatName))
+            _expandedFormats.Remove(formatName);
+        else
+            _expandedFormats.Add(formatName);
+        StateHasChanged();
+    }
+
+    private class FormatLegalityItem
+    {
+        public string FormatName { get; set; } = "";
+        public bool IsLegal { get; set; }
+        public List<string> IllegalCards { get; set; } = new();
+    }
+}

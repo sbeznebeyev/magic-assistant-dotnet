@@ -1,0 +1,140 @@
+using Bunit;
+using MagicAssistant.App.Components.Views;
+using Microsoft.AspNetCore.Components.Web;
+
+namespace MagicAssistant.Tests.UI;
+
+/// <summary>
+/// Tests for SearchControl — FTS5 full-text search.
+/// </summary>
+[TestFixture]
+public class SearchControlTests : BaseUiTest
+{
+    [SetUp]
+    public override void SetUp()
+    {
+        base.SetUp();
+        CardSearch.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<IMagicCard>
+            {
+                new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt" },
+                new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Helix" },
+            });
+    }
+
+    [Test]
+    public void Renders_SearchInputAndButton()
+    {
+        var cut = Ctx.Render<SearchControl>();
+        Assert.That(cut.Find(".search-input"), Is.Not.Null);
+        Assert.That(cut.Find(".search-btn"), Is.Not.Null);
+    }
+
+    [Test]
+    public void DefaultPlaceholder_IsCorrect()
+    {
+        var cut = Ctx.Render<SearchControl>();
+        Assert.That(cut.Find(".search-input").GetAttribute("placeholder"), Does.Contain("FTS5"));
+    }
+
+    [Test]
+    public void InDeckView_ChangesPlaceholder()
+    {
+        var cut = Ctx.Render<SearchControl>(p => p.Add(s => s.InDeckView, true));
+        Assert.That(cut.Find(".search-input").GetAttribute("placeholder"), Does.Contain("Filter deck"));
+    }
+
+    [Test]
+    public async Task ClickSearchButton_ExecutesSearch()
+    {
+        string? completedQuery = null;
+        var cut = Ctx.Render<SearchControl>(p =>
+            p.Add(s => s.OnSearchCompleted, (string q) => completedQuery = q));
+
+        cut.Find(".search-input").Input("lightning");
+        cut.Find(".search-btn").Click();
+        await Task.Yield();
+
+        Assert.That(completedQuery, Is.EqualTo("lightning"));
+    }
+
+    [Test]
+    public async Task EnterKey_ExecutesSearch()
+    {
+        string? completedQuery = null;
+        var cut = Ctx.Render<SearchControl>(p =>
+            p.Add(s => s.OnSearchCompleted, (string q) => completedQuery = q));
+
+        var input = cut.Find(".search-input");
+        input.Input("creature");
+        input.KeyDown(new KeyboardEventArgs { Key = "Enter", Type = "keydown" });
+        await Task.Yield();
+
+        Assert.That(completedQuery, Is.EqualTo("creature"));
+    }
+
+    [Test]
+    public async Task Search_DisplaysResultCount()
+    {
+        int? resultCount = null;
+        var cut = Ctx.Render<SearchControl>(p =>
+            p.Add(s => s.OnResultCountChanged, (int c) => resultCount = c));
+
+        cut.Find(".search-input").Input("test");
+        cut.Find(".search-btn").Click();
+        await Task.Yield();
+
+        Assert.That(resultCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ClearButton_ClearsQueryAndResults()
+    {
+        var cut = Ctx.Render<SearchControl>();
+        cut.Find(".search-input").Input("test");
+        cut.Find(".search-btn").Click();
+        await Task.Yield();
+
+        Assert.That(cut.Markup, Does.Contain("2 results"));
+        cut.Find(".clear-btn").Click();
+
+        Assert.That(cut.Find(".search-input").GetAttribute("value"), Is.Null.Or.Empty);
+    }
+
+    [Test]
+    public void ScopeSelector_HasAllOptions()
+    {
+        var cut = Ctx.Render<SearchControl>();
+        var options = cut.Find(".scope-select").QuerySelectorAll("option");
+        var values = options.Select(o => o.TextContent.Trim()).ToList();
+
+        Assert.That(values, Does.Contain("All"));
+        Assert.That(values, Does.Contain("Name"));
+        Assert.That(values, Does.Contain("Type"));
+        Assert.That(values, Does.Contain("Text"));
+    }
+
+    [Test]
+    public void AdvancedToggle_ShowsAdvancedPanel()
+    {
+        var cut = Ctx.Render<SearchControl>();
+        Assert.That(cut.Markup, Does.Not.Contain("search-advanced"));
+        cut.Find(".advanced-toggle").Click();
+        Assert.That(cut.Markup, Does.Contain("search-advanced"));
+    }
+
+    [Test]
+    public async Task SearchError_DisplaysErrorMessage()
+    {
+        CardSearch.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("FTS5 index corrupted"));
+
+        var cut = Ctx.Render<SearchControl>();
+        cut.Find(".search-input").Input("test");
+        cut.Find(".search-btn").Click();
+        await Task.Yield();
+
+        Assert.That(cut.Markup, Does.Contain("search-error"));
+        Assert.That(cut.Markup, Does.Contain("FTS5 index corrupted"));
+    }
+}

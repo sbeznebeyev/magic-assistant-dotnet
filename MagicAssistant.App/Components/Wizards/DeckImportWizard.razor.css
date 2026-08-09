@@ -1,0 +1,124 @@
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 3000;
+}
+
+.dialog-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1e1e1e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 360px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #eee;
+}
+
+.form-group {
+    margin-bottom: 12px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+.dialog-input,
+.dialog-select {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.dialog-input:focus,
+.dialog-select:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.file-input {
+    width: 100%;
+    padding: 6px;
+}
+
+.file-info {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #4caf50;
+}
+
+.deck-info {
+    padding: 6px 8px;
+    background: #2d2d2d;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.dialog-error {
+    color: #e74c3c;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.btn-primary {
+    background: #0078d4;
+    color: #fff;
+    border: none;
+    padding: 6px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.btn-primary:disabled {
+    background: #3c3c3c;
+    color: #888;
+    cursor: default;
+}
+
+.btn-secondary {
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 6px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.dialog-loading,
+.dialog-success {
+    padding: 20px;
+    text-align: center;
+    color: #888;
+}
+
+.dialog-success {
+    color: #4caf50;
+}

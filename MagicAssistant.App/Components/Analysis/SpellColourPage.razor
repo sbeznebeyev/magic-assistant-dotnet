@@ -1,0 +1,151 @@
+@*
+    SpellColourPage — Color distribution (pure CSS progress bars + color identity)
+    Mirrors Java: ui.views.analyzers.SpellColourPage + CardStoreUtils.buildSpellColorStats
+    
+    Features:
+    - MTG color-coded progress bars with hover effects
+    - Color identity detection and display
+    - Summary stats
+*@
+
+<div class="color-distribution-page">
+    <div class="section-header">
+        <span>Color Distribution</span>
+        @if (_loading) { <span class="loading-indicator">Loading...</span> }
+    </div>
+
+    <div class="analysis-content">
+        @if (_error != null)
+        {
+            <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
+        }
+        else if (_loading && _colorItems.Count == 0)
+        {
+            <div class="loading-state">Loading color distribution...</div>
+        }
+        else if (_colorItems.Count > 0)
+        {
+            @* ── Color Identity Banner ── *@
+            <div class="color-identity-banner">
+                <span class="identity-label">Color Identity:</span>
+                @foreach (var color in _colorItems)
+                {
+                    <span class="identity-dot" style="background: @color.Hex;" title="@color.DisplayName">@color.Symbol</span>
+                }
+            </div>
+
+            @* ── Color Progress Bars ── *@
+            <div class="color-bars">
+                @foreach (var color in _colorItems)
+                {
+                    <div class="color-bar-row" style="--bar-color: @color.Hex;">
+                        <div class="color-bar-header">
+                            <span class="color-symbol">@color.Symbol</span>
+                            <span class="color-name">@color.DisplayName</span>
+                        </div>
+                        <div class="color-bar-track">
+                            <div class="color-bar-fill" style="width: @color.Percentage%; background: linear-gradient(90deg, @color.Hex, @color.LightHex);"></div>
+                        </div>
+                        <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
+                    </div>
+                }
+            </div>
+
+            @* ── Summary Stats ── *@
+            <div class="summary-stats">
+                <div class="stat-card"><div class="stat-value">@_totalCards</div><div class="stat-label">Non-Land Cards</div></div>
+                <div class="stat-card"><div class="stat-value">@_colorItems.Count</div><div class="stat-label">Colors Used</div></div>
+                <div class="stat-card"><div class="stat-value">@_dominantColor</div><div class="stat-label">Dominant Color</div></div>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <span>No color distribution data available.</span>
+                <span>Add non-land cards to your deck to see the distribution.</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<ColorItem> _colorItems = new();
+    private int _totalCards;
+    private string _dominantColor = "—";
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public int DeckId { get; set; }
+    [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
+    [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DeckId <= 0) return;
+        await LoadAnalysis();
+    }
+
+    private async Task LoadAnalysis()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            if (cards.Count == 0)
+            {
+                _colorItems = new List<ColorItem>();
+                _totalCards = 0;
+            }
+            else
+            {
+                var result = AnalysisService.Analyze(cards);
+                BuildChartData(result);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Reload() => await LoadAnalysis();
+
+    private void BuildChartData(DeckAnalysisResult result)
+    {
+        _totalCards = result.ColorDistribution.Values.Sum();
+        if (_totalCards == 0) return;
+
+        var colorMap = new Dictionary<string, (string Hex, string LightHex, string DisplayName, string Symbol)>
+        {
+            ["W"] = ("#e8daef", "#f5eef8", "White", "W"),
+            ["U"] = ("#85c1e9", "#aed6f1", "Blue", "U"),
+            ["B"] = ("#5d6d7e", "#85929e", "Black", "B"),
+            ["R"] = ("#e74c3c", "#f1948a", "Red", "R"),
+            ["G"] = ("#2ecc71", "#82e0aa", "Green", "G"),
+        };
+
+        _colorItems = result.ColorDistribution
+            .Select(kv =>
+            {
+                var (hex, lightHex, displayName, symbol) = colorMap.TryGetValue(kv.Key, out var val) ? val : ("#95a5a6", "#bdc3c7", kv.Key, "?");
+                return new ColorItem
+                {
+                    Key = kv.Key, Hex = hex, LightHex = lightHex, DisplayName = displayName, Symbol = symbol,
+                    Count = kv.Value, Percentage = (double)kv.Value / _totalCards * 100
+                };
+            })
+            .OrderByDescending(c => c.Count)
+            .ToList();
+
+        _dominantColor = _colorItems.FirstOrDefault()?.DisplayName ?? "—";
+    }
+
+    private class ColorItem
+    {
+        public string Key { get; set; } = "";
+        public string Hex { get; set; } = "";
+        public string LightHex { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Symbol { get; set; } = "";
+        public int Count { get; set; }
+        public double Percentage { get; set; }
+    }
+}

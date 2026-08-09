@@ -1,0 +1,69 @@
+@*
+    CollectorView — Трекер коллекции по сетам
+    Аналог Java: ui.views.collector.CollectorView, ProgressColumn, Progress4Column
+    
+    Показывает прогресс сбора каждого сета: собрано X из Y карт
+    с визуальным прогресс-баром
+*@
+
+<div class="section-header">Collector's Progress</div>
+
+<div style="padding: 4px;">
+    @if (_progress != null && _progress.Any())
+    {
+        <table class="card-table">
+            <thead>
+                <tr>
+                    <th>Set</th>
+                    <th>Collected</th>
+                    <th>Total</th>
+                    <th>Progress</th>
+                    <th>4x</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _progress)
+                {
+                    <tr>
+                        <td>@item.SetName</td>
+                        <td>@item.OwnedCards</td>
+                        <td>@item.TotalCards</td>
+                        <td>
+                            <div style="background:#333; height:12px; border-radius:2px; overflow:hidden;">
+                                <div style="background:#0078d4; height:100%; width:@(item.ProgressPercent)%"></div>
+                            </div>
+                            @item.ProgressPercent.ToString("F0")%
+                        </td>
+                        <td>—</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div style="color:#666; text-align:center; padding:20px 0;">
+            No collector data loaded.<br/>
+            Sync sets from Scryfall to track progress.
+        </div>
+    }
+</div>
+
+@using MagicAssistant.Core.Services.DeckAnalysis
+@inject IDeckAnalysisService DeckAnalysisService
+
+@code {
+    private ICollection<CollectorProgressEntry>? _progress = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _progress = await DeckAnalysisService.GetCollectorProgressAsync();
+        }
+        catch
+        {
+            _progress = null;
+        }
+    }
+}

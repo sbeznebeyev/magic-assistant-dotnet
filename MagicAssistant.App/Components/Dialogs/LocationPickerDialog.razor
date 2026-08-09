@@ -1,0 +1,164 @@
+@using MagicAssistant.Core.Services.DeckManagement
+@using MagicAssistant.Data.Model.NavigatorNodes
+@inject IDeckManagementService DeckManagement
+
+@if (!IsOpen) return;
+
+<div class="location-overlay" @onclick="OnOverlayClick">
+    <div class="location-box" @onclick:stopPropagation="true">
+        @* ── Header ── *@
+        <div class="location-header">
+            <span class="location-title">Select Location</span>
+            <button class="close-btn" @onclick="Close">✕</button>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="location-loading">Loading decks...</div>
+        }
+        else if (_error != null)
+        {
+            <div class="location-error">@_error</div>
+        }
+        else if (!_allDecks.Any())
+        {
+            <div class="location-empty">No decks found. Create a deck first.</div>
+        }
+        else
+        {
+            @* ── Search ── *@
+            <div class="location-search">
+                <input @bind="_searchQuery" @bind:event="oninput" placeholder="Search decks..." class="location-input" />
+            </div>
+
+            @* ── Deck list ── *@
+            <div class="location-list">
+                @foreach (var deck in _filteredDecks)
+                {
+                    <div class="location-item @(deck.Id == _selectedId ? "selected" : "")"
+                         @onclick="() => SelectDeck(deck)">
+                        <span class="item-icon">🃏</span>
+                        <span class="item-name">@deck.Name</span>
+                        <span class="item-count">@deck.CardCount cards</span>
+                    </div>
+                }
+            </div>
+
+            @* ── Sideboard toggle ── *@
+            <div class="location-sideboard">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="_isSideboard" />
+                    <span>Move to sideboard</span>
+                </label>
+            </div>
+
+            @* ── Footer ── *@
+            <div class="location-footer">
+                <button class="btn-select" @onclick="OnSelect" disabled="@(!_selectedId.HasValue)">Select</button>
+                <button class="btn-cancel" @onclick="Close">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<NavigatorNodeDeck> _allDecks = new();
+    private List<NavigatorNodeDeck> _filteredDecks = new();
+    private int? _selectedId;
+    private bool _loading;
+    private string? _error;
+    private string _searchQuery = "";
+    private bool _isSideboard;
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<LocationResult> OnSelected { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && _allDecks.Count == 0)
+            await LoadDecks();
+    }
+
+    private async Task LoadDecks()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var tree = await DeckManagement.GetAllNodesAsync();
+            // Extract all decks from the pre-built hierarchical tree
+            _allDecks = new List<NavigatorNodeDeck>();
+            foreach (var node in tree.Values)
+            {
+                CollectDecks(node);
+            }
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CollectDecks(NavigatorNodeBase node)
+    {
+        if (node is NavigatorNodeDeck deck)
+        {
+            _allDecks.Add(deck);
+        }
+        else if (node is NavigatorNodeFolder folder && folder.Children != null)
+        {
+            foreach (var child in folder.Children)
+            {
+                CollectDecks(child);
+            }
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredDecks = string.IsNullOrWhiteSpace(_searchQuery)
+            ? _allDecks
+            : _allDecks.Where(d => d.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        StateHasChanged();
+    }
+
+    private void SelectDeck(NavigatorNodeBase deck)
+    {
+        _selectedId = deck.Id;
+        StateHasChanged();
+    }
+
+    private async Task OnSelect()
+    {
+        if (!_selectedId.HasValue) return;
+
+        var result = new LocationResult
+        {
+            DeckId = _selectedId.Value,
+            IsSideboard = _isSideboard,
+        };
+
+        await OnSelected.InvokeAsync(result);
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task OnOverlayClick() => await Close();
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            _ = Close();
+    }
+}

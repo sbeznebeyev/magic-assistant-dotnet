@@ -1,0 +1,185 @@
+/* ── Overlay ───────────────────────────────────────── */
+.edit-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* ── Dialog box ────────────────────────────────────── */
+.edit-dialog-box {
+    background: #252525;
+    border: 1px solid #444;
+    border-radius: 8px;
+    width: 400px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Header ────────────────────────────────────────── */
+.edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #383838;
+}
+
+.edit-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ddd;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.close-btn:hover {
+    background: #383838;
+    color: #ccc;
+}
+
+/* ── Card preview ──────────────────────────────────── */
+.edit-card-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #2a2a2a;
+    border-bottom: 1px solid #333;
+}
+
+.preview-name {
+    font-size: 13px;
+    color: #ccc;
+    font-weight: 500;
+}
+
+.preview-cost {
+    font-size: 12px;
+    color: #888;
+}
+
+/* ── Form ──────────────────────────────────────────── */
+.edit-form {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.form-label {
+    font-size: 11px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Inputs ────────────────────────────────────────── */
+.form-input,
+.form-select,
+.form-textarea {
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+.form-input-sm {
+    width: 70px;
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 48px;
+}
+
+.tag-hint {
+    font-size: 10px;
+    color: #666;
+    margin-top: 2px;
+}
+
+/* ── Error ─────────────────────────────────────────── */
+.edit-error {
+    padding: 8px 16px;
+    color: #e74c3c;
+    font-size: 12px;
+    background: rgba(231, 76, 60, 0.1);
+    border-top: 1px solid #383838;
+}
+
+/* ── Footer ────────────────────────────────────────── */
+.edit-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #383838;
+}
+
+.btn-save,
+.btn-cancel {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-save {
+    background: #0078d4;
+    color: white;
+}
+
+.btn-save:hover:not(:disabled) {
+    background: #106ebe;
+}
+
+.btn-save:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.btn-cancel {
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+}
+
+.btn-cancel:hover:not(:disabled) {
+    background: #4a4a4a;
+}
+
+.btn-cancel:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

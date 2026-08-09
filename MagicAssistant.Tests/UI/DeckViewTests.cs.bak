@@ -1,0 +1,325 @@
+using Bunit;
+using MagicAssistant.App.Components.Views;
+using AngleSharp.Dom;
+
+namespace MagicAssistant.Tests.UI;
+
+/// <summary>
+/// Tests for DeckView — the primary deck management view.
+/// </summary>
+[TestFixture]
+public class DeckViewTests : BaseUiTest
+{
+    private static List<MagicCardPhysical> CreateTestCards(int count = 3)
+    {
+        var cards = new List<MagicCardPhysical>();
+        for (int i = 0; i < count; i++)
+        {
+            var baseCard = new MagicCard
+            {
+                Id = Guid.NewGuid(), Name = $"Test Card {i}", ManaCost = "{W}",
+                Type = i == 0 ? "Basic Land — Plains" : "Creature — Human Warrior",
+                SetCode = "M19",
+                Rarity = i switch { 0 => "common", 1 => "rare", _ => "mythic" },
+                Cmc = i.ToString()
+            };
+            cards.Add(new MagicCardPhysical(baseCard, Location.FromPath($"deck_{i}"), true) { Count = i + 1 });
+        }
+        return cards;
+    }
+
+    [Test]
+    public async Task Renders_DeckHeader_WithCorrectStats()
+    {
+        var cards = new List<MagicCardPhysical>
+        {
+            new(new MagicCard { Id = Guid.NewGuid(), Name = "Plains", Type = "Basic Land — Plains", SetCode = "m19" }, Location.FromPath("d1"), true) { Count = 24 },
+            new(new MagicCard { Id = Guid.NewGuid(), Name = "Knight", Type = "Creature — Human Knight", SetCode = "m19" }, Location.FromPath("d1"), true) { Count = 4 },
+            new(new MagicCard { Id = Guid.NewGuid(), Name = "Fireball", Type = "Sorcery", SetCode = "m19" }, Location.FromPath("d1"), true) { Count = 2 },
+        };
+
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Test Deck", null, false, 30));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+        cut.WaitForState(() => cut.Find(".deck-name").TextContent == "Test Deck");
+
+        Assert.That(cut.Markup, Does.Contain("30 cards"));
+        // Component counts unique land/creature types, not sum of counts
+        Assert.That(cut.Markup, Does.Contain("1 land"));
+        Assert.That(cut.Markup, Does.Contain("1 creature"));
+    }
+
+    [Test]
+    public async Task Renders_ErrorState_WhenLoadFails()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("bad-deck", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB connection failed"));
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "bad-deck"));
+        await Task.Yield();
+
+        Assert.That(cut.Find(".deck-error"), Is.Not.Null);
+        Assert.That(cut.Markup, Does.Contain("DB connection failed"));
+    }
+
+    [Test]
+    public async Task Renders_DeckNotFound_WhenDeckIsNull()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("missing", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CardCollectionNode?)null);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "missing"));
+        await Task.Yield();
+
+        Assert.That(cut.Markup, Does.Contain("Deck not found"));
+    }
+
+    [Test]
+    public async Task EmptyDeck_ShowsEmptyMessage()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Empty Deck", null, false, 0));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+
+        Assert.That(cut.Markup, Does.Contain("This deck is empty"));
+    }
+
+    [Test]
+    public async Task Renders_CardTable_WithAllColumns()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        var cards = CreateTestCards(2);
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+        cut.WaitForState(() => cut.FindAll(".card-table tbody tr").Count >= 2);
+
+        Assert.That(cut.FindAll(".card-table tbody tr").Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task SearchInput_FiltersCardsByType()
+    {
+        var cards = CreateTestCards(3);
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 3));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+        cut.WaitForState(() => cut.FindAll(".card-table tbody tr").Count >= 3);
+
+        Assert.That(cut.FindAll(".card-table tbody tr").Count, Is.EqualTo(3));
+        cut.Find(".search-input").Input("Creature");
+        Assert.That(cut.FindAll(".card-table tbody tr").Count, Is.LessThan(3));
+    }
+
+    [Test]
+    public async Task ClearSearchButton_ReshowsAllCards()
+    {
+        var cards = CreateTestCards(3);
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 3));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+        cut.WaitForState(() => cut.FindAll(".card-table tbody tr").Count >= 3);
+
+        cut.Find(".search-input").Input("nonexistent");
+        Assert.That(cut.FindAll(".card-table tbody tr").Count, Is.EqualTo(0));
+        cut.Find(".clear-btn").Click();
+        Assert.That(cut.FindAll(".card-table tbody tr").Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ToggleSort_SwitchesDirection()
+    {
+        var cards = CreateTestCards(3);
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 3));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+
+        var firstRowBefore = cut.FindAll(".card-table tbody tr")[0];
+        var nameBefore = firstRowBefore.QuerySelector(".card-name").TextContent.Trim();
+
+        // Find the Name sort button by checking button text content
+        var nameBtn = cut.FindAll("button").First(b => b.TextContent.Contains("Name"));
+        nameBtn.Click();
+
+        var firstRowAfter = cut.FindAll(".card-table tbody tr")[0];
+        var nameAfter = firstRowAfter.QuerySelector(".card-name").TextContent.Trim();
+
+        Assert.That(nameAfter, Is.Not.EqualTo(nameBefore));
+    }
+
+    [Test]
+    public async Task ActiveSortButton_HasActiveClass()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestCards(2));
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+
+        var nameBtn = cut.FindAll("button").First(b => b.TextContent.Contains("Name"));
+        Assert.That(nameBtn.ClassList, Does.Contain("active"));
+    }
+
+    [Test]
+    public async Task IncrementCount_CallsUpdateCard()
+    {
+        var card = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
+            Location.FromPath("d1"), true) { Count = 1 };
+
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(new[] { card });
+        DeckCard.Setup(s => s.UpdateCardAsync("d1", card.Id, It.IsAny<Dictionary<MagicCardField, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+
+        // + button is the second count-btn in the row
+        cut.FindAll(".count-btn")[1].Click();
+
+        DeckCard.Verify(s => s.UpdateCardAsync("d1", card.Id,
+            It.Is<Dictionary<MagicCardField, object?>>((d) => d[MagicCardField.Count].Equals(2)),
+            It.IsAny<CancellationToken>()), Times.Once());
+    }
+
+    [Test]
+    public async Task DecrementToZero_CallsRemoveCards()
+    {
+        var card = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
+            Location.FromPath("d1"), true) { Count = 1 };
+
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(new[] { card });
+        DeckCard.Setup(s => s.RemoveCardsAsync("d1", It.IsAny<ICollection<Guid>>(), false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+
+        cut.Find(".count-btn").Click(); // - button
+
+        DeckCard.Verify(s => s.RemoveCardsAsync("d1", It.Is<ICollection<Guid>>(c => c.Contains(card.Id)), false, It.IsAny<CancellationToken>()),
+            Times.Once());
+    }
+
+    [Test]
+    public async Task ClickingCardRow_FiresOnCardSelected()
+    {
+        var cards = CreateTestCards(2);
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 2));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        Guid? selectedId = null;
+        var cut = Ctx.Render<DeckView>(p =>
+        {
+            p.Add(d => d.DeckId, "d1");
+            p.Add(d => d.OnCardSelected, (Guid id) => selectedId = id);
+        });
+
+        await Task.Yield();
+        cut.FindAll(".card-table tbody tr")[0].Click();
+        Assert.That(selectedId, Is.EqualTo(cards[0].Id));
+    }
+
+    [Test]
+    public async Task EditButton_FiresOnEditCard()
+    {
+        var card = CreateTestCards(1)[0];
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(new[] { card });
+
+        MagicCardPhysical? editedCard = null;
+        var cut = Ctx.Render<DeckView>(p =>
+        {
+            p.Add(d => d.DeckId, "d1");
+            p.Add(d => d.OnEditCard, (MagicCardPhysical c) => editedCard = c);
+        });
+
+        await Task.Yield();
+        cut.Find(".edit-btn").Click();
+        Assert.That(editedCard, Is.SameAs(card));
+    }
+
+    [Test]
+    public async Task SplitButton_Visible_OnlyWhenCountGreaterThan1()
+    {
+        var cards = new List<MagicCardPhysical>
+        {
+            new(new MagicCard { Id = Guid.NewGuid(), Name = "Single", SetCode = "m19" }, Location.FromPath("d1"), true) { Count = 1 },
+            new(new MagicCard { Id = Guid.NewGuid(), Name = "Multiple", SetCode = "m19" }, Location.FromPath("d1"), true) { Count = 4 },
+        };
+
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 2));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(cards);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        await Task.Yield();
+
+        Assert.That(cut.FindAll(".split-btn").Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task MoveButton_FiresOnOpenLocationPicker()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(CreateTestCards(1));
+
+        bool pickerOpened = false;
+        var cut = Ctx.Render<DeckView>(p =>
+        {
+            p.Add(d => d.DeckId, "d1");
+            p.Add(d => d.OnOpenLocationPicker, () => pickerOpened = true);
+        });
+
+        await Task.Yield();
+        cut.Find(".action-btn").Click();
+        Assert.That(pickerOpened, Is.True);
+    }
+
+    [Test]
+    public async Task FilterButton_FiresOnOpenDeckFilter()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Deck", null, false, 1));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>())).ReturnsAsync(CreateTestCards(1));
+
+        bool filterOpened = false;
+        var cut = Ctx.Render<DeckView>(p =>
+        {
+            p.Add(d => d.DeckId, "d1");
+            p.Add(d => d.OnOpenDeckFilter, () => filterOpened = true);
+        });
+
+        await Task.Yield();
+        cut.Find(".filter-btn").Click();
+        Assert.That(filterOpened, Is.True);
+    }
+}

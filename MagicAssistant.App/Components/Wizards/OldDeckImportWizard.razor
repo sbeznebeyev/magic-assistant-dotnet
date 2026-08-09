@@ -1,0 +1,173 @@
+@using MagicAssistant.Data.DbModel
+@using MagicAssistant.Data.Model
+@using MagicAssistant.Data.Model.NavigatorNodes
+@inject IDeckManagementService DeckManagement
+@inject IDeckImportExportService ImportExport
+
+<div class="dialog-overlay" @onclick="OnOverlayClick">
+    <div class="dialog-box" @onclick:stopPropagation="true">
+        <div class="dialog-title">📜 Import Legacy Deck</div>
+
+        <div style="color:#888;font-size:0.9em;margin-bottom:12px;">
+            For old Magic Assistant XML files with Gatherer IDs and full set names (e.g. "Core Set 2019").<br />
+            Cards will be resolved against the knowledge base.
+        </div>
+
+        @if (_importing)
+        {
+            <div class="dialog-loading">Importing...</div>
+        }
+        else
+        {
+            @* ── Step 1: Select File ── *@
+            <div class="form-group">
+                <label>Select XML File</label>
+                <InputFile OnChange="OnFileSelected" accept=".xml" class="file-input" />
+                @if (_fileName != null)
+                {
+                    <div class="file-info">✓ @_fileName</div>
+                }
+            </div>
+
+            @* ── Step 2: Target Deck ── *@
+            <div class="form-group">
+                <label>Import to</label>
+                <select @bind="_importMode" class="dialog-select">
+                    <option value="new">New deck (creates from file name)</option>
+                    @foreach (var deck in _existingDecks)
+                    {
+                        <option value="@deck.Id">@deck.Name (add to existing)</option>
+                    }
+                </select>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="dialog-error">@_error</div>
+            }
+
+            <div class="dialog-actions">
+                <button class="btn-primary" @onclick="OnImport"
+                        disabled="@(_fileName == null)">
+                    Import Legacy
+                </button>
+                <button class="btn-secondary" @onclick="Close">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string? _fileName;
+    private byte[]? _fileContent;
+    private string _importMode = "new";
+    private bool _importing;
+    private string? _error;
+    private List<NavigatorNodeBase> _existingDecks = new();
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnImported { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            _fileName = null;
+            _fileContent = null;
+            _importMode = "new";
+            _error = null;
+            _importing = false;
+
+            try
+            {
+                var tree = await DeckManagement!.GetAllNodesAsync();
+                _existingDecks = tree.Values.ToList();
+            }
+            catch { }
+        }
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        _fileName = file.Name;
+        _fileContent = new byte[file.Size];
+        await file.OpenReadStream().ReadExactlyAsync(_fileContent);
+    }
+
+    private async Task OnImport()
+    {
+        if (_fileContent == null || _fileName == null) return;
+
+        _importing = true;
+        _error = null;
+
+        try
+        {
+            var xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
+
+            // Parse XML to get deck name
+            using var reader = System.Xml.XmlReader.Create(
+                new System.IO.StringReader(xmlContent),
+                new System.Xml.XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true });
+
+            string? deckName = _fileName.Replace(".xml", "");
+            while (reader.Read())
+            {
+                if (reader.NodeType == System.Xml.XmlNodeType.Element && reader.LocalName == "name")
+                {
+                    deckName = reader.ReadString();
+                    break;
+                }
+            }
+
+            if (_importMode == "new")
+            {
+                // Create new deck and import cards via legacy path
+                var deckId = await DeckManagement!.CreateNodeAsync(null, deckName!, NodeType.Deck);
+                await ImportLegacyCardsToDeck(deckId, xmlContent);
+            }
+            else
+            {
+                // Add to existing deck via legacy path
+                if (int.TryParse(_importMode, out var targetId))
+                    await ImportLegacyCardsToDeck(targetId, xmlContent);
+            }
+
+            await OnImported.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Legacy import failed: {ex.Message}";
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private async Task ImportLegacyCardsToDeck(int deckId, string xmlContent)
+    {
+        var imported = await ImportExport.ImportLegacyToCollectionAsync(deckId, xmlContent);
+        if (imported <= 0)
+            _error = "No cards were imported.";
+    }
+
+    private async Task OnCancel()
+    {
+        if (_importing) return;
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private void OnOverlayClick() => _ = OnCancel();
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+}

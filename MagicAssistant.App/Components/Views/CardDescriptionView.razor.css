@@ -1,0 +1,341 @@
+/* ── Container ─────────────────────────────────────── */
+.card-desc {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.card-desc-header {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    padding: 8px 12px;
+    border-bottom: 1px solid #3c3c3c;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-desc-loading,
+.card-desc-empty,
+.card-desc-hint {
+    padding: 24px 12px;
+    text-align: center;
+    color: #666;
+    font-size: 13px;
+}
+
+/* ── Tabs (double-sided cards) ─────────────────────── */
+.card-tabs-area {
+    width: 100%;
+    height: 18px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.tab-btn {
+    position: absolute;
+    top: 0;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+    cursor: pointer;
+    z-index: 1;
+    transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+    line-height: 16px;
+    text-align: center;
+}
+
+.tab-front {
+    left: 0;
+    width: 54%;
+    clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 0% 100%);
+}
+
+.tab-back {
+    right: 0;
+    width: 54%;
+    clip-path: polygon(20% 0%, 100% 0%, 100% 100%, 0% 100%);
+}
+
+.tab-btn.active {
+    z-index: 2;
+    opacity: 1;
+}
+
+.tab-front.active {
+    background-color: #00c853;
+    color: #fff;
+}
+.tab-back.active {
+    background-color: #ff9100;
+    color: #fff;
+}
+
+.tab-btn.inactive {
+    z-index: 1;
+    opacity: 0.75;
+}
+.tab-front.inactive {
+    background-color: #00893a;
+    color: #c8e6c9;
+}
+.tab-back.inactive {
+    background-color: #b36200;
+    color: #ffe0b2;
+}
+
+.tab-btn:hover {
+    opacity: 1 !important;
+}
+
+/* ── Image ─────────────────────────────────────────── */
+.card-image-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 8px;
+}
+
+.card-image {
+    max-width: 100%;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Language Toggle Buttons ───────────────────────── */
+.card-lang-toggles {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 3px;
+    padding: 0 12px 8px;
+    justify-content: center;
+}
+
+.lang-btn {
+    background: #2d2d2d;
+    border: 1px solid #555;
+    color: #888;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lang-btn:hover {
+    background: #3c3c3c;
+    color: #ccc;
+    border-color: #777;
+}
+
+.lang-btn.active {
+    background: #0078d4;
+    border-color: #1a8ae8;
+    color: #fff;
+}
+
+.lang-btn.active:hover {
+    background: #1a8ae8;
+}
+
+/* ── Name & Cost Row ──────────────────────────────── */
+.card-name-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 12px 4px;
+    gap: 8px;
+}
+
+.card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #eee;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.card-cost {
+    font-size: 13px;
+    color: #aaa;
+    flex-shrink: 0;
+}
+
+/* ── Meta Line ─────────────────────────────────────── */
+.card-meta {
+    display: flex;
+    gap: 8px;
+    padding: 2px 12px 6px;
+    font-size: 11px;
+    color: #888;
+}
+
+.meta-item {
+    text-transform: capitalize;
+}
+
+.double-badge {
+    color: #ff9100;
+    font-style: italic;
+}
+
+.rarity-badge {
+    padding: 0 4px;
+    border-radius: 2px;
+}
+
+.rarity-common { color: #aaa; }
+.rarity-uncommon { color: #8ab4f8; }
+.rarity-rare { color: #f5c542; }
+.rarity-mythic { color: #e74c3c; }
+
+/* ── Type Line ─────────────────────────────────────── */
+.card-type-line {
+    padding: 2px 12px 6px;
+    font-size: 12px;
+    color: #ccc;
+}
+
+/* ── Power / Toughness ─────────────────────────────── */
+.card-pt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+}
+
+.pt-label {
+    font-size: 11px;
+    color: #888;
+}
+
+.pt-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f5c542;
+}
+
+/* ── Oracle Text ───────────────────────────────────── */
+.card-oracle {
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #ccc;
+    white-space: pre-wrap;
+}
+
+/* ── Separator ─────────────────────────────────────── */
+.card-sep {
+    border: none;
+    border-top: 1px solid #3c3c3c;
+    margin: 4px 12px;
+}
+
+/* ── Details Grid ──────────────────────────────────── */
+.card-details {
+    padding: 4px 12px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+}
+
+.detail-label {
+    color: #888;
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.detail-value {
+    color: #ccc;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.prices-info {
+    color: #f5c542;
+}
+
+.prices-info .foil-price {
+    color: #ff9100;
+}
+
+/* ── Rulings ───────────────────────────────────────── */
+.card-rulings {
+    padding: 4px 12px;
+}
+
+.rulings-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.rulings-text {
+    font-size: 11px;
+    line-height: 1.4;
+    color: #999;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0;
+}
+
+/* ── Legality ──────────────────────────────────────── */
+.card-legality {
+    padding: 4px 12px 12px;
+}
+
+.legality-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.legality-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.legality-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: #2d2d2d;
+    color: #aaa;
+}
+
+.legality-tag.legal {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}

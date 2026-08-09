@@ -1,0 +1,115 @@
+@typeparam TKey where TKey : notnull
+@typeparam TItem
+
+<div class="multi-select-list">
+    @* ── Main form: chip list ── *@
+    <div class="msl-container">
+        @foreach (var item in ViewModel.Items)
+        {
+            <span class="msl-chip">
+                <span class="msl-chip-label">@item.DisplayValue</span>
+                <button type="button"
+                        class="msl-chip-remove"
+                        @onclick="() => OnRemoveItem(item)"
+                        aria-label="@($"Remove {item.DisplayValue}")">
+                    ✕
+                </button>
+            </span>
+        }
+
+        <button type="button"
+                class="msl-add-btn"
+                @onclick="HandleAddClick"
+                aria-label="Add item">
+            +
+        </button>
+    </div>
+
+    @* ── Second form: add dialog ── *@
+    @if (IsAddDialogOpen)
+    {
+        <div class="msl-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+            <div class="msl-dialog" @onclick:stopPropagation>
+                <div class="msl-dialog-header">
+                    <span class="msl-dialog-title">Add Item</span>
+                    <button type="button"
+                            class="msl-close-btn"
+                            @onclick="OnCloseDialog"
+                            aria-label="Close dialog">
+                        ✕
+                    </button>
+                </div>
+                <div class="msl-dialog-body">
+                    @AddDialogContent
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Generic view model holding the selected items.</summary>
+    [Parameter]
+    public required MultiSelectViewModel<TKey, TItem> ViewModel { get; set; }
+
+    /// <summary>Whether the add dialog is visible. Supports @bind-IsAddDialogOpen.</summary>
+    [Parameter]
+    public bool IsAddDialogOpen { get; set; }
+
+    [Parameter]
+    public required EventCallback<bool> IsAddDialogOpenChanged { get; set; }
+
+    /// <summary>Optional custom content rendered inside the add dialog body.</summary>
+    [Parameter]
+    public RenderFragment? AddDialogContent { get; set; }
+
+    /// <summary>Fired when the "+" button is clicked (before dialog opens).</summary>
+    [Parameter]
+    public EventCallback OnAddItemClicked { get; set; }
+
+    /// <summary>Fired when an item is removed from the selection.</summary>
+    [Parameter]
+    public EventCallback<MultiSelectItemBase> OnItemRemoved { get; set; }
+
+    protected override void OnInitialized()
+    {
+        ViewModel.Changed += OnViewModelChanged;
+    }
+
+    private void OnViewModelChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRemoveItem(MultiSelectItemBase item)
+    {
+        ViewModel.RemoveItem(item);
+        await OnItemRemoved.InvokeAsync(item);
+    }
+
+    private async Task HandleAddClick()
+    {
+        await OnAddItemClicked.InvokeAsync(null!);
+        IsAddDialogOpen = true;
+        await IsAddDialogOpenChanged.InvokeAsync(true);
+    }
+
+    private async Task OnCloseDialog()
+    {
+        IsAddDialogOpen = false;
+        await IsAddDialogOpenChanged.InvokeAsync(false);
+    }
+
+    private void OnOverlayClick()
+    {
+        OnCloseDialog();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await OnCloseDialog();
+        }
+    }
+}

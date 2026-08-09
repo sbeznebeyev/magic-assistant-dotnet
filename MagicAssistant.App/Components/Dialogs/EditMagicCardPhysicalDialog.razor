@@ -1,0 +1,202 @@
+@using MagicAssistant.Core.Services.DeckCard
+@using MagicAssistant.Data.Model
+@inject IDeckCardService DeckCardService
+
+@if (!IsOpen) return;
+
+<div class="edit-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+    <div class="edit-dialog-box" @onclick:stopPropagation>
+        @* ── Header ── *@
+        <div class="edit-header">
+            <span class="edit-title">Edit Card</span>
+            <button class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
+        </div>
+
+        @if (_card != null)
+        {
+            <div class="edit-card-preview">
+                <span class="preview-name">@_card.Name</span>
+                <span class="preview-cost">@(_card.ManaCost ?? "—")</span>
+            </div>
+
+            @* ── Form fields ── *@
+            <div class="edit-form">
+                @* Count ── *@
+                <div class="form-row">
+                    <label class="form-label">Count</label>
+                    <input type="number" min="1" max="10" @bind="_count" @bind:event="oninput"
+                           class="form-input form-input-sm" />
+                </div>
+
+                @* Owned ── *@
+                <div class="form-row">
+                    <label class="form-label">Ownership</label>
+                    <select @bind="_isOwn" @bind:event="onchange" class="form-select">
+                        <option value="true">Owned</option>
+                        <option value="false">Borrowed</option>
+                    </select>
+                </div>
+
+                @* Price ── *@
+                <div class="form-row">
+                    <label class="form-label">Price ($)</label>
+                    <input type="number" min="0" step="0.01" @bind="_price" @bind:event="oninput"
+                           placeholder="0.00" class="form-input" />
+                </div>
+
+                @* Comment ── *@
+                <div class="form-row">
+                    <label class="form-label">Comment</label>
+                    <textarea @bind="_comment" @bind:event="oninput" rows="2"
+                              placeholder="Notes about this card..." class="form-textarea"></textarea>
+                </div>
+
+                @* Special Tags ── *@
+                <div class="form-row">
+                    <label class="form-label">Special Tags</label>
+                    <input @bind="_tags" @bind:event="oninput"
+                           placeholder="foil, premium, forTrade, damaged..." class="form-input" />
+                    <div class="tag-hint">Separate with commas. Use "fortrade" to mark for trading.</div>
+                </div>
+
+                @* For Trade Count ── *@
+                <div class="form-row">
+                    <label class="form-label">For Trade Count</label>
+                    <input type="number" min="0" max="@_count" @bind="_forTradeCount" @bind:event="oninput"
+                           placeholder="0 = none" class="form-input form-input-sm" />
+                </div>
+            </div>
+
+            @* ── Error message ── *@
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="edit-error">@_error</div>
+            }
+
+            @* ── Footer ── *@
+            <div class="edit-footer">
+                <button class="btn-save" @onclick="OnSave" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save")
+                </button>
+                <button class="btn-cancel" @onclick="Close" disabled="@_saving">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private MagicCardPhysical? _card;
+    private int _count = 1;
+    private bool _isOwn = true;
+    private float? _price;
+    private string _comment = "";
+    private string _tags = "";
+    private int _forTradeCount = 0;
+    private bool _saving;
+    private string? _error;
+
+    // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter] public MagicCardPhysical? Card { get; set; }
+    [Parameter] public int? DeckId { get; set; }
+    [Parameter] public EventCallback<MagicCardPhysical?> OnSaved { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen && Card != _card)
+            LoadCard(Card);
+    }
+
+    private void LoadCard(MagicCardPhysical? card)
+    {
+        _card = card;
+        if (card == null) return;
+
+        _count = card.Count;
+        _isOwn = card.IsOwn;
+        _price = card.Price;
+        _comment = card.Comment ?? "";
+        _tags = card.SpecialTags ?? "";
+        _forTradeCount = card.GetForTradeCount();
+        _error = null;
+    }
+
+    private async Task OnSave()
+    {
+        if (_card == null || !DeckId.HasValue) return;
+
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            var updates = new Dictionary<MagicCardField, object?>();
+            updates[MagicCardField.Count] = _count;
+
+            if (_isOwn != _card.IsOwn)
+                updates[MagicCardField.IsOwn] = _isOwn;
+
+            if (_price.HasValue && _price.Value != (_card.Price ?? 0))
+                updates[MagicCardField.Price] = _price.Value;
+
+            if (_comment != (_card.Comment ?? ""))
+                updates[MagicCardField.Comment] = _comment.Trim();
+
+            if (_tags != (_card.SpecialTags ?? ""))
+                updates[MagicCardField.Special] = _tags.Trim();
+
+            var success = await DeckCardService.UpdateCardAsync(DeckId.Value, _card.Id, updates);
+
+            if (!success)
+            {
+                _error = "Failed to update card.";
+                return;
+            }
+
+            // Handle for-trade count separately (creates trade split)
+            if (_forTradeCount > 0 && _forTradeCount < _count)
+            {
+                var splitResult = await DeckCardService.SplitCardAsync(DeckId.Value, _card.Id, _forTradeCount);
+                if (splitResult != null)
+                    _card = splitResult;
+            }
+            else if (_forTradeCount >= _count)
+            {
+                _card.SetSpecialTag("fortrade");
+                await DeckCardService.UpdateCardAsync(DeckId.Value, _card.Id, new Dictionary<MagicCardField, object?>
+                {
+                    [MagicCardField.Special] = _tags.Contains("fortrade", StringComparison.OrdinalIgnoreCase)
+                        ? _tags : _tags + (string.IsNullOrEmpty(_tags) ? "fortrade" : ",fortrade")
+                });
+            }
+
+            await OnSaved.InvokeAsync(_card);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ── Close helpers ──
+    private async Task Close()
+    {
+        if (_saving) return;
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task OnOverlayClick() => await Close();
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            _ = Close();
+    }
+}

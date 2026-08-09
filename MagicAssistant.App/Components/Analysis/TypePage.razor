@@ -1,0 +1,146 @@
+@*
+    TypePage — Card type distribution (pure CSS cards + progress bars)
+    Mirrors Java: ui.views.analyzers.TypePage + CardStoreUtils.buildTypeStats
+    
+    Features:
+    - Visual type cards with color-coded badges
+    - Progress bars showing distribution percentages
+    - Summary stats
+*@
+
+<div class="type-page">
+    <div class="section-header">
+        <span>Type Distribution</span>
+        @if (_loading) { <span class="loading-indicator">Loading...</span> }
+    </div>
+
+    <div class="analysis-content">
+        @if (_error != null)
+        {
+            <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
+        }
+        else if (_loading && _typeItems.Count == 0)
+        {
+            <div class="loading-state">Loading type data...</div>
+        }
+        else if (_typeItems.Count > 0)
+        {
+            @* ── Type Cards Grid ── *@
+            <div class="type-cards-grid">
+                @foreach (var type in _typeItems)
+                {
+                    <div class="type-card" style="--card-accent: @type.Hex;">
+                        <div class="type-icon">@GetIcon(type.TypeName)</div>
+                        <div class="type-name">@type.TypeName</div>
+                        <div class="type-count">@type.Count card@(type.Count != 1 ? "s" : "")</div>
+                        <div class="type-bar-track">
+                            <div class="type-bar-fill" style="width: @type.Percentage%; background: @type.Hex;"></div>
+                        </div>
+                        <div class="type-percent">@type.Percentage.ToString("F1")%</div>
+                    </div>
+                }
+            </div>
+
+            @* ── Summary Stats ── *@
+            <div class="summary-stats">
+                <div class="stat-card"><div class="stat-value">@_totalCards</div><div class="stat-label">Total Cards</div></div>
+                <div class="stat-card"><div class="stat-value">@_typeItems.Count</div><div class="stat-label">Types Used</div></div>
+                <div class="stat-card"><div class="stat-value">@_dominantType</div><div class="stat-label">Dominant Type</div></div>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <span>No type distribution data available.</span>
+                <span>Add cards to your deck to see type analysis.</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<TypeItem> _typeItems = new();
+    private int _totalCards;
+    private string _dominantType = "—";
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public int DeckId { get; set; }
+    [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
+    [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DeckId <= 0) return;
+        await LoadAnalysis();
+    }
+
+    private async Task LoadAnalysis()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            if (cards.Count == 0)
+            {
+                _typeItems = new List<TypeItem>();
+                _totalCards = 0;
+            }
+            else
+            {
+                var result = AnalysisService.Analyze(cards);
+                BuildTypeData(result);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Reload() => await LoadAnalysis();
+
+    private void BuildTypeData(DeckAnalysisResult result)
+    {
+        // DeckAnalysisResult stores types as LandCount/CreatureCount/NonCreatureCount.
+        // Build a dictionary for rendering.
+        var typeDistribution = new Dictionary<string, int>
+        {
+            ["Land"] = result.LandCount,
+            ["Creature"] = result.CreatureCount,
+            ["NonCreature"] = result.NonCreatureCount,
+        };
+
+        _totalCards = typeDistribution.Values.Sum();
+        if (_totalCards == 0) return;
+
+        var typeColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Land"] = "#4a9c2f", ["Creature"] = "#c0392b", ["NonCreature"] = "#8e44ad",
+        };
+
+        _typeItems = typeDistribution
+            .Select(kv => new TypeItem
+            {
+                TypeName = kv.Key,
+                Hex = typeColors.TryGetValue(kv.Key, out var hex) ? hex : "#95a5a6",
+                Count = kv.Value,
+                Percentage = (double)kv.Value / _totalCards * 100
+            })
+            .OrderByDescending(t => t.Count).ToList();
+
+        _dominantType = _typeItems.FirstOrDefault()?.TypeName ?? "—";
+    }
+
+    private static string GetIcon(string type) => type.ToLowerInvariant() switch
+    {
+        "land" => "🏔️", "creature" => "🐉", "instant" => "⚡", "sorcery" => "✨",
+        "enchantment" => "🔮", "artifact" => "⚙️", "planeswalker" => "🌟", _ => "🃏"
+    };
+
+    private class TypeItem
+    {
+        public string TypeName { get; set; } = "";
+        public string Hex { get; set; } = "";
+        public int Count { get; set; }
+        public double Percentage { get; set; }
+    }
+}

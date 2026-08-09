@@ -1,0 +1,76 @@
+.legality-page { padding: 12px; }
+
+.section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 600; color: #cdd6f4; margin-bottom: 12px;
+}
+.loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
+
+.summary-banner {
+    display: flex; gap: 12px; margin-bottom: 16px; padding: 14px;
+    background: #1e1e2e; border: 1px solid #313244; border-radius: 8px;
+}
+.summary-stat { flex: 1; text-align: center; }
+.summary-value { font-size: 24px; font-weight: 700; }
+.summary-value.legal { color: #a6e3a1; }
+.summary-value.illegal { color: #f38ba8; }
+.summary-value.total { color: #89b4fa; }
+.summary-label { font-size: 11px; color: #6c7086; margin-top: 4px; }
+
+.legality-progress { margin-bottom: 16px; }
+.progress-label { font-size: 12px; color: #6c7086; margin-bottom: 6px; }
+.progress-track {
+    height: 10px; background: #1e1e2e; border-radius: 5px; overflow: hidden;
+    border: 1px solid #313244; margin-bottom: 4px;
+}
+.progress-fill {
+    height: 100%; border-radius: 5px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: linear-gradient(90deg, #f38ba8, #a6e3a1); min-width: 2px;
+}
+.progress-value { font-size: 12px; color: #cdd6f4; text-align: right; }
+
+.format-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 16px;
+}
+.format-card {
+    background: #1e1e2e; border-radius: 8px; padding: 12px; transition: transform 0.2s, box-shadow 0.2s;
+}
+.format-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.format-card.legal { border: 1px solid #a6e3a1; }
+.format-card.illegal { border: 1px solid #f38ba8; }
+
+.format-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.format-name { font-size: 13px; font-weight: 600; color: #cdd6f4; }
+.legality-badge {
+    font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: 600;
+}
+.badge-legal { background: rgba(166, 227, 161, 0.15); color: #a6e3a1; }
+.badge-illegal { background: rgba(243, 139, 168, 0.15); color: #f38ba8; }
+
+.toggle-btn {
+    background: none; border: none; color: #a6adc8; font-size: 11px; cursor: pointer;
+    padding: 4px 0; width: 100%; text-align: left;
+}
+.toggle-btn:hover { color: #cdd6f4; }
+
+.illegal-cards-list {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 6px;
+    border-top: 1px solid #313244;
+}
+.illegal-card-tag {
+    font-size: 10px; padding: 2px 6px; background: rgba(243, 139, 168, 0.1);
+    color: #f38ba8; border-radius: 3px; border: 1px solid rgba(243, 139, 168, 0.2);
+}
+
+.total-illegal {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: #1e1e2e; border: 1px solid #313244; border-radius: 8px;
+}
+.total-label { font-size: 12px; color: #6c7086; }
+.total-value { font-size: 16px; font-weight: 700; color: #f38ba8; }
+
+.loading-state, .empty-state, .error-state {
+    padding: 24px; text-align: center; color: #6c7086; font-size: 13px;
+}
+.error-state { color: #f38ba8; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.retry-btn { background: #3c3c3c; border: 1px solid #555; color: #ccc; padding: 4px 12px; border-radius: 4px; cursor: pointer; }

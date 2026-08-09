@@ -1,0 +1,151 @@
+.tree-branch {
+    position: relative;
+}
+
+/* ── Tree Node Row ── */
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #ccc;
+    border-left: 2px solid transparent;
+    user-select: none;
+    box-sizing: border-box;
+    width: 100%;
+    flex-wrap: nowrap;
+}
+
+.tree-toggle {
+    width: 24px;
+    min-width: 24px;
+    flex-shrink: 0;
+}
+
+.tree-spacer {
+    width: 24px;
+    min-width: 24px;
+    flex-shrink: 0;
+}
+
+/* Label can shrink to make room for right-aligned buttons */
+.tree-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* Selected label — pill highlight */
+.tree-node.selected .tree-label {
+    background: #ffa500;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Right-aligned action buttons container */
+.tree-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.tree-more-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #666;
+    background: transparent;
+    color: #888;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tree-more-btn:hover {
+    background: #0078d4;
+    color: #fff;
+    border-color: #0078d4;
+    box-shadow: 0 0 12px rgba(0, 120, 212, 0.5);
+}
+
+.tree-sb-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: 2px solid #666;
+    color: #888;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tree-sb-btn:hover {
+    background: #0078d4;
+    color: #fff;
+    border-color: #0078d4;
+    box-shadow: 0 0 12px rgba(0, 120, 212, 0.5);
+}
+
+.tree-sb-btn.selected {
+    background: #ffa500;
+    color: #000;
+    border-color: #ffa500;
+}
+
+/* ── Add Menu (child level — scoped to TreeItem) ─────── */
+.add-menu-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.add-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 4px 0;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+}
+
+.add-menu button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #ccc;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.add-menu button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+

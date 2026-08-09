@@ -1,0 +1,250 @@
+using Bunit;
+using MagicAssistant.App.Components.Views;
+using MagicAssistant.App.Components.Dialogs;
+using MagicAssistant.App.Components.Wizards;
+
+namespace MagicAssistant.Tests.UI;
+
+/// <summary>
+/// Tests for error handling across UI components.
+/// Verifies graceful degradation when data is missing, null, or API fails.
+/// </summary>
+[TestFixture]
+public class ErrorHandlingTests : BaseUiTest
+{
+    // =========================================================================
+    // CardDescView — error states
+    // =========================================================================
+
+    [Test]
+    public void CardDescView_NullCardId_ShowsHint()
+    {
+        var cut = Ctx.Render<CardDescView>();
+        Assert.That(cut.Markup, Does.Contain("Select a card to see details"));
+        Assert.That(cut.Markup, Does.Not.Contain("card-name"));
+    }
+
+    [Test]
+    public void CardDescView_NonExistentCardId_ShowsNotFound()
+    {
+        var nonExistentId = Guid.NewGuid();
+        CardSearch.Setup(s => s.GetCardByIdAsync(nonExistentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MagicCard?)null);
+
+        var cut = Ctx.Render<CardDescView>(p => p.Add(c => c.CardId, nonExistentId));
+        
+        Assert.That(cut.Markup, Does.Contain("Card not found in knowledge base"));
+        Assert.That(cut.Markup, Does.Not.Contain("card-name"));
+    }
+
+    [Test]
+    public void CardDescView_ServiceError_ShowsErrorMessage()
+    {
+        var cardId = Guid.NewGuid();
+        CardSearch.Setup(s => s.GetCardByIdAsync(cardId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Database connection failed"));
+
+        var cut = Ctx.Render<CardDescView>(p => p.Add(c => c.CardId, cardId));
+        
+        Assert.That(cut.Markup, Does.Contain("card-desc"));
+    }
+
+    // =========================================================================
+    // DeckView — error states
+    // =========================================================================
+
+    [Test]
+    public void DeckView_NullDeck_ShowsNotFound()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("missing", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CardCollectionNode?)null);
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "missing"));
+        
+        Assert.That(cut.Markup, Does.Contain("Deck not found"));
+    }
+
+    [Test]
+    public void DeckView_ServiceError_ShowsErrorMessage()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("bad-deck", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB connection failed"));
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "bad-deck"));
+        
+        Assert.That(cut.Markup, Does.Contain("deck-error"));
+        Assert.That(cut.Markup, Does.Contain("DB connection failed"));
+    }
+
+    [Test]
+    public void DeckView_EmptyDeck_ShowsEmptyMessage()
+    {
+        DeckMgmt.Setup(s => s.GetByIdAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CardCollectionNode("d1", "Empty Deck", null, false, 0));
+        DeckCard.Setup(s => s.GetDeckCardsAsync("d1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
+
+        var cut = Ctx.Render<DeckView>(p => p.Add(d => d.DeckId, "d1"));
+        
+        Assert.That(cut.Markup, Does.Contain("This deck is empty"));
+    }
+
+    // =========================================================================
+    // PrintingsView — error states
+    // =========================================================================
+
+    [Test]
+    public void PrintingsView_NullCardId_ShowsHint()
+    {
+        var cut = Ctx.Render<PrintingsView>();
+        Assert.That(cut.Markup, Does.Contain("Select a card to see all printings"));
+    }
+
+    [Test]
+    public void PrintingsView_NoPrintings_ShowsEmptyMessage()
+    {
+        var currentId = Guid.NewGuid();
+        var name = "Unique Card";
+
+        CardSearch.Setup(s => s.GetCardByIdAsync(currentId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MagicCard { Id = currentId, Name = name });
+        CardSearch.Setup(s => s.GetPrintingsAsync(name, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCard>());
+
+        var cut = Ctx.Render<PrintingsView>(p => p.Add(v => v.CardId, currentId));
+        
+        Assert.That(cut.Markup, Does.Contain("No printings found"));
+    }
+
+    // =========================================================================
+    // InstancesView — error states
+    // =========================================================================
+
+    [Test]
+    public void InstancesView_NullCardId_ShowsHint()
+    {
+        var cut = Ctx.Render<InstancesView>();
+        Assert.That(cut.Markup, Does.Contain("Select a card to see instances"));
+    }
+
+    [Test]
+    public void InstancesView_NoInstances_ShowsEmptyMessage()
+    {
+        var cardId = Guid.NewGuid();
+        CardPhysicalStore.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
+
+        var cut = Ctx.Render<InstancesView>(p => p.Add(v => v.CardId, cardId));
+        
+        Assert.That(cut.Markup, Does.Contain("No instances of this card in any deck"));
+    }
+
+    // =========================================================================
+    // SplitDialog — error states
+    // =========================================================================
+
+    [Test]
+    public void SplitDialog_NullCard_ShowsEmptyMessage()
+    {
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, (MagicCardPhysical?)null);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        Assert.That(cut.Markup, Does.Contain("No card selected"));
+    }
+
+    [Test]
+    public async Task SplitDialog_ServiceError_ShowsErrorMessage()
+    {
+        var card = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Test Card", SetCode = "m19" },
+            Location.FromPath("deck1"), true) { Count = 4 };
+
+        DeckCard.Setup(s => s.SplitCardAsync("deck1", card.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Split failed: insufficient cards"));
+
+        var cut = Ctx.Render<SplitDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        cut.Find("input[type='number']").Input("2");
+        cut.Find(".btn-split").Click();
+        await Task.Yield();
+        
+        Assert.That(cut.Markup, Does.Contain("split-error"));
+        Assert.That(cut.Markup, Does.Contain("insufficient cards"));
+    }
+
+    // =========================================================================
+    // EditMagicCardPhysicalDialog — error states
+    // =========================================================================
+
+    [Test]
+    public async Task EditMagicCardPhysicalDialog_SaveFailure_ShowsErrorMessage()
+    {
+        var card = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Test Card", ManaCost = "{W}", SetCode = "m19" },
+            Location.FromPath("deck1"), true)
+        { Count = 3, IsOwn = true };
+
+        DeckCard.Setup(s => s.UpdateCardAsync("deck1", card.Id, It.IsAny<Dictionary<MagicCardField, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var cut = Ctx.Render<EditMagicCardPhysicalDialog>(p =>
+        {
+            p.Add(d => d.IsOpen, true);
+            p.Add(d => d.Card, card);
+            p.Add(d => d.DeckId, "deck1");
+        });
+
+        cut.Find(".btn-save").Click();
+        await Task.Yield();
+        
+        Assert.That(cut.Markup, Does.Contain("edit-error"));
+        Assert.That(cut.Markup, Does.Contain("Failed to update card"));
+    }
+
+    // =========================================================================
+    // NewDeckWizard — error states
+    // =========================================================================
+
+    [Test]
+    public async Task NewDeckWizard_CreateFailure_ShowsErrorMessage()
+    {
+        DeckMgmt.Setup(s => s.CreateDeckAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Deck name already exists"));
+
+        var cut = Ctx.Render<NewDeckWizard>(p => p.Add(d => d.IsOpen, true));
+        cut.Find("input").Change("Duplicate Name");
+        cut.Find(".btn-primary").Click();
+        await Task.Yield();
+        
+        Assert.That(cut.Markup, Does.Contain("dialog-error"));
+        Assert.That(cut.Markup, Does.Contain("Deck name already exists"));
+    }
+
+    // =========================================================================
+    // SearchControl — error states
+    // =========================================================================
+
+    [Test]
+    public async Task SearchControl_SearchError_ShowsErrorMessage()
+    {
+        CardSearch.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("FTS5 index corrupted"));
+
+        var cut = Ctx.Render<SearchControl>();
+        cut.Find(".search-input").Input("test");
+        cut.Find(".search-btn").Click();
+        await Task.Yield();
+        
+        Assert.That(cut.Markup, Does.Contain("search-error"));
+        Assert.That(cut.Markup, Does.Contain("FTS5 index corrupted"));
+    }
+}

@@ -1,0 +1,212 @@
+/* ── Container ─────────────────────────────────────── */
+.printings-view {
+    display: flex;
+    flex-direction: column;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    border-bottom: 1px solid #3c3c3c;
+}
+
+.count-badge {
+    background: #3c3c3c;
+    color: #aaa;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+/* ── States ────────────────────────────────────────── */
+.view-loading,
+.view-empty,
+.view-hint {
+    padding: 12px;
+    text-align: center;
+    color: #666;
+    font-size: 12px;
+}
+
+/* ── Filter Bar ────────────────────────────────────── */
+.filter-bar {
+    position: relative;
+    padding: 4px 8px;
+}
+
+.filter-input {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 3px 24px 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    box-sizing: border-box;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.clear-btn:hover {
+    color: #ccc;
+}
+
+/* ── Printings List ────────────────────────────────── */
+.printings-list {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.printing-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+}
+
+.printing-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.printing-row.current {
+    background: rgba(0, 120, 212, 0.12);
+    border-left-color: #0078d4;
+}
+
+/* ── Image wrapper (clickable area) ────────────────── */
+.printing-img-wrap {
+    cursor: pointer;
+    position: relative;
+}
+
+/* ── Image ─────────────────────────────────────────── */
+.printing-img {
+    width: 32px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #2d2d2d;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.printing-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ── Hover: pop up + scale 3% ──────────────────────── */
+.printing-img-wrap:hover .printing-img {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+/* Back image — slight orange tint to distinguish */
+.printing-img-back {
+    border: 1px solid rgba(255, 145, 0, 0.3);
+}
+
+/* Empty placeholder for single-sided cards — collapses to zero */
+.printing-img-empty {
+    display: none;
+}
+
+.printing-img-placeholder {
+    width: 32px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 3px;
+    background: #2d2d2d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-size: 14px;
+}
+
+/* ── Info (clickable) ──────────────────────────────── */
+.printing-info {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.printing-name {
+    font-size: 12px;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.printing-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 1px;
+    font-size: 10px;
+    color: #888;
+}
+
+.meta-set {
+    font-weight: 500;
+    color: #aaa;
+}
+
+.meta-rarity {
+    text-transform: capitalize;
+}
+
+.rarity-common { color: #aaa; }
+.rarity-uncommon { color: #8ab4f8; }
+.rarity-rare { color: #f5c542; }
+.rarity-mythic { color: #e74c3c; }
+
+.meta-cmc {
+    color: #666;
+}
+
+.meta-lang {
+    text-transform: uppercase;
+    font-size: 9px;
+}
+
+/* ── Collector Number ──────────────────────────────── */
+.printing-num {
+    font-size: 10px;
+    color: #888;
+    flex-shrink: 0;
+}
+
+/* ── Filter Result ─────────────────────────────────── */
+.filter-result {
+    padding: 4px 10px;
+    font-size: 10px;
+    color: #666;
+    text-align: right;
+}

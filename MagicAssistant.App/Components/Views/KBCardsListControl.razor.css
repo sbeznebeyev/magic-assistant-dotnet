@@ -1,0 +1,535 @@
+/* ── Container ─────────────────────────────────────── */
+.kb-browser {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ── Body: two-panel layout (sets sidebar + content) ── */
+.kb-body {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── Sets Sidebar ──────────────────────────────────── */
+.sets-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    min-width: 160px;
+    max-width: 500px;
+    flex-shrink: 0;
+    border-right: 1px solid #3c3c3c;
+    background: rgba(20, 20, 20, 0.6);
+    overflow: hidden;
+}
+
+.sets-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid #3c3c3c;
+    flex-shrink: 0;
+}
+
+.sets-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ccc;
+}
+
+.sets-search-bar {
+    position: relative;
+    padding: 6px 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.sets-search-input {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.sets-search-input:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.sets-clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #555;
+    color: #ccc;
+    border: none;
+    cursor: pointer;
+    font-size: 9px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.sets-clear-btn:hover {
+    background: #0078d4;
+    color: #fff;
+}
+
+.sets-list-wrapper {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.sets-list {
+    padding: 4px 0;
+}
+
+/* ── Splitter (8px, draggable) ─────────────────────── */
+.sets-splitter {
+    width: 8px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+.sets-splitter:hover,
+.sets-splitter.dragging {
+    background: rgba(0, 120, 212, 0.3);
+}
+
+.sets-splitter::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px;
+    height: 36px;
+    border-radius: 2px;
+    background: #555;
+    transition: background 0.2s, height 0.2s;
+}
+
+.sets-splitter:hover::after,
+.sets-splitter.dragging::after {
+    background: #0078d4;
+    height: 60px;
+}
+
+.set-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #bbb;
+    border-left: 2px solid transparent;
+}
+
+.set-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #eee;
+}
+
+.set-item.selected {
+    background: rgba(0, 120, 212, 0.15);
+    border-left-color: #0078d4;
+    color: #fff;
+}
+
+.set-item.empty {
+    cursor: default;
+    color: #666;
+    padding: 20px 10px;
+    text-align: center;
+}
+
+/* Subset indentation: 20px right shift */
+.set-item.subset {
+    padding-left: 30px;
+}
+
+.set-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Bright orange ink for set icons */
+.set-symbol {
+    filter: brightness(0) saturate(1) invert(23%) sepia(89%) saturate(2821%) hue-rotate(359deg) brightness(104%) contrast(103%);
+}
+
+.set-code {
+    font-weight: 600;
+    color: #0078d4;
+    font-size: 11px;
+    flex-shrink: 0;
+    min-width: 28px;
+}
+
+.set-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.set-count {
+    font-size: 10px;
+    color: #666;
+    flex-shrink: 0;
+}
+
+/* ── Right Panel: Content Area ─────────────────────── */
+.kb-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── Name Filter Area (left section of toolbar) ──── */
+.name-filter-area {
+    flex: 0 0 200px;
+    min-width: 0;
+}
+
+.name-filter-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.name-filter-input {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 3px 26px 3px 8px;
+    border-radius: 3px;
+    font-size: 15px;
+    box-sizing: border-box;
+}
+
+.name-filter-input:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.name-filter-clear {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 10px;
+    padding: 0;
+    line-height: 1;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.name-filter-clear:hover {
+    color: #ccc;
+}
+
+/* ── Toolbar Row (3 sections: name filter | sort | filters) ── */
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 12px;
+    flex-shrink: 0;
+}
+
+/* ── Sort Area ──────────────────────────────────────── */
+.sort-area {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.sort-label {
+    font-size: 11px;
+    color: #666;
+    margin-right: 4px;
+}
+
+.sort-btn {
+    background: #2d2d2d;
+    border: 1px solid #444;
+    color: #999;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.sort-btn:hover {
+    background: #3c3c3c;
+    color: #ccc;
+}
+
+.sort-btn.active {
+    background: rgba(0, 120, 212, 0.2);
+    border-color: #0078d4;
+    color: #0078d4;
+}
+
+/* ── Filter Area ────────────────────────────────────── */
+.filter-area {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.filter-select {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.filter-btn {
+    background: #0078d4;
+    color: white;
+    border: none;
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.filter-btn:hover {
+    background: #106ebe;
+}
+
+.clear-filters-btn {
+    background: transparent;
+    color: #663333;
+    border: 1px solid transparent;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clear-filters-btn:hover {
+    background: rgba(120, 30, 30, 0.15);
+}
+
+.clear-filters-btn.active {
+    color: #ff4444;
+}
+
+.clear-filters-btn.active:hover {
+    background: rgba(255, 68, 68, 0.12);
+}
+
+/* ── Loading ───────────────────────────────────────── */
+.kb-loading {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 13px;
+}
+
+/* ── Table area — fills space above pagination, scrolls when overfilled ── */
+.table-wrapper {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.card-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: auto;
+}
+
+.card-table thead th {
+    position: sticky;
+    top: 0;
+    background: #1a1a1a;
+    color: #888;
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid #3c3c3c;
+    user-select: none;
+}
+
+.card-table tbody tr {
+    cursor: pointer;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.card-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.card-table tbody tr.selected {
+    background: rgba(0, 120, 212, 0.15);
+}
+
+.card-table td {
+    padding: 4px 8px;
+    color: #ccc;
+    vertical-align: middle;
+}
+
+.col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
+.col-name   { width: 50%; }
+.col-cost   { width: 1%; white-space: nowrap; }
+.col-type   { width: 1%; white-space: nowrap; }
+.col-set    { width: 1%; white-space: nowrap; }
+.col-rarity { width: 1%; white-space: nowrap; }
+.col-cmc    { width: 1%; white-space: nowrap; text-align: center; font-size: 15px}
+
+.card-name {
+    font-weight: 500;
+    color: #eee;
+}
+
+.rarity-badge {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.rarity-common  { color: #aaa; }
+.rarity-uncommon { color: #8ab4f8; }
+.rarity-rare     { color: #f5c542; }
+.rarity-mythic   { color: #e74c3c; }
+
+/* ── Pagination — bottom of container (no grow) ───── */
+.gallery-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 8px 12px;
+    min-height: 40px;
+    flex-shrink: 0;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid #444;
+}
+
+.pagination-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-btn {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: #383838;
+    border-color: #0078d4;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.page-info {
+    font-size: 11px;
+    color: #888;
+}
+
+/* ── Empty State ───────────────────────────────────── */
+.kb-empty {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #666;
+    font-size: 13px;
+    line-height: 1.6;
+    gap: 12px;
+}
+
+/* ── Inline Sync Button ────────────────────────────── */
+.sync-btn-inline {
+    background: linear-gradient(135deg, #0078d4, #1a8ae8);
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 120, 212, 0.3);
+}
+
+.sync-btn-inline:hover {
+    background: linear-gradient(135deg, #1a8ae8, #2196f3);
+    box-shadow: 0 4px 16px rgba(0, 120, 212, 0.5);
+    transform: translateY(-1px);
+}
+
+.sync-btn-inline:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 120, 212, 0.3);
+}

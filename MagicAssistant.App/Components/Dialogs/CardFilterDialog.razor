@@ -1,0 +1,373 @@
+@using MagicAssistant.App.Shared
+@using MagicAssistant.Data.Model
+@using MagicAssistant.Data.Model.Enums
+@using MagicAssistant.Data.Model.Legality
+@using MagicAssistant.Data.Extensions
+
+@if (!IsOpen) return;
+
+<div class="filter-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+    <div class="filter-dialog-box" @onclick:stopPropagation>
+        @* ── Header ── *@
+        <div class="filter-header">
+            <span class="filter-title">Card Filter</span>
+            <button class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
+        </div>
+
+        @* ── Fields — all bound directly to shared FilterViewModel ── *@
+        <div class="filter-tab-content">
+                <div class="filter-field-row">
+                    <label class="filter-label">Type</label>
+                    <MultiSelectList ViewModel="@_typeVm"
+                                    @bind-IsAddDialogOpen="_showTypePicker"
+                                    OnItemRemoved="OnTypeRemoved">
+                        <AddDialogContent>
+                            <div class="type-picker-list">
+                                @foreach (var type in _allTypes)
+                                {
+                                    <button type="button"
+                                            class="@GetTypeOptionClass(type)"
+                                            @onclick="() => OnSelectType(type)">
+                                        <span>@type</span>
+                                    </button>
+                                }
+                            </div>
+                        </AddDialogContent>
+                    </MultiSelectList>
+                </div>
+
+                <div class="filter-field-row">
+                    <label class="filter-label">Rarity</label>
+                    <MultiSelectList ViewModel="@_rarityVm"
+                                    @bind-IsAddDialogOpen="_showRarityPicker"
+                                    OnItemRemoved="OnRarityRemoved">
+                        <AddDialogContent>
+                            <div class="rarity-picker-list">
+                                @foreach (var rarity in _allRarities)
+                                {
+                                    <button type="button"
+                                            class="@GetRarityOptionClass(rarity)"
+                                            @onclick="() => OnSelectRarity(rarity)">
+                                        <span class="rarity-dot" style="background-color: @GetRarityColor(rarity)"></span>
+                                        <span>@rarity</span>
+                                    </button>
+                                }
+                            </div>
+                        </AddDialogContent>
+                    </MultiSelectList>
+                </div>
+
+                <div class="filter-field-row">
+                    <label class="filter-label">Artist</label>
+                    <input value="@FilterViewModel.Artist"
+                           @oninput="@(e => FilterViewModel.Artist = e.Value?.ToString() ?? "")"
+                           class="filter-input" placeholder="Artist name..." />
+                </div>
+
+                <div class="filter-field-row">
+                    <label class="filter-label">Color</label>
+                    @* ── Base colors (icons only) ── *@
+                    <div class="color-toggle-grid color-toggle-grid-6">
+                        <button type="button" class="color-toggle color-icon-btn @(FilterViewModel.ColorFilters[ColorBitFlags.W] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.W)"><span class="card-symbol card-symbol-W"></span></button>
+                        <button type="button" class="color-toggle color-icon-btn @(FilterViewModel.ColorFilters[ColorBitFlags.U] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.U)"><span class="card-symbol card-symbol-U"></span></button>
+                        <button type="button" class="color-toggle color-icon-btn @(FilterViewModel.ColorFilters[ColorBitFlags.B] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.B)"><span class="card-symbol card-symbol-B"></span></button>
+                        <button type="button" class="color-toggle color-icon-btn @(FilterViewModel.ColorFilters[ColorBitFlags.R] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.R)"><span class="card-symbol card-symbol-R"></span></button>
+                        <button type="button" class="color-toggle color-icon-btn @(FilterViewModel.ColorFilters[ColorBitFlags.G] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.G)"><span class="card-symbol card-symbol-G"></span></button>
+                        <button type="button" class="color-toggle color-icon-btn @(FilterViewModel.ColorFilters[ColorBitFlags.C] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.C)"><span class="card-symbol card-symbol-C"></span></button>
+                    </div>
+                    @* ── Color types ── *@
+                    <div class="color-toggle-grid">
+                        <button type="button" class="color-toggle @(FilterViewModel.ColorFilters[ColorBitFlags.MULTI] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.MULTI)">Multi-Color</button>
+                        <button type="button" class="color-toggle @(FilterViewModel.ColorFilters[ColorBitFlags.MONO] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.MONO)">Mono-Color</button>
+                        <button type="button" class="color-toggle @(FilterViewModel.ColorFilters[ColorBitFlags.HYBRID] ? "active" : "")" @onclick="() => ToggleColorFlag(ColorBitFlags.HYBRID)">Hybrid</button>
+                    </div>
+                    @* ── Modifiers ── *@
+                    <div class="color-toggle-grid">
+                        <button type="button" class="color-toggle @(FilterViewModel.ColorAndMode ? "active" : "")" @onclick="() => FilterViewModel.ColorAndMode = !FilterViewModel.ColorAndMode">And</button>
+                        <button type="button" class="color-toggle @(FilterViewModel.ColorOnlyMode ? "active" : "")" @onclick="() => FilterViewModel.ColorOnlyMode = !FilterViewModel.ColorOnlyMode">Only</button>
+                        <button type="button" class="color-toggle @(FilterViewModel.ColorIdentityMode ? "active" : "")" @onclick="() => FilterViewModel.ColorIdentityMode = !FilterViewModel.ColorIdentityMode">Identity</button>
+                    </div>
+                </div>
+
+                <div class="filter-field-row">
+                    <label class="filter-label">Properties</label>
+                    <div class="prop-row">
+                        <span class="prop-title">Power</span>
+                        <select class="prop-op" value="@FilterViewModel.PowerOp"
+                                @onchange="@(e => FilterViewModel.PowerOp = e.Value?.ToString() ?? ">=")">
+                            <option value=">=" selected="@(FilterViewModel.PowerOp == ">=")">&gt;=</option>
+                            <option value="=" selected="@(FilterViewModel.PowerOp == "=")">=</option>
+                            <option value="<=" selected="@(FilterViewModel.PowerOp == "<=")">&#60;&#61;</option>
+                        </select>
+                        <input type="text" inputmode="decimal" class="prop-value"
+                               value="@FilterViewModel.PowerValue"
+                               @oninput="@(e => FilterViewModel.PowerValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                               placeholder="0.0" />
+                    </div>
+                    <div class="prop-row">
+                        <span class="prop-title">Toughness</span>
+                        <select class="prop-op" value="@FilterViewModel.ToughnessOp"
+                                @onchange="@(e => FilterViewModel.ToughnessOp = e.Value?.ToString() ?? ">=")">
+                            <option value=">=" selected="@(FilterViewModel.ToughnessOp == ">=")">&gt;=</option>
+                            <option value="=" selected="@(FilterViewModel.ToughnessOp == "=")">=</option>
+                            <option value="<=" selected="@(FilterViewModel.ToughnessOp == "<=")">&#60;&#61;</option>
+                        </select>
+                        <input type="text" inputmode="decimal" class="prop-value"
+                               value="@FilterViewModel.ToughnessValue"
+                               @oninput="@(e => FilterViewModel.ToughnessValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                               placeholder="0.0" />
+                    </div>
+                    <div class="prop-row">
+                        <span class="prop-title">CMC</span>
+                        <select class="prop-op" value="@FilterViewModel.CmcOp"
+                                @onchange="@(e => FilterViewModel.CmcOp = e.Value?.ToString() ?? ">=")">
+                            <option value=">=" selected="@(FilterViewModel.CmcOp == ">=")">&gt;=</option>
+                            <option value="=" selected="@(FilterViewModel.CmcOp == "=")">=</option>
+                            <option value="<=" selected="@(FilterViewModel.CmcOp == "<=")">&#60;&#61;</option>
+                        </select>
+                        <input type="text" inputmode="decimal" class="prop-value"
+                               value="@FilterViewModel.CmcValue"
+                               @oninput="@(e => FilterViewModel.CmcValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                               placeholder="0.0" />
+                    </div>
+                </div>
+
+                @* ── Layout ── *@
+                <div class="filter-field-row">
+                    <label class="filter-label">Layout</label>
+                    <select class="filter-select" value="@FilterViewModel.LayoutFilter"
+                            @onchange="@(e => FilterViewModel.LayoutFilter = e.Value?.ToString() ?? "")">
+                        <option value="">(All)</option>
+                        @foreach (var layoutValue in _allLayouts)
+                        {
+                            <option value="@layoutValue" selected="@(FilterViewModel.LayoutFilter == layoutValue)">
+                                @GetLayoutDisplayName(layoutValue)
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                @* ── Legality ── *@
+                <div class="filter-field-row">
+                    <label class="filter-label">Legality</label>
+                    <select class="filter-select" value="@FilterViewModel.LegalityFilter"
+                            @onchange="@(e => FilterViewModel.LegalityFilter = e.Value?.ToString() ?? "")">
+                        <option value="">(All)</option>
+                        @foreach (var format in _allFormats)
+                        {
+                            var scryfallKey = format.ToScryfallKey();
+                            <option value="@scryfallKey" selected="@(FilterViewModel.LegalityFilter == scryfallKey)">
+                                @format.DisplayName()
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                @* ── Other ── *@
+                <div class="filter-field-row">
+                    <label class="filter-label">Other</label>
+                    <button type="button" class="other-toggle @(FilterViewModel.GameChangerFilter ? "active" : "")" @onclick="() => FilterViewModel.GameChangerFilter = !FilterViewModel.GameChangerFilter">
+                        Game Changer
+                    </button>
+                </div>
+        </div>
+
+        @* ── Footer ── *@
+        <div class="filter-footer">
+            <button class="btn-apply" @onclick="OnApply">Apply</button>
+            <button class="btn-clear" @onclick="OnClearAndApply">Clear All</button>
+            <button class="btn-cancel" @onclick="Close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Shared filter/sort view model — mutations here propagate to KBCardsListControl.</summary>
+    [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
+
+    // ── Rarity MultiSelectList ──
+    private readonly MultiSelectViewModel<string, string> _rarityVm = new();
+    private bool _showRarityPicker;
+    private static readonly string[] _allRarities = { "common", "uncommon", "rare", "mythic" };
+
+    // ── Type MultiSelectList ──
+    private readonly MultiSelectViewModel<string, string> _typeVm = new();
+    private bool _showTypePicker;
+    private static readonly string[] _allTypes = { "artifact", "creature", "enchantment", "instant", "land", "planeswalker", "sorcery" };
+
+    // ── Layout filter options ──
+    private static readonly string[] _allLayouts = Enum.GetNames(typeof(LayoutEnum));
+
+    // ── Legality format filter options ──
+    private static readonly Format[] _allFormats = (Format[])Enum.GetValues(typeof(Format));
+
+    // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Apply: fire Changed event so KBCardsListControl re-queries via InvokeAsync.</summary>
+    private async Task OnApply()
+    {
+        FilterViewModel.Apply();  // fires Changed → KBCardsListControl wraps in InvokeAsync
+        await Close();
+    }
+
+    /// <summary>Clear all filter/sort fields and trigger re-query.</summary>
+    private async Task OnClearAndApply()
+    {
+        FilterViewModel.ClearAndApply();  // clears + fires Changed
+        await Close();
+    }
+
+    // ── Sync rarity + type from FilterViewModel on open ──
+    protected override void OnParametersSet()
+    {
+        _rarityVm.Initialize(
+            FilterViewModel.Rarity.Select(r => (Key: r, Item: r)),
+            r => r);
+
+        _typeVm.Initialize(
+            FilterViewModel.TypeFilter.Select(t => (Key: t, Item: t)),
+            t => t);
+    }
+
+    // ── Rarity MultiSelectList handlers ──
+    private void OnRarityRemoved(MultiSelectItemBase item)
+    {
+        SyncRarityToFilterViewModel();
+    }
+
+    private void OnSelectRarity(string rarity)
+    {
+        if (!_rarityVm.Items.Any(i => i.DisplayValue == rarity))
+        {
+            _rarityVm.AddNewItem(rarity, rarity, r => r);
+        }
+        SyncRarityToFilterViewModel();
+        _showRarityPicker = false;
+    }
+
+    private void SyncRarityToFilterViewModel()
+    {
+        FilterViewModel.Rarity = _rarityVm.Items.Select(i => i.DisplayValue).ToList();
+    }
+
+    private string GetRarityOptionClass(string rarity)
+    {
+        bool selected = _rarityVm.Items.Any(i => i.DisplayValue == rarity);
+        return "rarity-option" + (selected ? " rarity-option-selected" : "");
+    }
+
+    private static string GetRarityColor(string rarity) => rarity switch
+    {
+        "common" => "#999999",
+        "uncommon" => "#a0522d",
+        "rare" => "#ffd700",
+        "mythic" => "#c0392b",
+        _ => "#888888"
+    };
+
+    // ── Layout display names ──
+    private static string GetLayoutDisplayName(string layout) => layout switch
+    {
+        "normal" => "Normal",
+        "split" => "Split",
+        "flip" => "Flip",
+        "transform" => "Transform",
+        "modal_dfc" => "Modal DFC",
+        "meld" => "Meld",
+        "leveler" => "Leveler",
+        "class" => "Class",
+        "case" => "Case",
+        "saga" => "Saga",
+        "adventure" => "Adventure",
+        "prepare" => "Prepare",
+        "mutate" => "Mutate",
+        "prototype" => "Prototype",
+        "battle" => "Battle",
+        "planar" => "Planar",
+        "scheme" => "Scheme",
+        "vanguard" => "Vanguard",
+        "token" => "Token",
+        "double_faced_token" => "Double-Faced Token",
+        "emblem" => "Emblem",
+        "augment" => "Augment",
+        "host" => "Host",
+        "art_series" => "Art Series",
+        "reversible_card" => "Reversible Card",
+        _ => layout
+    };
+
+    // ── Type MultiSelectList handlers ──
+    private void OnTypeRemoved(MultiSelectItemBase item)
+    {
+        SyncTypeToFilterViewModel();
+    }
+
+    private void OnSelectType(string type)
+    {
+        if (!_typeVm.Items.Any(i => i.DisplayValue == type))
+        {
+            _typeVm.AddNewItem(type, type, t => t);
+        }
+        SyncTypeToFilterViewModel();
+        _showTypePicker = false;
+    }
+
+    private void SyncTypeToFilterViewModel()
+    {
+        FilterViewModel.SetTypeFilters(_typeVm.Items.Select(i => i.DisplayValue));
+    }
+
+    private string GetTypeOptionClass(string type)
+    {
+        bool selected = _typeVm.Items.Any(i => i.DisplayValue == type);
+        return "type-option" + (selected ? " type-option-selected" : "");
+    }
+
+    // ── Color toggle button ──
+    private void ToggleColorFlag(ColorBitFlags flag)
+    {
+        FilterViewModel.ColorFilters[flag] = !FilterViewModel.ColorFilters[flag];
+    }
+
+    // ── Numeric input sanitization (Power / Toughness / CMC) ──
+    /// <summary>Strip all non-numeric characters except a single dot. Replaces comma with dot.</summary>
+    private static string SanitizeNumericInput(string input)
+    {
+        // Replace comma with dot (European input)
+        input = input.Replace(',', '.');
+
+        var result = new System.Text.StringBuilder();
+        bool hasDot = false;
+
+        foreach (char c in input)
+        {
+            if (char.IsDigit(c))
+                result.Append(c);
+            else if (c == '.' && !hasDot)
+            {
+                result.Append(c);
+                hasDot = true;
+            }
+            // All other characters are silently dropped
+        }
+
+        return result.ToString();
+    }
+
+    // ── Close helpers ──
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task OnOverlayClick() => await Close();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await Close();
+    }
+}

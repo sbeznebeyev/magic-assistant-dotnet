@@ -1,0 +1,383 @@
+@using System.Text.Json
+@using MagicAssistant.App.Dtos
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
+
+@if (IsOpen)
+{
+    <div class="sync-dialog-overlay" @onclick="OnOverlayClick">
+    <div class="sync-dialog" @onclick:stopPropagation="true">
+        @* ── Header ── *@
+        <div class="sync-header">
+            <span class="sync-title">🔄 Sync Set from Scryfall</span>
+            <button class="close-btn" @onclick="OnOverlayClick">✕</button>
+        </div>
+
+        @if (_loadingSet)
+        {
+            <div class="sync-loading">Loading set information...</div>
+        }
+        else if (_error != null)
+        {
+            <div class="sync-error">
+                <span>@_error</span>
+                <button @onclick="RetryLoadSet">Retry</button>
+            </div>
+        }
+        else if (!_isSyncing)
+        {
+            @* ── Selection Form ── *@
+            <div class="sync-form">
+                @* Selected Set Display ── *@
+                @if (_currentSet != null)
+                {
+                    <div class="selected-set-display">
+                        <span class="set-icon-large set-symbol set-symbol-@_currentSet.Code"></span>
+                        <div class="set-info">
+                            <div class="set-name-full">@_currentSet.Name</div>
+                            <div class="set-meta">
+                                <span class="set-code-badge">@_currentSet.Code</span>
+                                <span class="set-card-count">@_currentSet.CardCount cards</span>
+                                <span class="set-release-date">@_currentSet.ReleasedAt.ToString("yyyy-MM")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="sync-divider" />
+                }
+                else
+                {
+                    <div class="no-set-selected">
+                        <span>No set selected. Please select a set from the sidebar first.</span>
+                    </div>
+                }
+
+                @* Download Images ── *@
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="_downloadImages" />
+                        <span>Download card images</span>
+                    </label>
+                </div>
+
+                @* Language Localization Toggles ── *@
+                <div class="form-group language-group">
+                    <label>Card languages</label>
+                    <div class="language-toggles">
+                        @foreach (var lang in _allLanguages)
+                        {
+                            <button type="button"
+                                    class="lang-toggle @(IsLangSelected(lang) ? "active" : "")"
+                                    @onclick="() => ToggleLanguage(lang)"
+                                    title="@GetLangDisplayName(lang)">
+                                @lang
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @* Sync Button ── *@
+                <button class="sync-btn" @onclick="StartSyncCards"
+                        disabled="@(_syncDisabled)">
+                    @GetSyncButtonLabel()
+                </button>
+            </div>
+
+            @* ── Last Result ── *@
+            @if (_lastResult != null)
+            {
+                <div class="sync-result @( _lastResult.Success ? "success" : "error")">
+                    <div class="result-header">
+                        @( _lastResult.Success ? "✓ Sync Complete" : "✗ Sync Failed")
+                    </div>
+                    <div class="result-details">
+                        @if (!string.IsNullOrEmpty(_lastResult.SetName))
+                        {
+                            <span class="detail">Set: @_lastResult.SetName</span>
+                        }
+                        <span class="detail">Cards: @_lastResult.CardsPersisted</span>
+                        <span class="detail">Images: @_lastResult.ImagesDownloaded</span>
+                        @if (_lastResult.Errors > 0)
+                        {
+                            <span class="detail error">Errors: @_lastResult.Errors</span>
+                        }
+                        <span class="detail">Duration: @_lastResult.Duration.ToString("mm\\:ss")</span>
+                    </div>
+                    @if (_lastResult.ErrorMessages.Any())
+                    {
+                        <div class="result-errors">
+                            @foreach (var err in _lastResult.ErrorMessages)
+                            {
+                                <div>⚠ @err</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            @* ── Sync In Progress ── *@
+            <div class="sync-progress-section">
+                <div class="progress-set-name">@(_currentSet?.Name ?? SetCode)</div>
+
+                <div class="phase-indicator">
+                    <span class="phase-label">@_currentState?.PhaseName</span>
+                    <span class="phase-message">@_currentState?.Message</span>
+                </div>
+
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar" style="width: @(_currentState?.ProgressPercent ?? 0)%"></div>
+                </div>
+
+                <div class="progress-stats">
+                    <span>Cards: @_currentState?.ReadyCardsToSave / @_currentState?.TotalCards</span>
+                    @if (_downloadImages)
+                    {
+                        <span>Images: @_currentState?.ImagesDownloaded</span>
+                        @if ((_currentState?.ImagesFailed ?? 0) > 0)
+                        {
+                            <span class="fail">(@_currentState!.ImagesFailed failed)</span>
+                        }
+                    }
+                </div>
+
+                <button class="cancel-btn" @onclick="CancelSync">Cancel</button>
+            </div>
+        }
+    </div>
+    </div>
+}
+
+@code {
+    // ── Parameters ─────────────────────────────────────
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public string SetCode { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnCompleted { get; set; }
+
+    // ── DI ─────────────────────────────────────────────
+    [Inject] private GetKBAvailableSetsQueryHandler? KBSetsQueryHandler { get; set; }
+    [Inject] private SyncKBCommandHandler? SyncCommandHandler { get; set; }
+    [Inject] private SyncSetStateRegistry? StateRegistry { get; set; }
+    [Inject] private SaveUserSettingCommandHandler? SaveSettingCommandHandler { get; set; }
+    [Inject] private GetUserSettingQueryHandler? GetSettingQueryHandler { get; set; }
+
+    // ── State ────────────────────────────────────────────
+    private CardSetDto? _currentSet;
+    private bool _loadingSet;
+    private string? _error;
+
+    // ── Sync ─────────────────────────────────────
+    private bool _downloadImages = true;
+    private bool _isSyncing;
+    private SyncResult? _lastResult;
+    private SyncSetState? _currentState;
+    private CancellationTokenSource? _cts;
+    private Timer? _pollTimer;
+    private string[] _languages = [];
+    private static readonly string[] _allLanguages = ["en", "ru", "es", "fr", "de", "it", "pt", "ja", "ko", "zhs", "zht"];
+    private const string LanguagesSettingKey = "SyncSelectedSetCards.Languages";
+
+    private static readonly Dictionary<string, string> _langDisplayNames = new()
+    {
+        { "en", "English" },
+        { "ru", "Русский" },
+        { "es", "Español" },
+        { "fr", "Français" },
+        { "de", "Deutsch" },
+        { "it", "Italiano" },
+        { "pt", "Português" },
+        { "ja", "日本語" },
+        { "ko", "한국어" },
+        { "zhs", "简体中文" },
+        { "zht", "繁體中文" }
+    };
+
+    private bool IsLangSelected(string lang) => _languages.Contains(lang);
+
+    private string GetLangDisplayName(string lang)
+    {
+        return _langDisplayNames.TryGetValue(lang, out var name) ? name : lang;
+    }
+
+    private async Task ToggleLanguage(string lang)
+    {
+        if (_languages.Contains(lang))
+        {
+            _languages = _languages.Where(l => l != lang).ToArray();
+        }
+        else
+        {
+            _languages = _languages.Append(lang).ToArray();
+        }
+        await SaveLanguagesAsync();
+    }
+
+    private async Task LoadLanguagesAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(LanguagesSettingKey));
+            if (!string.IsNullOrEmpty(json))
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                _languages = System.Text.Json.JsonSerializer.Deserialize<string[]>(json, options) ?? [];
+            }
+        }
+        catch
+        {
+            // If loading fails, keep default (empty)
+            _languages = [];
+        }
+    }
+
+    private async Task SaveLanguagesAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_languages);
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(LanguagesSettingKey, json));
+        }
+        catch
+        {
+            // Silently fail — settings are not critical for sync to work
+        }
+    }
+
+    private bool _syncDisabled => string.IsNullOrEmpty(SetCode) || _languages.Length == 0;
+
+    private string GetSyncButtonLabel()
+    {
+        if (string.IsNullOrEmpty(SetCode))
+            return "No selected Set";
+        if (_languages.Length == 0)
+            return "Select at least one language";
+        return $"Sync Cards ({_languages.Length} lang)";
+    }
+
+    // ── Lifecycle ────────────────────────────────────────
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            await LoadSetInfo();
+            await LoadLanguagesAsync();
+        }
+    }
+
+    private async Task LoadSetInfo()
+    {
+        if (string.IsNullOrEmpty(SetCode))
+        {
+            _currentSet = null;
+            return;
+        }
+
+        _loadingSet = true;
+        _error = null;
+        try
+        {
+            var sets = await KBSetsQueryHandler!.Handle(new GetKBAvailableSetsQuery());
+            _currentSet = sets.Select(DtoHelper.ToCardSetDto)
+                .FirstOrDefault(s => s.Code == SetCode);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loadingSet = false;
+        }
+    }
+
+    private async Task RetryLoadSet()
+    {
+        await LoadSetInfo();
+        StateHasChanged();
+    }
+
+    // ── Sync Control ─────────────────────────────────────
+    private async Task StartSyncCards()
+    {
+        if (string.IsNullOrEmpty(SetCode)) return;
+
+        _isSyncing = true;
+        _lastResult = null;
+        _cts = new CancellationTokenSource();
+        StateHasChanged();
+
+        Task syncTask = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await SyncCommandHandler!.Handle(
+                    new SyncKBCommand(SetCode, _languages, _downloadImages),
+                    _cts.Token);
+
+                _lastResult = result;
+            }
+            catch (OperationCanceledException)
+            {
+                _lastResult = new SyncResult
+                {
+                    Success = false,
+                    SetCode = SetCode,
+                    ErrorMessages = { "Sync cancelled" }
+                };
+            }
+            catch (Exception ex)
+            {
+                _lastResult = new SyncResult
+                {
+                    Success = false,
+                    SetCode = SetCode,
+                    ErrorMessages = { ex.Message }
+                };
+            }
+            finally
+            {
+                _isSyncing = false;
+                _cts = null;
+                _pollTimer?.Dispose();
+                _pollTimer = null;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        // Start polling for progress (every 500ms)
+        _pollTimer = new Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                if (StateRegistry != null)
+                {
+                    _currentState = StateRegistry.Get(SetCode);
+                    StateHasChanged();
+                }
+            });
+        }, null, 0, 500);
+
+        // Wait for sync to complete, then notify parent.
+        // The parent (MainLayout) wraps its handler in InvokeAsync per Microsoft Learn pattern
+        // for cross-thread notifications from Task.Run.
+        await syncTask;
+        await OnCompleted.InvokeAsync();
+    }
+
+    private void CancelSync()
+    {
+        _cts?.Cancel();
+    }
+
+    // ── Dialog ───────────────────────────────────────────
+    private async Task OnOverlayClick()
+    {
+        if (_isSyncing) return; // Don't close while syncing
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

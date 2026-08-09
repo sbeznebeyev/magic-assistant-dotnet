@@ -1,0 +1,223 @@
+/* ── Overlay ───────────────────────────────────────── */
+.deck-filter-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* ── Dialog box ────────────────────────────────────── */
+.deck-filter-box {
+    background: #252525;
+    border: 1px solid #444;
+    border-radius: 8px;
+    width: 420px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Header ────────────────────────────────────────── */
+.deck-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #383838;
+}
+
+.deck-filter-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ddd;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.close-btn:hover {
+    background: #383838;
+    color: #ccc;
+}
+
+/* ── Tabs ──────────────────────────────────────────── */
+.deck-filter-tabs {
+    display: flex;
+    border-bottom: 1px solid #383838;
+}
+
+.deck-filter-tab {
+    flex: 1;
+    background: #2a2a2a;
+    color: #999;
+    border: none;
+    padding: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+}
+
+.deck-filter-tab:hover {
+    background: #333;
+    color: #ccc;
+}
+
+.deck-filter-tab.active {
+    background: #333;
+    color: #ddd;
+    border-bottom-color: #0078d4;
+}
+
+/* ── Content ───────────────────────────────────────── */
+.deck-filter-content {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.section-label {
+    font-size: 11px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Radio group ───────────────────────────────────── */
+.radio-group {
+    display: flex;
+    gap: 16px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+    accent-color: #0078d4;
+}
+
+/* ── Range row ─────────────────────────────────────── */
+.range-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.range-input {
+    width: 60px;
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 5px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.range-sep {
+    color: #666;
+}
+
+/* ── Tag filters ───────────────────────────────────── */
+.tag-filters {
+    display: flex;
+    gap: 12px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    accent-color: #0078d4;
+}
+
+/* ── Textarea / Input ──────────────────────────────── */
+.filter-textarea,
+.filter-input,
+.filter-select {
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.filter-textarea {
+    resize: vertical;
+    min-height: 48px;
+}
+
+.filter-input:focus,
+.filter-select:focus,
+.filter-textarea:focus {
+    border-color: #0078d4;
+}
+
+/* ── Footer ────────────────────────────────────────── */
+.deck-filter-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #383838;
+}
+
+.btn-apply,
+.btn-clear,
+.btn-cancel {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-apply {
+    background: #0078d4;
+    color: white;
+}
+
+.btn-apply:hover {
+    background: #106ebe;
+}
+
+.btn-clear,
+.btn-cancel {
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+}
+
+.btn-clear:hover,
+.btn-cancel:hover {
+    background: #4a4a4a;
+}

@@ -1,0 +1,261 @@
+@using MagicAssistant.App.Dtos
+@inject IJSRuntime JS
+
+<div class="set-selector-wrapper" @ref="_wrapperRef" @onclick="OnWrapperClick">
+    <div class="set-selector-trigger sync-select @(IsOpen ? "open" : "")"
+         @ref="_triggerRef"
+         @onclick="Toggle"
+         @onclick:stopPropagation
+         @onkeydown="OnKeyDown"
+         @onkeydown:preventDefault="true">
+        @if (IsOpen)
+        {
+            <input class="set-filter-input" type="text" placeholder="Search sets..."
+                   value="@_filterText"
+                   @oninput="OnFilterInputChanged"
+                   @ref="_filterInputRef"
+                   @onclick:stopPropagation
+                   @onkeydown:stopPropagation />
+        }
+        else
+        {
+            @if (_selectedSet != null)
+            {
+                <span class="set-icon set-symbol set-symbol-@_selectedSet.Code"></span>
+            }
+            <span class="trigger-text">@_displayText</span>
+            <span class="trigger-arrow">@(_arrowChar)</span>
+        }
+    </div>
+
+    @if (IsOpen)
+    {
+        <div class="set-dropdown-list" style="@_dropdownStyle" @onclick:stopPropagation>
+            @if (_filteredSets.Count == 0)
+            {
+                <div class="set-option empty">No sets found</div>
+            }
+            else
+            {
+                @foreach (var s in _filteredSets)
+                {
+                    var isSelected = Value == s.Code;
+                    <div class="set-option @(isSelected ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
+                         @onclick:stopPropagation
+                         @onclick="(e) => OnSelect(s, e)">
+                        <span class="set-icon set-symbol set-symbol-@s.Code"></span>
+                        <span class="set-label">(@s.ReleasedAt.ToString("yyyy")) @s.Name (@s.CardCount)</span>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter]
+    public required List<CardSetDto> Sets { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnDropdownToggle { get; set; }
+
+    private ElementReference _wrapperRef;
+    private ElementReference _triggerRef;
+    private ElementReference _filterInputRef;
+    private bool IsOpen;
+    private int _activeIndex = -1;
+    private string _displayText = "-- Select a set --";
+    private string _arrowChar = "▾";
+    private string _dropdownStyle = string.Empty;
+    private string _filterText = string.Empty;
+
+    private List<CardSetDto> _sortedSets = new();
+    private List<CardSetDto> _filteredSets = new();
+    private CardSetDto? _selectedSet;
+
+    protected override void OnParametersSet()
+    {
+        _sortedSets = Sets
+            .OrderByDescending(s => s.ReleasedAt)
+            .ThenBy(s => s.ParentSetCode)
+            .ToList();
+
+        if (!string.IsNullOrEmpty(Value))
+        {
+            _selectedSet = _sortedSets.FirstOrDefault(s => s.Code == Value);
+            _displayText = _selectedSet != null
+                ? $"({_selectedSet.ReleasedAt:yyyy}) {_selectedSet.Name} ({_selectedSet.CardCount})"
+                : "-- Select a set --";
+        }
+        else
+        {
+            _selectedSet = null;
+            _displayText = "-- Select a set --";
+        }
+
+        ApplyFilter();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen)
+        {
+            await PositionDropdown();
+        }
+    }
+
+    // Close dropdown when clicking outside the trigger (but still inside wrapper)
+    private async Task OnWrapperClick()
+    {
+        if (IsOpen)
+        {
+            IsOpen = false;
+            _arrowChar = "▾";
+            _activeIndex = -1;
+            await OnDropdownToggle.InvokeAsync(false);
+        }
+    }
+
+    private async Task Toggle()
+    {
+        if (Disabled) return;
+
+        IsOpen = !IsOpen;
+        _arrowChar = IsOpen ? "▴" : "▾";
+        _activeIndex = -1;
+
+        await OnDropdownToggle.InvokeAsync(IsOpen);
+
+        if (IsOpen)
+        {
+            _filterText = string.Empty;
+            ApplyFilter();
+            StateHasChanged();
+            await Task.Yield();
+            await PositionDropdown();
+            await FocusFilterInput();
+        }
+    }
+
+    private async Task PositionDropdown()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("eval", @"
+                (() => {
+                    const el = document.querySelector('.set-selector-trigger.open');
+                    if (!el) return null;
+                    const r = el.getBoundingClientRect();
+                    return JSON.stringify({ top: r.bottom + 2, left: r.left, width: r.width });
+                })()
+            ");
+
+            if (!string.IsNullOrEmpty(json))
+            {
+                var obj = System.Text.Json.JsonDocument.Parse(json).RootElement;
+                var top = obj.GetProperty("top").GetDouble();
+                var left = obj.GetProperty("left").GetDouble();
+                var width = obj.GetProperty("width").GetDouble();
+                _dropdownStyle = $"position:fixed;top:{top:F1}px;left:{left:F1}px;width:{width:F1}px;z-index:9999;";
+            }
+        }
+        catch
+        {
+            _dropdownStyle = "position:absolute;top:100%;left:0;right:0;z-index:100;";
+        }
+
+        StateHasChanged();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_filterText) || _filterText.Length < 2)
+        {
+            _filteredSets = _sortedSets;
+        }
+        else
+        {
+            var q = _filterText.ToLowerInvariant();
+            _filteredSets = _sortedSets
+                .Where(s => s.Name.ToLowerInvariant().Contains(q) ||
+                            s.Code.ToLowerInvariant().Contains(q))
+                .ToList();
+        }
+    }
+
+    private void OnFilterInputChanged(ChangeEventArgs e)
+    {
+        _filterText = e.Value?.ToString() ?? string.Empty;
+        ApplyFilter();
+    }
+
+    private async Task FocusFilterInput()
+    {
+        try
+        {
+            await _filterInputRef.FocusAsync();
+        }
+        catch { /* ignore focus errors */ }
+    }
+
+    private async Task OnSelect(CardSetDto s, MouseEventArgs e)
+    {
+        Value = s.Code;
+        _selectedSet = s;
+        _displayText = $"({s.ReleasedAt:yyyy}) {s.Name} ({s.CardCount})";
+        IsOpen = false;
+        _arrowChar = "▾";
+        _activeIndex = -1;
+
+        await ValueChanged.InvokeAsync(Value);
+        await OnDropdownToggle.InvokeAsync(false);
+        StateHasChanged();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (Disabled) return;
+
+        if (e.Key == "ArrowDown" && !IsOpen)
+        {
+            IsOpen = true;
+            _arrowChar = "▴";
+            _activeIndex = 0;
+            await OnDropdownToggle.InvokeAsync(true);
+            StateHasChanged();
+            await Task.Yield();
+            await PositionDropdown();
+        }
+        else if (e.Key == "ArrowDown" && IsOpen)
+        {
+            _activeIndex = Math.Min(_activeIndex + 1, _filteredSets.Count - 1);
+            StateHasChanged();
+        }
+        else if (e.Key == "ArrowUp" && IsOpen)
+        {
+            _activeIndex = Math.Max(_activeIndex - 1, 0);
+            StateHasChanged();
+        }
+        else if (e.Key == "Enter" && IsOpen && _activeIndex >= 0 && _activeIndex < _filteredSets.Count)
+        {
+            var s = _filteredSets[_activeIndex];
+            await OnSelect(s, new MouseEventArgs());
+        }
+        else if (e.Key == "Escape")
+        {
+            IsOpen = false;
+            _arrowChar = "▾";
+            _activeIndex = -1;
+            await OnDropdownToggle.InvokeAsync(false);
+        }
+    }
+}

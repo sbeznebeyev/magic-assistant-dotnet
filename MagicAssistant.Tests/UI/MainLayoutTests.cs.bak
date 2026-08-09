@@ -1,0 +1,542 @@
+using Bunit;
+using MagicAssistant.App.Shared;
+using AngleSharp.Dom;
+using System.Reflection;
+
+namespace MagicAssistant.Tests.UI;
+
+/// <summary>
+/// Tests for MainLayout — the central orchestrator of the entire UI.
+/// Covers: 3-panel layout, toolbar buttons (8), dialog orchestration (12+),
+/// view mode switching, tab bar (9 tabs), card/deck selection flow, status bar updates.
+/// </summary>
+[TestFixture]
+public class MainLayoutTests : BaseUiTest
+{
+    private IRenderedComponent<MainLayout> _cut = null!;
+
+    [SetUp]
+    public override void SetUp()
+    {
+        base.SetUp();
+        _cut = Ctx.Render<MainLayout>();
+    }
+
+    [TearDown]
+    public override void TearDown()
+    {
+        _cut?.Dispose();
+        base.TearDown();
+    }
+
+    private static IElement FindButtonByTitle(IRenderedComponent<MainLayout> cut, string title)
+        => cut.FindAll("button").First(b => b.GetAttribute("title") == title);
+
+    private void ChangeSelectTo(IElement select, string value)
+    {
+        foreach (var opt in select.QuerySelectorAll("option"))
+        {
+            if (opt.GetAttribute("value") == value)
+            {
+                opt.SetAttribute("selected", "selected");
+                break;
+            }
+        }
+        var evt = Microsoft.AspNetCore.Components.ChangeEventArgs.Empty;
+        evt = new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = value };
+        select.TriggerEvent("onchange", evt);
+    }
+
+    private void SetPrivateField(string fieldName, object? value)
+    {
+        var field = _cut.Instance.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+        field?.SetValue(_cut.Instance, value);
+        _cut.Render();
+    }
+
+    // =========================================================================
+    // 1. Layout Structure — 3-panel rendering
+    // =========================================================================
+
+    [Test]
+    public void Renders_InitialLayout_WithAllThreePanels()
+    {
+        Assert.That(_cut.Find(".panel-left"), Is.Not.Null);
+        Assert.That(_cut.Find(".panel-center"), Is.Not.Null);
+        Assert.That(_cut.Find(".panel-right"), Is.Not.Null);
+    }
+
+    [Test]
+    public void Header_DisplaysApplicationTitle()
+    {
+        Assert.That(_cut.Markup, Does.Contain("Magic Assistant"));
+        Assert.That(_cut.Markup, Does.Contain("Card Organizer"));
+    }
+
+    // =========================================================================
+    // 2. Toolbar — all 8 buttons present and functional
+    // =========================================================================
+
+    [Test]
+    public void Toolbar_ContainsAllButtons()
+    {
+        var toolbar = _cut.Find(".toolbar");
+
+        Assert.That(toolbar.TextContent, Does.Contain("+ Deck"));
+        Assert.That(toolbar.TextContent, Does.Contain("Import"));
+        Assert.That(toolbar.TextContent, Does.Contain("Legacy Import"));
+        Assert.That(toolbar.TextContent, Does.Contain("Export"));
+        Assert.That(toolbar.TextContent, Does.Contain("Sync KB"));
+        Assert.That(toolbar.TextContent, Does.Contain("Update DB"));
+        Assert.That(toolbar.TextContent, Does.Contain("Booster"));
+        Assert.That(toolbar.TextContent, Does.Contain("New Folder"));
+    }
+
+    [Test]
+    public void OnNewDeck_OpensNewDeckWizard()
+    {
+        FindButtonByTitle(_cut, "Create new deck").Click();
+        Assert.That(_cut.Markup, Does.Contain("Create New Deck"));
+    }
+
+    [Test]
+    public void OnImportDeck_OpensImportWizard()
+    {
+        FindButtonByTitle(_cut, "Import deck (current format)").Click();
+        Assert.That(_cut.Markup, Does.Contain("dialog-overlay"));
+        Assert.That(_cut.Markup, Does.Contain("Import Deck"));
+    }
+
+    [Test]
+    public void OnLegacyImportDeck_OpensLegacyImportWizard()
+    {
+        FindButtonByTitle(_cut, "Import legacy deck (Gatherer ID + full set names)").Click();
+        Assert.That(_cut.Markup, Does.Contain("dialog-overlay"));
+        Assert.That(_cut.Markup, Does.Contain("Import Legacy Deck"));
+    }
+
+    [Test]
+    public void OnExportDeck_WithNoDeckSelected_ShowsStatusBarMessage()
+    {
+        FindButtonByTitle(_cut, "Export deck").Click();
+        Assert.That(_cut.Find(".status-bar").TextContent, Does.Contain("Select a deck first"));
+    }
+
+    [Test]
+    public void OnSyncKB_OpensSyncDialog()
+    {
+        FindButtonByTitle(_cut, "Sync knowledge base from Scryfall").Click();
+        Assert.That(_cut.Markup, Does.Contain("sync-dialog-overlay"));
+        Assert.That(_cut.Markup, Does.Contain("Sync Knowledge Base"));
+    }
+
+    [Test]
+    public void OnUpdateDB_OpensUpdateDbDialog()
+    {
+        FindButtonByTitle(_cut, "Update database from Scryfall").Click();
+        Assert.That(_cut.Markup, Does.Contain("dialog-overlay"));
+        Assert.That(_cut.Markup, Does.Contain("Update Magic Database"));
+    }
+
+    [Test]
+    public void OnBooster_OpensBoosterWizard()
+    {
+        FindButtonByTitle(_cut, "Generate booster packs").Click();
+        Assert.That(_cut.Markup, Does.Contain("booster-overlay"));
+        Assert.That(_cut.Markup, Does.Contain("Booster Generator"));
+    }
+
+    [Test]
+    public void OnNewFolder_OpensCollectionWizard()
+    {
+        FindButtonByTitle(_cut, "Create new collection/folder").Click();
+        Assert.That(_cut.Markup, Does.Contain("Create New Collection"));
+    }
+
+    // =========================================================================
+    // 3. Dialog Open/Close — NewDeckWizard full flow
+    // =========================================================================
+
+    [Test]
+    public void NewDeckWizard_CancelButton_ClosesDialog()
+    {
+        FindButtonByTitle(_cut, "Create new deck").Click();
+        Assert.That(_cut.Markup, Does.Contain("Create New Deck"));
+
+        var cancelBtn = _cut.FindAll(".btn-secondary")
+            .First(b => b.TextContent.Trim() == "Cancel");
+        cancelBtn.Click();
+        Assert.That(_cut.Markup, Does.Not.Contain("Create New Deck"));
+    }
+
+    // =========================================================================
+    // 4. Status Bar — initial state
+    // =========================================================================
+
+    [Test]
+    public void StatusBar_ShowsReady_Initially()
+    {
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Ready"));
+    }
+
+    // =========================================================================
+    // 5. Default View Mode — list / no tab bar
+    // =========================================================================
+
+    [Test]
+    public void DefaultViewMode_RendersListControl()
+    {
+        Assert.That(_cut.Markup, Does.Contain("kb-browser"));
+    }
+
+    [Test]
+    public void NoDeckSelected_HidesTabBar()
+    {
+        Assert.That(_cut.Markup, Does.Not.Contain("tab-bar"));
+    }
+
+    // =========================================================================
+    // 6. View Mode Switching — list / gallery / tree via select
+    // =========================================================================
+
+    [Test]
+    public void ViewMode_SwitchToGallery_RendersGalleryControl()
+    {
+        var select = _cut.Find("select");
+        ChangeSelectTo(select, "gallery");
+        Assert.That(_cut.Markup, Does.Contain("gallery-container"));
+        Assert.That(_cut.Markup, Does.Not.Contain("kb-browser"));
+    }
+
+    [Test]
+    public void ViewMode_SwitchToTree_RendersTreeViewControl()
+    {
+        var select = _cut.Find("select");
+        ChangeSelectTo(select, "tree");
+        Assert.That(_cut.Markup, Does.Contain("tree-view-container"));
+    }
+
+    [Test]
+    public void ViewMode_SwitchBackToList_RendersListControl()
+    {
+        var select = _cut.Find("select");
+        ChangeSelectTo(select, "gallery");
+        ChangeSelectTo(select, "list");
+        Assert.That(_cut.Markup, Does.Contain("kb-browser"));
+    }
+
+    // =========================================================================
+    // 7. Deck Selection — tab bar appears, DeckView renders, tabs work
+    // =========================================================================
+
+    [Test]
+    public void DeckSelected_ShowsTabBar()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        Assert.That(_cut.Find(".tab-bar"), Is.Not.Null);
+    }
+
+    [Test]
+    public void DeckSelected_RendersDeckViewWithCorrectDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        
+        // DeckView должен получить правильный DeckId
+        Assert.That(_cut.Markup, Does.Contain("deck-view"));
+    }
+
+    [Test]
+    public void TabBar_ContainsAllNineTabs()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        var tabBar = _cut.Find(".tab-bar");
+
+        Assert.That(tabBar.TextContent, Does.Contain("Cards"));
+        Assert.That(tabBar.TextContent, Does.Contain("Mana Curve"));
+        Assert.That(tabBar.TextContent, Does.Contain("Colors"));
+        Assert.That(tabBar.TextContent, Does.Contain("Creatures"));
+        Assert.That(tabBar.TextContent, Does.Contain("Types"));
+        Assert.That(tabBar.TextContent, Does.Contain("Abilities"));
+        Assert.That(tabBar.TextContent, Does.Contain("Info"));
+        Assert.That(tabBar.TextContent, Does.Contain("Legality"));
+        Assert.That(tabBar.TextContent, Does.Contain("Collector"));
+    }
+
+    [Test]
+    public void Tab_Cards_ActiveByDefault()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        var cardsTab = _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Cards");
+        Assert.That(cardsTab.ClassList.Contains("active"), Is.True);
+    }
+
+    [Test]
+    public void Tab_SwitchToManaCurve_RendersManaCurvePageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Mana Curve").Click();
+        
+        // ManaCurvePage должен получить DeckId и попытаться загрузить данные
+        Assert.That(_cut.Markup, Does.Contain("mana-curve-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToColors_RendersSpellColourPageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Colors").Click();
+        
+        Assert.That(_cut.Markup, Does.Contain("color-distribution-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToCreatures_RendersCreaturePageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Creatures").Click();
+        
+        Assert.That(_cut.Markup, Does.Contain("creature-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToTypes_RendersTypePageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Types").Click();
+        
+        Assert.That(_cut.Markup, Does.Contain("type-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToAbilities_RendersAbilityPageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Abilities").Click();
+        
+        Assert.That(_cut.Markup, Does.Contain("ability-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToInfo_RendersInfoPageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Info").Click();
+        
+        Assert.That(_cut.Markup, Does.Contain("info-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToLegality_RendersDeckLegalityPageWithDeckId()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Legality").Click();
+        
+        Assert.That(_cut.Markup, Does.Contain("legality-page"));
+    }
+
+    [Test]
+    public void Tab_SwitchToCollector_RendersCollectorView()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Collector").Click();
+        Assert.That(_cut.Markup, Does.Contain("Collector's Progress"));
+    }
+
+    [Test]
+    public void Tab_SwitchingBackToCards_RendersDeckView()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        // Switch to Mana Curve first
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Mana Curve").Click();
+        Assert.That(_cut.Markup, Does.Contain("mana-curve-page"));
+
+        // Switch back to Cards
+        _cut.FindAll(".tab-bar button")
+            .First(b => b.TextContent.Trim() == "Cards").Click();
+        Assert.That(_cut.Markup, Does.Contain("deck-view"));
+    }
+
+    // =========================================================================
+    // 8. Right Panel — component presence & card selection flow
+    // =========================================================================
+
+    [Test]
+    public void RightPanel_ContainsAllThreeComponents()
+    {
+        Assert.That(_cut.Find(".panel-right").InnerHtml, Does.Contain("card-desc"));
+        Assert.That(_cut.Find(".panel-right").InnerHtml, Does.Contain("printings-view"));
+        Assert.That(_cut.Find(".panel-right").InnerHtml, Does.Contain("instances-view"));
+    }
+
+    [Test]
+    public void CardSelected_PassesCardIdToAllRightPanelComponents()
+    {
+        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19", ManaCost = "{R}", Type = "Instant" };
+        
+        // Mock the search service to return this card
+        CardSearch.Setup(s => s.GetCardByIdAsync(card.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(card);
+        
+        SetPrivateField("_selectedCardId", card.Id);
+        
+        var rightPanel = _cut.Find(".panel-right");
+        
+        // CardDescView должен отобразить данные карты
+        Assert.That(rightPanel.InnerHtml, Does.Contain("Lightning Bolt"));
+        Assert.That(rightPanel.InnerHtml, Does.Contain("{R}"));
+        Assert.That(rightPanel.InnerHtml, Does.Contain("Instant"));
+    }
+
+    [Test]
+    public void NoCardSelected_ShowsHintsInRightPanel()
+    {
+        var rightPanel = _cut.Find(".panel-right");
+        
+        Assert.That(rightPanel.InnerHtml, Does.Contain("Select a card to see details"));
+        Assert.That(rightPanel.InnerHtml, Does.Contain("Select a card to see all printings"));
+        Assert.That(rightPanel.InnerHtml, Does.Contain("Select a card to see instances"));
+    }
+
+    // =========================================================================
+    // 9. Global Search — SearchControl rendered in layout
+    // =========================================================================
+
+    [Test]
+    public void GlobalSearchControl_IsRendered()
+    {
+        Assert.That(_cut.Find(".panel-center").InnerHtml, Does.Contain("search-control"));
+    }
+
+    [Test]
+    public void OnGlobalSearchCompleted_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Search: \"fire\"");
+        Assert.That(_cut.Find(".status-bar").TextContent, Does.Contain("Search"));
+        Assert.That(_cut.Find(".status-bar").TextContent, Does.Contain("fire"));
+    }
+
+    [Test]
+    public void OnGlobalSearchResultCount_UpdatesStatusBar()
+    {
+        SetPrivateField("_resultCount", 42);
+        SetPrivateField("_statusText", "42 result(s) found");
+        Assert.That(_cut.Find(".status-bar").TextContent, Does.Contain("42"));
+        Assert.That(_cut.Find(".status-bar").TextContent, Does.Contain("result"));
+    }
+
+    // =========================================================================
+    // 10. View Mode Selector — options present
+    // =========================================================================
+
+    [Test]
+    public void ViewModeSelector_ContainsAllOptions()
+    {
+        var select = _cut.Find("select");
+        var options = select.QuerySelectorAll("option");
+        Assert.That(options.Length, Is.EqualTo(3));
+        Assert.That(options[0].GetAttribute("value"), Is.EqualTo("list"));
+        Assert.That(options[1].GetAttribute("value"), Is.EqualTo("gallery"));
+        Assert.That(options[2].GetAttribute("value"), Is.EqualTo("tree"));
+    }
+
+    // =========================================================================
+    // 11. Export with deck selected — dialog opens (vs status message)
+    // =========================================================================
+
+    [Test]
+    public void OnExportDeck_WithDeckSelected_OpensExportDialog()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        FindButtonByTitle(_cut, "Export deck").Click();
+        Assert.That(_cut.Markup, Does.Contain("dialog-overlay"));
+        Assert.That(_cut.Markup, Does.Contain("Export Deck"));
+    }
+
+    // =========================================================================
+    // 12. Callback simulation — status bar updates after wizard operations
+    // =========================================================================
+
+    [Test]
+    public void OnDeckCreatedFromWizard_UpdatesStatusBarAndShowsTabBar()
+    {
+        SetPrivateField("_selectedDeckId", "new-deck-42");
+        SetPrivateField("_statusText", "Deck created");
+
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Deck created"));
+        Assert.That(_cut.Find(".tab-bar"), Is.Not.Null);
+    }
+
+    [Test]
+    public void OnImportCompleted_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Import completed");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Import completed"));
+    }
+
+    [Test]
+    public void OnExportCompleted_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Export completed");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Export completed"));
+    }
+
+    [Test]
+    public void OnEditCardSaved_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Card updated");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Card updated"));
+    }
+
+    [Test]
+    public void OnSplitDone_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Card split");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Card split"));
+    }
+
+    [Test]
+    public void OnUpdateDbCompleted_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Database update completed");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Database update completed"));
+    }
+
+    [Test]
+    public void OnCollectionCreatedFromWizard_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Collection created");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Collection created"));
+    }
+
+    [Test]
+    public void OnEditDeckPropertiesSaved_UpdatesStatusBar()
+    {
+        SetPrivateField("_statusText", "Deck properties updated");
+        Assert.That(_cut.Find(".status-bar").TextContent.Trim(), Is.EqualTo("Deck properties updated"));
+    }
+
+    // =========================================================================
+    // 13. Deck deselection — tab bar hidden, list view restored
+    // =========================================================================
+
+    [Test]
+    public void DeckDeselected_HidesTabBarAndShowsList()
+    {
+        SetPrivateField("_selectedDeckId", "test-deck-1");
+        Assert.That(_cut.Find(".tab-bar"), Is.Not.Null);
+
+        SetPrivateField("_selectedDeckId", null);
+        Assert.That(_cut.Markup, Does.Not.Contain("tab-bar"));
+        Assert.That(_cut.Markup, Does.Contain("kb-browser"));
+    }
+}

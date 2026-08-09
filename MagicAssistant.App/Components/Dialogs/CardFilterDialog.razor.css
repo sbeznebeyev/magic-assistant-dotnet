@@ -1,0 +1,333 @@
+/* ── Overlay ───────────────────────────────────────── */
+.filter-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* ── Dialog box ────────────────────────────────────── */
+.filter-dialog-box {
+    background: #252525;
+    border: 1px solid #444;
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Header ────────────────────────────────────────── */
+.filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #383838;
+}
+
+.filter-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ddd;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.close-btn:hover {
+    background: #383838;
+    color: #ccc;
+}
+
+/* ── Content ───────────────────────────────────── */
+.filter-tab-content {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── Field rows ────────────────────────────────────── */
+.filter-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.filter-range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.filter-label {
+    font-size: 11px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.filter-input,
+.filter-select {
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+.filter-input-sm {
+    width: 60px;
+}
+
+/* ── Footer ────────────────────────────────────────── */
+.filter-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #383838;
+}
+
+.btn-apply,
+.btn-clear,
+.btn-cancel {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-apply {
+    background: #0078d4;
+    color: white;
+}
+
+.btn-apply:hover {
+    background: #106ebe;
+}
+
+.btn-clear,
+.btn-cancel {
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+}
+
+.btn-clear:hover,
+.btn-cancel:hover {
+    background: #4a4a4a;
+}
+
+/* ── Rarity picker (MultiSelectList dialog content) ── */
+.rarity-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rarity-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: start;
+}
+
+.rarity-option:hover {
+    background: #2d2d2d;
+    border-color: #0078d4;
+}
+
+.rarity-option-selected {
+    background: #2a2a3a;
+    border-color: #0078d4;
+}
+
+.rarity-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ── Type picker (MultiSelectList dialog content) ── */
+.type-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.type-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: start;
+}
+
+.type-option:hover {
+    background: #2d2d2d;
+    border-color: #0078d4;
+}
+
+.type-option-selected {
+    background: #2a2a3a;
+    border-color: #0078d4;
+}
+/* ── Color toggle buttons grid ─────────────────── */
+.color-toggle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+}
+
+.color-toggle-grid-6 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.color-icon-btn {
+    padding: 6px;
+}
+
+.color-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 8px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.color-toggle:hover {
+    background: #2d2d2d;
+    border-color: #555;
+    color: #ccc;
+}
+
+.color-toggle.active {
+    background: #1a3a5c;
+    border-color: #0078d4;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(0, 120, 212, 0.3);
+}
+
+.color-toggle.active:hover {
+    background: #1f4568;
+}
+
+/* ── Properties rows ─────────────────────────────── */
+.prop-row {
+    display: grid;
+    grid-template-columns: 80px 50px 1fr;
+    align-items: center;
+    gap: 6px;
+}
+
+.prop-title {
+    font-size: 12px;
+    color: #ccc;
+}
+
+.prop-op {
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.prop-op:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+.prop-value {
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.prop-value:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+/* ── Other toggle button ───────────────────────── */
+.other-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.other-toggle:hover {
+    background: #2d2d2d;
+    border-color: #555;
+    color: #ccc;
+}
+
+.other-toggle.active {
+    background: #1a3a5c;
+    border-color: #0078d4;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(0, 120, 212, 0.3);
+}
+
+.other-toggle.active:hover {
+    background: #1f4568;
+}
+
+.other-checkbox input[type="checkbox"] {
+    accent-color: #0078d4;
+}

@@ -1,0 +1,270 @@
+/* === Main Layout - SWT-inspired 3-panel design === */
+
+.app-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    background-color: #1e1e1e;
+    color: #cccccc;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 13px;
+}
+
+/* === Header === */
+.header {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    background-color: #323233;
+    border-bottom: 1px solid #444;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.header .title {
+    font-weight: bold;
+    color: #0078d4;
+    font-size: 14px;
+}
+
+.header .subtitle {
+    color: #888;
+    margin-left: 8px;
+    font-size: 11px;
+}
+
+.header .sync-indicator {
+    color: #4fc3f7;
+    font-size: 11px;
+}
+
+/* === Main grid - 3 columns === */
+.main-grid {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Left panel: Navigator tree */
+.panel-left {
+    width: 280px;
+    min-width: 200px;
+    max-width: 400px;
+    border-right: 1px solid #444;
+    background-color: #252526;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+/* Center panel: Main content */
+.panel-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 300px;
+    overflow: hidden;
+    background-color: #1e1e1e;
+}
+
+/* Right panel: Card details + printings + instances */
+.panel-right {
+    width: 360px;
+    min-width: 250px;
+    max-width: 500px;
+    border-left: 1px solid #444;
+    background-color: #252526;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+/* === Toolbar (child component — use ::deep) === */
+::deep .toolbar {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px;
+    background-color: #2d2d2d;
+    border-bottom: 1px solid #444;
+    height: 32px;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+::deep .toolbar button {
+    background-color: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 2px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+::deep .toolbar button:hover {
+    background-color: #4c4c4c;
+    border-color: #666;
+}
+
+::deep .toolbar select,
+::deep .view-mode-select {
+    background-color: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 2px;
+}
+
+/* === Tab bar (child component — use ::deep) === */
+::deep .tab-bar {
+    display: flex;
+    background-color: #2d2d2d;
+    border-bottom: 1px solid #444;
+    height: 30px;
+    flex-shrink: 0;
+}
+
+::deep .tab-bar button {
+    background-color: transparent;
+    color: #888;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 4px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+::deep .tab-bar button.active {
+    color: #fff;
+    border-bottom-color: #0078d4;
+    background-color: #1e1e1e;
+}
+
+::deep .tab-bar button:hover:not(.active) {
+    color: #ccc;
+    background-color: #3c3c3c;
+}
+
+/* === Content area — stretched to fill panel-center, minus toolbar/tab/statusbar === */
+.content-area {
+    flex: 1 0 auto; /* takes ALL remaining space in panel-center */
+    overflow: hidden;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+::deep .content-area > div {
+    flex: 1 0 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+::deep .gallery-container,
+::deep .deck-view,
+::deep .list-control,
+::deep .tree-view {
+    flex: 1 0 auto !important;
+    min-height: 0 !important;
+}
+
+/* === Status bar === */
+.status-bar {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background-color: #007acc;
+    color: white;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+/* === Dividers in right panel === */
+.divider {
+    border: none;
+    border-top: 1px solid #444;
+    margin: 8px 0;
+}
+
+/* === Component section headers === */
+.section-header {
+    padding: 6px 10px;
+    font-weight: bold;
+    font-size: 12px;
+    color: #0078d4;
+    border-bottom: 1px solid #333;
+    background-color: #2d2d2d;
+}
+
+/* === Table styles (for card lists) === */
+.card-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.card-table th {
+    background-color: #2d2d2d;
+    color: #aaa;
+    padding: 4px 6px;
+    text-align: left;
+    border-bottom: 1px solid #444;
+    position: sticky;
+    top: 0;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+.card-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid #2a2a2a;
+    white-space: nowrap;
+}
+
+.card-table tr:hover {
+    background-color: #2a2a2a;
+}
+
+.card-table tr.selected {
+    background-color: #094551;
+}
+
+/* === Tree view styles === */
+.tree-node {
+    padding: 2px 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.tree-node:hover {
+    background-color: #2a2a2a;
+}
+
+.tree-children {
+    padding-left: 16px;
+}
+
+/* === Scrollbar styling === */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

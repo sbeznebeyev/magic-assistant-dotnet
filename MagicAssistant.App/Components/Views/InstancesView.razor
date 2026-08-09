@@ -1,0 +1,144 @@
+@using MagicAssistant.Data.Contracts
+@inject ICardStore<MagicCardPhysical> CardStore
+
+<div class="instances-view">
+    <div class="section-header">
+        <span>Instances</span>
+        @if (_instances != null && _instances.Any())
+        {
+            <span class="count-badge">@_totalCopies copies</span>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="view-loading">Loading...</div>
+    }
+    else if (!CardId.HasValue)
+    {
+        <div class="view-hint">Select a card to see instances</div>
+    }
+    else if (_instances!.Count == 0)
+    {
+        <div class="view-empty">No instances of this card in any deck</div>
+    }
+    else
+    {
+        <div class="instances-list">
+            @foreach (var instance in _instances)
+            {
+                <div class="instance-row" @onclick="() => SelectInstance(instance)">
+
+                    @* Count & Ownership *@
+                    <div class="instance-left">
+                        <span class="count-badge-large">@instance.Count×</span>
+                        <span class="ownership-badge @(instance.IsOwn ? "owned" : "borrowed")">
+                            @(instance.IsOwn ? "Owned" : "Borrowed")
+                        </span>
+                    </div>
+
+                    @* Deck info *@
+                    <div class="instance-deck">
+                        <span class="deck-name">@GetDeckName(instance)</span>
+                        @if (instance.Location.IsSideboard)
+                        {
+                            <span class="sideboard-tag">SB</span>
+                        }
+                    </div>
+
+                    @* Properties *@
+                    <div class="instance-right">
+                        @if (instance.Price.HasValue)
+                        {
+                            <span class="prop-price" title="Price">@instance.Price.Value.ToString("F2")</span>
+                        }
+                        @if (!string.IsNullOrEmpty(instance.SpecialTags))
+                        {
+                            <span class="prop-special" title="@instance.SpecialTags">★</span>
+                        }
+                        @if (!string.IsNullOrEmpty(instance.Comment))
+                        {
+                            <span class="prop-comment" title="@instance.Comment">📝</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* Summary *@
+        <div class="instances-summary">
+            <div class="summary-item">
+                <span class="summary-label">Total copies</span>
+                <span class="summary-value">@_totalCopies</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Owned</span>
+                <span class="summary-value owned">@_ownedCount</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Borrowed</span>
+                <span class="summary-value borrowed">@_borrowedCount</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Decks</span>
+                <span class="summary-value">@_deckCount</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MagicCardPhysical> _instances = new();
+    private bool _loading;
+
+    [Parameter] public Guid? CardId { get; set; }
+    [Parameter] public EventCallback<int> OnDeckSelected { get; set; }
+
+    // Computed
+    private int _totalCopies => _instances.Sum(i => i.Count);
+    private int _ownedCount => _instances.Where(i => i.IsOwn).Sum(i => i.Count);
+    private int _borrowedCount => _instances.Where(i => !i.IsOwn).Sum(i => i.Count);
+    private int _deckCount => _instances.Select(i => i.Location.Id).Distinct().Count();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!CardId.HasValue)
+        {
+            _instances = new();
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _instances = (await CardStore.GetCardsAsync(CardId.Value)).ToList();
+            // Sort: owned first, then by deck
+            _instances = _instances.OrderByDescending(i => i.IsOwn)
+                                   .ThenBy(i => i.Location.Id)
+                                   .ToList();
+        }
+        catch
+        {
+            _instances = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectInstance(MagicCardPhysical instance)
+    {
+        if (int.TryParse(instance.Location.Id, out var locId))
+            await OnDeckSelected.InvokeAsync(locId);
+    }
+
+    private static string GetDeckName(MagicCardPhysical instance)
+    {
+        var id = instance.Location.Id;
+        // Remove sideboard suffix for display
+        if (id.EndsWith("_sb"))
+            id = id[..^3];
+        return id.Length > 20 ? id[..17] + "…" : id;
+    }
+}

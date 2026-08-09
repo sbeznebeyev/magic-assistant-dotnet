@@ -1,0 +1,818 @@
+@using System.Text
+@using MagicAssistant.App.Components.Shared
+@using MagicAssistant.App.Dtos
+@using MagicAssistant.App.Shared
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject ICardSearchService CardSearch
+@inject GetKBAvailableSetsQueryHandler? KBSetsQueryHandler
+@inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
+@inject GetUserSettingQueryHandler? GetSettingQueryHandler
+@inject IJSRuntime JS
+
+<div class="kb-browser">
+    @* ── Two-panel layout: Sets sidebar + Splitter + Card grid ── *@
+    <div class="kb-body">
+        @* ── Left: Sets Sidebar ── *@
+        <div class="sets-sidebar" style="width: @(_sidebarWidth + "px");">
+            <div class="sets-header">
+                <span class="sets-title">KB (sets: @GetDisplayedSetsCount(), cards: @GetDisplayedCardsCount())</span>
+            </div>
+            <div class="sets-search-bar">
+                <input value="@GetSetsInputValue()"
+                       @oninput="OnSetsFilterInput"
+                       placeholder="Filter sets..."
+                       class="sets-search-input" />
+                @if (FilterViewModel.SetCodes.Count > 0 || (!string.IsNullOrEmpty(_setsSearchQuery) && _setsSearchQuery.Length >= 2))
+                {
+                    <button class="sets-clear-btn" @onclick="ClearSetsFilter" title="Clear filter">✕</button>
+                }
+            </div>
+            <div class="sets-list-wrapper">
+                <div class="sets-list">
+                    @if (_filteredSets.Count == 0)
+                    {
+                        <div class="set-item empty">No sets found</div>
+                    }
+                    else
+                    {
+                        @* "All Sets" option ── *@
+                        <div class="set-item @(FilterViewModel.SetCodes.Count == 0 ? "selected" : "")"
+                             @onclick="@(() => SelectAllSets())">
+                            <span class="set-code">ALL</span>
+                            <span class="set-name">All Sets</span>
+                        </div>
+                        @foreach (var s in _filteredSets)
+                        {
+                            <div class="set-item @(FilterViewModel.SetCodes.Contains(s.Code) ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
+                                 @onclick="@(() => SelectSetFilter(s.Code))">
+                                <span class="set-icon set-symbol set-symbol-@s.Code"></span>
+                                <span class="set-name" title="@s.Name">@s.Name</span>
+                                <span class="set-count">@s.CardCount</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ── Splitter (8px, draggable) ── *@
+        <div class="sets-splitter" @ref="_splitterRef"
+             @onmousedown="OnSplitterMouseDown"
+             @onmousedown:preventDefault></div>
+
+        @* ── Right: Card Grid Area ── *@
+        <div class="kb-content">
+            @* ── Toolbar Row: Name filter + Sort + Filters ── *@
+            <div class="toolbar-row">
+                <div class="name-filter-area">
+                    <div class="name-filter-wrapper">
+                        <input value="@_nameInputBuffer" @oninput="OnNameFilterInput" @onkeypress="OnNameFilterKey"
+                               placeholder="Name... (3+)"
+                               class="name-filter-input" />
+                        @if (!string.IsNullOrEmpty(_nameInputBuffer))
+                        {
+                            <button class="name-filter-clear" @onclick="ClearNameFilter" title="Clear">✕</button>
+                        }
+                    </div>
+                </div>
+
+                <div class="sort-area">
+                    <span class="sort-label">Sort:</span>
+                    @foreach (var field in _sortFields)
+                    {
+                        var isActive = FilterViewModel.SortField == field.Value;
+                        <button class="sort-btn @(isActive ? "active" : "")"
+                                @onclick="() => ToggleSort(field.Value)">
+                            @field.Key @(isActive && !FilterViewModel.SortAsc ? "▲" : (isActive ? "▼" : ""))
+                        </button>
+                    }
+                </div>
+                <div class="filter-area">
+                    <select value="@(GetTypeSelectValue())" @onchange="(e) => OnTypeChanged(e)" class="filter-select">
+                        <option value="@_typeExpr" selected="@(FilterViewModel.TypeFilter.Count > 1)">@TypePlaceholderLabel</option>
+                        @foreach (var t in _typeOptions)
+                        {
+                            <option value="@t.Key" selected="@(FilterViewModel.TypeFilter.Count == 1 && FilterViewModel.TypeFilter[0] == t.Key)">@t.DisplayName</option>
+                        }
+                    </select>
+                    <select value="@(GetRaritySelectValue())" @onchange="(e) => OnRarityChanged(e)" class="filter-select">
+                        <option value="@_rarityExpr" selected="@(FilterViewModel.Rarity.Count != 1)">@RarityPlaceholderLabel</option>
+                        @foreach (var r in _rarities)
+                        {
+                            <option value="@r" selected="@(FilterViewModel.Rarity.Count == 1 && FilterViewModel.Rarity[0] == r)">@r</option>
+                        }
+                    </select>
+                    <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
+                    <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
+                </div>
+            </div>
+
+            @* ── Loading ── *@
+            @if (_loading)
+            {
+                <div class="kb-loading">Searching...</div>
+            }
+
+            @* ── Card Table ── *@
+            @if (!_loading && _displayCards.Any())
+            {
+                <div class="table-wrapper">
+                    <table class="card-table">
+                        <thead>
+                            <tr>
+                                <th class="col-num">#</th>
+                                <th class="col-name">Name</th>
+                                <th class="col-cmc">CMC</th>
+                                <th class="col-cost">Cost</th>
+                                <th class="col-rarity">Rarity</th>
+                                <th class="col-set">Set</th>
+                                <th class="col-type">Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < _displayCards.Count; i++)
+                            {
+                                var card = _displayCards[i];
+                                <tr class="@(_selectedCardId == card.Id ? "selected" : "")"
+                                    @onclick="() => SelectCard(card)">
+                                    <td class="col-num">@((_currentPage - 1) * PageSize + i + 1)</td>
+                                    <td class="col-name">
+                                        <span class="card-name">@(card.PrintedName ?? card.Name)</span>
+                                    </td>
+                                    <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
+                                    <td class="col-cost"><MagicText Text="@ManaCost(card)" /></td>
+                                    <td class="col-rarity">
+                                        <span class="rarity-badge @(GetRarityClass(card.Rarity))">
+                                            @card.Rarity
+                                        </span>
+                                    </td>
+                                    <td class="col-set">@(card.SetCode ?? "—")</td>
+                                    <td class="col-type" title="@(card.PrintedTypeLine ?? card.Type)">@Truncate(card.PrintedTypeLine ?? card.Type, 28)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @* ── Pagination ── *@
+                <div class="gallery-pagination">
+                    <div class="pagination-buttons">
+                        <button @onclick="PrevPage" disabled="@(!_hasPrev)" class="page-btn">← Prev</button>
+                        <span class="page-info">Page @_currentPage / @_totalPages</span>
+                        <button @onclick="NextPage" disabled="@(!_hasNext)" class="page-btn">Next →</button>
+                    </div>
+                </div>
+            }
+
+            @* ── Empty State ── *@
+            @if (!_loading && !_displayCards.Any())
+            {
+                <div class="kb-empty">
+                    @if (HasActiveFilters)
+                    {
+                        <span class="empty-filters-msg">No cards match the selected filters</span>
+                    }
+                    else
+                    {
+                        <span>No cards in knowledge base yet.</span>
+                        <button class="sync-btn-inline" @onclick="OnSyncClick">
+                            Sync from Scryfall
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private const int PageSize = 50;
+
+    // Data
+    private List<MagicCard> _displayCards = new();
+    private int _totalCount;
+    private int _currentPage = 1;
+    private int _totalPages = 0;
+    private bool _loading;
+
+    // Name filter input buffer (debounced — actual filter lives in FilterViewModel)
+    private string _nameInputBuffer = "";
+    private System.Threading.Timer? _nameDebounceTimer;
+    private int _debounceSequence;
+
+    // Static options
+    private static readonly string[] _rarities = { "common", "uncommon", "rare", "mythic" };
+    private static readonly (string Key, string DisplayName)[] _typeOptions =
+    {
+        ("artifact", "Artifact"),
+        ("creature", "Creature"),
+        ("enchantment", "Enchantment"),
+        ("instant", "Instant"),
+        ("land", "Land"),
+        ("planeswalker", "Planeswalker"),
+        ("sorcery", "Sorcery"),
+    };
+
+    // Sets (loaded from KB via GetKBAvailableSetsQuery)
+    private List<CardSetDto> _sets = new();
+    private List<CardSetDto> _filteredSets = new();
+    private string _setsSearchQuery = "";
+
+    // Splitter / Resizable sidebar
+    private ElementReference _splitterRef;
+    private int _sidebarWidth = 220;
+    private const int MinSidebarWidth = 160;
+    private const int MaxSidebarWidth = 500;
+    private bool _isDragging;
+
+    // Settings persistence
+    private const string SplitterPositionKey = "KBCardsListControl.SplitterPosition";
+
+    // Refresh trigger tracking
+    private int _previousRefreshTrigger;
+    /// <summary>Display label → internal sort field name (matches CardListFilter.SortFields).</summary>
+    private static readonly Dictionary<string, string> _sortFields = new()
+    {
+        ["Name"] = "Name",
+        ["CMC"] = "CmcNumber",
+        ["Type"] = "Type",
+        ["Set"] = "SetCode",
+        ["Rarity"] = "Rarity",
+    };
+
+    private static string ManaCost(MagicCard magicCard)
+    {
+        if (!string.IsNullOrWhiteSpace(magicCard.ManaCost))
+            return magicCard.ManaCost;
+
+        if (magicCard.CardFaces is null || magicCard.CardFaces.Length == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder(magicCard.CardFaces[0].ManaCost);
+
+        if (magicCard.CardFaces.Length > 1)
+            sb.Append($" // {magicCard.CardFaces[1].ManaCost}");
+
+        return sb.ToString();
+    }
+
+    // ── Parameters ──────────────────────────────────────
+    /// <summary>Central filter/sort state shared with CardFilterDialog.</summary>
+    [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
+
+    [Parameter] public EventCallback<Guid?> OnCardSelected { get; set; }
+    [Parameter] public EventCallback OnOpenFilter { get; set; }
+    [Parameter] public EventCallback<string> OnOpenSync { get; set; }
+    [Parameter] public int RefreshTrigger { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        FilterViewModel.Changed += OnFilterChanged;
+        await LoadSplitterSettingsAsync();
+        await LoadSetsFromKB();
+        await LoadCounts();
+        await ApplyFiltersAndPagination();
+    }
+
+    /// <summary>Central handler: reset page + re-query when any filter/sort changes.
+    /// Called from FilterViewModel.Changed (Action event) — wraps async work in InvokeAsync.</summary>
+    private void OnFilterChanged()
+    {
+        _currentPage = 1;
+        InvokeAsync(async () =>
+        {
+            await ApplyFiltersAndPagination();
+            StateHasChanged();
+        });
+    }
+
+    private IJSObjectReference? _jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _jsModule == null)
+        {
+            // ES Module — Microsoft Learn pattern: путь относительно wwwroot
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/js/splitter.js");
+
+            // Register C# callback — модуль вызовет OnSidebarResize из C#
+            await _jsModule.InvokeVoidAsync(
+                "init",
+                DotNetObjectReference.Create(this));
+        }
+    }
+
+    // ── Sets Loading ──────────────────────────────────────
+    private async Task LoadSetsFromKB()
+    {
+        try
+        {
+            var sets = await KBSetsQueryHandler!.Handle(new GetKBAvailableSetsQuery());
+            _sets = sets.Select(DtoHelper.ToCardSetDto)
+                .OrderByDescending(s => s.ReleasedAt)
+                .ThenBy(s => s.ParentSetCode)
+                .ToList();
+            ApplySetsFilter();
+        }
+        catch (Exception ex)
+        {
+            _sets = new List<CardSetDto>();
+            _filteredSets = new List<CardSetDto>();
+        }
+    }
+
+    private void OnSetsFilterInput(ChangeEventArgs e)
+    {
+        // Typing in the input = search mode; clear any active set filter
+        FilterViewModel.SetNewSetCodeFilter(null);
+        _setsSearchQuery = e.Value?.ToString() ?? string.Empty;
+        ApplySetsFilter();
+        StateHasChanged();
+    }
+
+    private async Task ClearSetsFilter()
+    {
+        FilterViewModel.SetNewSetCodeFilter(null);
+        _setsSearchQuery = "";
+        ApplySetsFilter();
+        await OnCardSelected.InvokeAsync((Guid?)null);
+        FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
+    }
+
+    private string GetSetsInputValue()
+    {
+        // Show set codes when sets are selected as filter; otherwise show search text
+        if (FilterViewModel.SetCodes.Count == 1)
+            return FilterViewModel.SetCodes[0];
+        if (FilterViewModel.SetCodes.Count > 1)
+            return $"{FilterViewModel.SetCodes.Count} sets";
+        return _setsSearchQuery;
+    }
+
+    // ── Header stats (dynamic based on filter context) ─────────────────────
+    private int GetDisplayedSetsCount()
+    {
+        if (FilterViewModel.SetCodes.Count > 0)
+            return FilterViewModel.SetCodes.Count;  // Sets selected
+        if (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
+            return _filteredSets.Count;  // Text-filtered sets
+        return _sets.Count;  // All sets
+    }
+
+    private int GetDisplayedCardsCount()
+    {
+        if (FilterViewModel.SetCodes.Count > 0)
+        {
+            // Selected sets: sum of declared CardCount from set metadata
+            return _sets.Where(s => FilterViewModel.SetCodes.Contains(s.Code))
+                .Sum(s => s.CardCount);
+        }
+        if (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
+        {
+            // Text-filtered sets: sum of declared CardCount from matching sets
+            return _filteredSets.Sum(s => s.CardCount);
+        }
+        // No filter: total cards from DB
+        return _totalCount;
+    }
+
+    private void ApplySetsFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_setsSearchQuery) || _setsSearchQuery.Length < 2)
+        {
+            _filteredSets = _sets;
+        }
+        else
+        {
+            var q = _setsSearchQuery.ToLowerInvariant();
+            _filteredSets = _sets
+                .Where(s => s.Name.ToLowerInvariant().Contains(q) ||
+                            s.Code.ToLowerInvariant().Contains(q))
+                .ToList();
+        }
+    }
+
+    private async Task SelectSetFilter(string setCode)
+    {
+        // Toggle: if already selected, remove it; otherwise add it
+        if (FilterViewModel.SetCodes.Contains(setCode))
+        {
+            FilterViewModel.SetCodes.Remove(setCode);
+        }
+        else
+        {
+            FilterViewModel.SetCodes.Add(setCode);
+        }
+        _setsSearchQuery = "";  // Clear search so input shows the set code(s)
+        await OnCardSelected.InvokeAsync((Guid?)null);
+        FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
+    }
+
+    private async Task SelectAllSets()
+    {
+        FilterViewModel.SetNewSetCodeFilter(null);
+        _setsSearchQuery = "";  // Clear search text too
+        await OnCardSelected.InvokeAsync((Guid?)null);
+        FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
+    }
+
+    // ── Splitter / Resize ──────────────────────────────────────
+    private async Task OnSplitterMouseDown(MouseEventArgs e)
+    {
+        if (_jsModule is null) return;
+
+        _isDragging = true;
+        StateHasChanged();
+        await _jsModule.InvokeVoidAsync("startDrag", (int)e.ClientX, _sidebarWidth);
+    }
+
+    // ── Settings Persistence ───────────────────────────────
+    private async Task LoadSplitterSettingsAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(SplitterPositionKey));
+            if (!string.IsNullOrEmpty(json) && int.TryParse(json, out var width))
+            {
+                _sidebarWidth = Math.Clamp(width, MinSidebarWidth, MaxSidebarWidth);
+            }
+        }
+        catch
+        {
+            // default _sidebarWidth = 220
+        }
+    }
+
+    private async Task SaveSplitterPositionAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(SplitterPositionKey, _sidebarWidth.ToString()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    [JSInvokable]
+    public void OnSidebarResize(int newWidth)
+    {
+        _sidebarWidth = Math.Clamp(newWidth, MinSidebarWidth, MaxSidebarWidth);
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnDragEnd()
+    {
+        await SaveSplitterPositionAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Auto-reload when RefreshTrigger changes (sync completed)
+        if (RefreshTrigger != _previousRefreshTrigger)
+        {
+            _previousRefreshTrigger = RefreshTrigger;
+            _currentPage = 1;
+            await LoadSetsFromKB();   // reload sets list after sync
+            ApplySetsFilter();         // re-apply search filter on sets
+            await LoadCounts();        // refresh total card count
+            await ApplyFiltersAndPagination();
+        }
+    }
+
+    private async Task OnFilterClick()
+    {
+        await OnOpenFilter.InvokeAsync();
+    }
+
+    /// <summary>Clear all active filters and re-query.</summary>
+    private void OnClearFiltersClick()
+    {
+        FilterViewModel.ClearAndApply();
+    }
+
+    private async Task OnSyncClick()
+    {
+        if (FilterViewModel.SetCodes.Count == 1)
+        {
+            await OnOpenSync.InvokeAsync(FilterViewModel.SetCodes[0]);
+        }
+        else
+        {
+            // No set or multiple sets selected — open sync dialog without pre-selected set
+            await OnOpenSync.InvokeAsync(string.Empty);
+        }
+    }
+
+    private async Task LoadCounts()
+    {
+        try
+        {
+            _totalCount = await CardSearch!.GetTotalCountAsync();
+        }
+        catch { }
+    }
+
+    // ── Filter change handlers — all through single channel (FilterViewModel.Apply) ──
+
+    private void OnTypeChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (value == _typeExpr)
+        {
+            // "All types" clicked — clear type filter
+            FilterViewModel.SetNewTypeFilter(null);
+            FilterViewModel.Apply();
+            return;
+        }
+        FilterViewModel.SetNewTypeFilter(value);
+        FilterViewModel.Apply();  // Changed → OnFilterChanged resets page + re-queries
+    }
+
+    /// <summary>Internal expression string for multi-type filter in the select.</summary>
+    private const string _typeExpr = "type: (a or b)";
+
+    /// <summary>_typeExpr when multi-type filter is active, otherwise the single selected type or empty.</summary>
+    private string TypePlaceholderLabel =>
+        FilterViewModel.TypeFilter.Count > 1 ? _typeExpr : "All types";
+
+    /// <summary>Value for the type select: selected type or _typeExpr for multi/empty.</summary>
+    private string GetTypeSelectValue() =>
+        FilterViewModel.TypeFilter.Count == 1 ? FilterViewModel.TypeFilter[0] : _typeExpr;
+
+    private const string _rarityExpr = "rarity: (a or b)";
+
+    private void OnRarityChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (value == _rarityExpr)
+        {
+            // "All Rarities" clicked — clear rarity filter
+            FilterViewModel.SetNewRarityFilter(null);
+            FilterViewModel.Apply();
+            return;
+        }
+        FilterViewModel.SetNewRarityFilter(value);
+        FilterViewModel.Apply();
+    }
+
+    /// <summary>_rarityExpr when multi-rarity filter is active, otherwise "All Rarities".</summary>
+    private string RarityPlaceholderLabel =>
+        FilterViewModel.Rarity.Count > 1 ? _rarityExpr : "All Rarities";
+
+    /// <summary>Value for the rarity select: selected rarity or _rarityExpr for multi/empty.</summary>
+    private string GetRaritySelectValue() =>
+        FilterViewModel.Rarity.Count == 1 ? FilterViewModel.Rarity[0] : _rarityExpr;
+
+    private void OnNameFilterInput(ChangeEventArgs e)
+    {
+        _nameInputBuffer = e.Value?.ToString() ?? "";
+
+        // Cancel previous timer
+        _nameDebounceTimer?.Dispose();
+        _nameDebounceTimer = null;
+
+        if (_nameInputBuffer.Length >= 3)
+        {
+            // Debounce: wait 300ms, then commit to ViewModel + fire Changed
+            int sequence = ++_debounceSequence;
+            string filterValue = _nameInputBuffer;
+
+            _nameDebounceTimer = new System.Threading.Timer(_ =>
+            {
+                InvokeAsync(() => ApplyNameFilterWithGuard(sequence, filterValue));
+            }, null, 300, Timeout.Infinite);
+        }
+        else
+        {
+            // Below 3 chars — clear filter immediately through single channel
+            _debounceSequence++;
+            FilterViewModel.NameFilter = string.Empty;
+            FilterViewModel.Apply();
+        }
+    }
+
+    private void ApplyNameFilterWithGuard(int sequence, string filterValue)
+    {
+        if (sequence != _debounceSequence)
+            return;
+        FilterViewModel.NameFilter = filterValue;
+        FilterViewModel.Apply();  // Changed → OnFilterChanged
+    }
+
+    private void OnNameFilterKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _nameDebounceTimer?.Dispose();
+            _nameDebounceTimer = null;
+            _debounceSequence++;
+            FilterViewModel.NameFilter = _nameInputBuffer.Length >= 3 ? _nameInputBuffer : string.Empty;
+            FilterViewModel.Apply();
+        }
+    }
+
+    private void ClearNameFilter()
+    {
+        _nameDebounceTimer?.Dispose();
+        _nameDebounceTimer = null;
+        _debounceSequence++;
+        _nameInputBuffer = "";
+        FilterViewModel.NameFilter = string.Empty;
+        FilterViewModel.Apply();
+    }
+
+    // Server-side: filters + sort + pagination in one SQL query via GetPagedAsync
+    private async Task ApplyFiltersAndPagination()
+    {
+        _loading = true;
+        try
+        {
+            // FilterViewModel.SortField already matches CardListFilter.SortFields values
+            var sortField = FilterViewModel.SortField;
+
+            string? effectiveNameFilter = FilterViewModel.NameFilter.Length >= 3
+                ? FilterViewModel.NameFilter
+                : null;
+
+            var filter = new CardListFilter
+            {
+                SetCodes = FilterViewModel.SetCodes.Count > 0 ? FilterViewModel.SetCodes : null,
+                Rarity = FilterViewModel.Rarity.Count > 0 ? FilterViewModel.Rarity : null,
+                SortField = sortField,
+                SortAsc = FilterViewModel.SortAsc,
+                Page = _currentPage,
+                PageSize = PageSize,
+                NameFilter = effectiveNameFilter,
+                Query = null,
+                TypeFilters = FilterViewModel.TypeFilter.Count > 0 ? FilterViewModel.TypeFilter : null,
+                Artist = string.IsNullOrEmpty(FilterViewModel.Artist) ? null : FilterViewModel.Artist,
+                ColorType = string.IsNullOrEmpty(FilterViewModel.ColorType) ? null : FilterViewModel.ColorType,
+                ColorFilter = ColorFilterHelper.GetFilter(
+                    FilterViewModel.ColorFilters,
+                    andMode: FilterViewModel.ColorAndMode,
+                    onlyMode: FilterViewModel.ColorOnlyMode,
+                    identityMode: FilterViewModel.ColorIdentityMode),
+                // Properties filters (Power / Toughness / CMC)
+                PowerFilter = ParseNumericPropertyFilter(FilterViewModel.PowerOp, FilterViewModel.PowerValue),
+                ToughnessFilter = ParseNumericPropertyFilter(FilterViewModel.ToughnessOp, FilterViewModel.ToughnessValue),
+                CmcFilter = ParseNumericPropertyFilter(FilterViewModel.CmcOp, FilterViewModel.CmcValue),
+                // Layout / Legality / GameChanger filters
+                LayoutFilter = string.IsNullOrEmpty(FilterViewModel.LayoutFilter) ? null : FilterViewModel.LayoutFilter,
+                LegalityFilter = string.IsNullOrEmpty(FilterViewModel.LegalityFilter) ? null : FilterViewModel.LegalityFilter,
+                GameChangerFilter = FilterViewModel.GameChangerFilter,
+            };
+
+            var result = await CardSearch!.GetPagedAsync(filter);
+            _displayCards = result.Cards.Cast<MagicCard>().ToList();
+            _totalCount = result.TotalCount;
+            _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
+            if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
+        }
+        catch
+        {
+            _displayCards = new List<MagicCard>();
+            _totalCount = 0;
+            _totalPages = 0;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>Parse a numeric property filter from operator string + value string.
+    /// Returns null if the value is empty/non-numeric (filter inactive).</summary>
+    private static NumericPropertyFilter? ParseNumericPropertyFilter(string op, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var num))
+            return null;
+
+        return new NumericPropertyFilter { Operator = op, Value = num };
+    }
+
+    // ── Sort — through single channel ────────────────────
+    private void ToggleSort(string field)
+    {
+        if (FilterViewModel.SortField == field)
+            FilterViewModel.SortAsc = !FilterViewModel.SortAsc;
+        else
+        {
+            FilterViewModel.SortField = field;
+            FilterViewModel.SortAsc = true;
+        }
+        FilterViewModel.Apply();  // Changed → OnFilterChanged resets page + re-queries
+    }
+
+    // ── Pagination ──────────────────────────────────────
+    private bool _hasPrev => _currentPage > 1;
+    private bool _hasNext => _currentPage < _totalPages;
+
+    private async Task PrevPage()
+    {
+        if (_hasPrev)
+        {
+            _currentPage--;
+            await ApplyFiltersAndPagination();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (_hasNext)
+        {
+            _currentPage++;
+            await ApplyFiltersAndPagination();
+        }
+    }
+
+    // ── Selection ───────────────────────────────────────
+    private Guid? _selectedCardId;
+
+    private async Task SelectCard(MagicCard card)
+    {
+        _selectedCardId = card.Id;
+        await OnCardSelected.InvokeAsync(card.Id);
+    }
+
+    /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
+    private bool HasActiveFilters =>
+        FilterViewModel.SetCodes.Count > 0
+        || FilterViewModel.Rarity.Count > 0
+        || FilterViewModel.TypeFilter.Count > 0
+        || !string.IsNullOrWhiteSpace(FilterViewModel.NameFilter)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.Artist)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.ColorType)
+        || (FilterViewModel.ColorFilters.Any(kvp => kvp.Value))
+        || FilterViewModel.ColorAndMode
+        || FilterViewModel.ColorOnlyMode
+        || FilterViewModel.ColorIdentityMode
+        || !string.IsNullOrWhiteSpace(FilterViewModel.PowerValue)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.ToughnessValue)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.CmcValue)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.LayoutFilter)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.LegalityFilter)
+        || FilterViewModel.GameChangerFilter;
+
+    // ── Helpers ─────────────────────────────────────────
+    private static string Truncate(string? text, int maxLen)
+    {
+        if (text == null) return "—";
+        return text.Length <= maxLen ? text : text[..(maxLen - 1)] + "…";
+    }
+
+    /// <summary>Format CMC: strip trailing ".0" (e.g. "3.0" → "3", "2.5" stays "2.5").</summary>
+    private static string FormatCmc(string? cmcText)
+    {
+        if (string.IsNullOrEmpty(cmcText)) 
+            return "—";
+
+        if (cmcText.EndsWith(".0"))
+            return cmcText.Replace(".0", string.Empty);
+
+        return cmcText;
+    }
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        // Unsubscribe from FilterViewModel
+        FilterViewModel.Changed -= OnFilterChanged;
+
+        // Dispose debounce timer
+        _nameDebounceTimer?.Dispose();
+
+        // Microsoft Learn pattern: try-catch JSDisconnectedException
+        var module = _jsModule;
+        _jsModule = null;
+        if (module is not null)
+        {
+            try { await module.InvokeVoidAsync("dispose"); }
+            catch (JSDisconnectedException) { /* circuit lost */ }
+            try { await module.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* circuit lost */ }
+        }
+    }
+}

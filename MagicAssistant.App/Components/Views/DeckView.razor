@@ -1,0 +1,388 @@
+@using MagicAssistant.Data.DbModel
+@using MagicAssistant.Data.Model
+@inject IDeckCardService DeckCardService
+@inject IDeckManagementService DeckManagement
+
+<div class="deck-view">
+    @if (_loading)
+    {
+        <div class="deck-loading">Loading deck...</div>
+    }
+    else if (_error != null)
+    {
+        <div class="deck-error">
+            <span>@_error</span>
+            <button @onclick="Reload">Retry</button>
+        </div>
+    }
+    else if (_deck == null)
+    {
+        <div class="deck-empty">Deck not found</div>
+    }
+    else
+    {
+        @* ── Deck Header ── *@
+        <div class="deck-header">
+            <div class="deck-title-row">
+                <span class="deck-name">@_deck.Name</span>
+                <span class="deck-stats">
+                    @_totalCards card@( _totalCards != 1 ? "s" : "")
+                    @{ if (_landCount > 0) { <span>@_landCount land@( _landCount != 1 ? "s" : "")</span> } }
+                    @{ if (_creatureCount > 0) { <span>@_creatureCount creature@( _creatureCount != 1 ? "s" : "")</span> } }
+                </span>
+                <button class="action-btn" @onclick="OnMoveCardsClick" title="Move cards to another deck">📦 Move</button>
+            </div>
+
+            @* ── Search Bar ── *@
+            <div class="search-bar">
+                <input @bind="_searchText" @oninput="OnSearchInput"
+                       placeholder="Filter cards by name, type..."
+                       class="search-input" />
+                @if (!string.IsNullOrEmpty(_searchText))
+                {
+                    <button class="clear-btn" @onclick="ClearSearch">✕</button>
+                }
+                <button class="filter-btn" @onclick="OnOpenFilterClick" title="Advanced filter">⚙ Filter</button>
+            </div>
+
+            @* ── Sort Controls ── *@
+            <div class="sort-bar">
+                <span class="sort-label">Sort:</span>
+                @foreach (var field in _sortFields)
+                {
+                    <button class="sort-btn @(_currentSort == field.Value ? "active" : "")"
+                            @onclick="() => ToggleSort(field.Value)">
+                        @field.Key @(_currentSort == field.Value && !_sortAsc ? "▲" : (_currentSort == field.Value ? "▼" : ""))
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* ── Card Table ── *@
+        <div class="card-table-wrapper">
+            <table class="card-table">
+                <thead>
+                    <tr>
+                        <th class="col-count">#</th>
+                        <th class="col-name">Name</th>
+                        <th class="col-cost">Cost</th>
+                        <th class="col-type">Type</th>
+                        <th class="col-set">Set</th>
+                        <th class="col-rarity">Rarity</th>
+                        <th class="col-cmc">CMC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var card in _displayCards)
+                    {
+                        <tr class="@(_selectedCardId == card.Id ? "selected" : "")"
+                            @onclick="() => SelectCard(card)"
+                            @oncontextmenu:stopPropagation="true"
+                            @oncontextmenu="(e) => ShowEditCard(e, card)">
+                            <td class="col-count">
+                                <div class="count-control">
+                                    <button class="count-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => ChangeCount(card, -1)">−</button>
+                                    <span class="count-value">@card.Count</span>
+                                    <button class="count-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => ChangeCount(card, 1)">+</button>
+                                </div>
+                            </td>
+                            <td class="col-name">
+                                <span class="card-name">@card.Name</span>
+                                <button class="edit-btn" @onclick:stopPropagation="true"
+                                        @onclick="() => EditCard(card)" title="Edit card">✎</button>
+                                @if (card.Count > 1)
+                                {
+                                    <button class="split-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => SplitCard(card)" title="Split pile">⫯</button>
+                                }
+                            </td>
+                            <td class="col-cost">@card.ManaCost ?? "—"</td>
+                            <td class="col-type" title="@card.Type">@Truncate(card.Type, 30)</td>
+                            <td class="col-set">@card.SetCode ?? "—"</td>
+                            <td class="col-rarity">
+                                <span class="rarity-badge @(GetRarityClass(card.Rarity))">
+                                    @card.Rarity
+                                </span>
+                            </td>
+                            <td class="col-cmc">@(card.CmcNumber > 0 ? card.CmcText : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (!_displayCards.Any())
+            {
+                <div class="empty-table">
+                    @if (!string.IsNullOrEmpty(_searchText))
+                    {
+                        <span>No cards match "<em>@_searchText</em>"</span>
+                    }
+                    else
+                    {
+                        <span>This deck is empty. Search for cards to add.</span>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ── Footer ── *@
+        <div class="deck-footer">
+            <span>@_displayCards.Count of @_totalCards cards shown</span>
+            @if (_searchText != null)
+            {
+                <span class="filter-info">Filtered by: "@_searchText"</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Collection? _deck;
+    private List<MagicCardPhysical> _allCards = new();
+    private Guid? _selectedCardId;
+    private bool _loading;
+    private string? _error;
+
+    // Search / filter
+    private string _searchText = "";
+    private List<MagicCardPhysical> _displayCards = new();
+
+    // Sort
+    private string _currentSort = "name";
+    private bool _sortAsc = true;
+    private static readonly Dictionary<string, string> _sortFields = new()
+    {
+        ["Name"] = "name",
+        ["Cost"] = "cmc",
+        ["Type"] = "type",
+        ["Set"] = "set",
+        ["Rarity"] = "rarity",
+        ["Count"] = "count",
+    };
+
+    // Computed stats
+    private int _totalCards => _allCards.Sum(c => c.Count);
+    private int _landCount => _allCards.Count(c => c.Card.IsBasicLand());
+    private int _creatureCount => _allCards.Count(c => c.Card.Type?.Contains("Creature") == true);
+
+    [Parameter] public int DeckId { get; set; }
+    [Parameter] public EventCallback<Guid> OnCardSelected { get; set; }
+    [Parameter] public EventCallback<MagicCardPhysical> OnEditCard { get; set; }
+    [Parameter] public EventCallback<MagicCardPhysical> OnSplitCard { get; set; }
+    [Parameter] public EventCallback OnOpenDeckFilter { get; set; }
+    [Parameter] public EventCallback OnOpenLocationPicker { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDeck();
+    }
+
+    private async Task LoadDeck()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _deck = await DeckManagement!.GetByIdAsync(DeckId);
+            if (_deck != null)
+            {
+                var cards = await DeckCardService.GetDeckCardsAsync(DeckId);
+                _allCards = cards.ToList();
+            }
+            ApplyFilterAndSort();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Reload()
+    {
+        await LoadDeck();
+        StateHasChanged();
+    }
+
+    // ── Search / Filter ────────────────────────────────────
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? "";
+        ApplyFilterAndSort();
+        StateHasChanged();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+        ApplyFilterAndSort();
+        StateHasChanged();
+    }
+
+    private void ApplyFilterAndSort()
+    {
+        var filtered = _allCards;
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            var q = _searchText.ToLowerInvariant();
+            filtered = filtered.Where(c =>
+                c.Name.ToLowerInvariant().Contains(q) ||
+                (c.Type != null && c.Type.ToLowerInvariant().Contains(q)) ||
+                (c.SetCode != null && c.SetCode.ToLowerInvariant().Contains(q)) ||
+                (c.ManaCost != null && c.ManaCost.ToLowerInvariant().Contains(q)) ||
+                (c.Rarity != null && c.Rarity.ToLowerInvariant().Contains(q))
+            ).ToList();
+        }
+
+        // Sort
+        filtered = filtered.OrderBy(c => c, new CardSortComparer(_currentSort, _sortAsc)).ToList();
+        _displayCards = filtered;
+    }
+
+    // ── Sort ───────────────────────────────────────────────
+    private void ToggleSort(string field)
+    {
+        if (_currentSort == field)
+            _sortAsc = !_sortAsc;
+        else
+        {
+            _currentSort = field;
+            _sortAsc = true;
+        }
+        ApplyFilterAndSort();
+        StateHasChanged();
+    }
+
+    // ── Count change ───────────────────────────────────────
+    private async Task ChangeCount(MagicCardPhysical card, int delta)
+    {
+        var newCount = card.Count + delta;
+        if (newCount < 0) return;
+
+        if (newCount == 0)
+        {
+            // Remove card from deck
+            // DeckCardService handles card removal with proper location matching
+            var removed = await DeckCardService.RemoveCardsAsync(DeckId!, new[] { card.Id }, false);
+            if (removed == 0) return;
+            _allCards.Remove(card);
+        }
+        else
+        {
+            card.Count = newCount;
+            var fields = new List<MagicCardField> { MagicCardField.Count };
+            // DeckCardService handles card updates
+            var updates = new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = card.Count };
+            await DeckCardService.UpdateCardAsync(DeckId!, card.Id, updates);
+        }
+
+        ApplyFilterAndSort();
+        StateHasChanged();
+    }
+
+    // ── Card selection ─────────────────────────────────────
+    private async Task SelectCard(MagicCardPhysical card)
+    {
+        _selectedCardId = card.Id;
+        await OnCardSelected.InvokeAsync(card.Id);
+    }
+
+    // ── Edit card ──────────────────────────────────────────
+    private async Task EditCard(MagicCardPhysical card)
+    {
+        await OnEditCard.InvokeAsync(card);
+    }
+
+    private async Task SplitCard(MagicCardPhysical card)
+    {
+        if (card.Count > 1)
+            await OnSplitCard.InvokeAsync(card);
+    }
+
+    private async Task ShowEditCard(MouseEventArgs e, MagicCardPhysical card)
+    {
+        // @oncontextmenu:stopPropagation="true" already prevents default context menu
+        await SelectCard(card);
+        await EditCard(card);
+    }
+
+    // ── Advanced filter ──────────────────────────────────────
+    private async Task OnOpenFilterClick()
+    {
+        await OnOpenDeckFilter.InvokeAsync();
+    }
+
+    // ── Move cards ───────────────────────────────────────────
+    private async Task OnMoveCardsClick()
+    {
+        await OnOpenLocationPicker.InvokeAsync();
+    }
+
+    // ── Helpers ────────────────────────────────────────────
+    private static string Truncate(string? text, int maxLen)
+    {
+        if (text == null) return "—";
+        return text.Length <= maxLen ? text : text[..(maxLen - 1)] + "…";
+    }
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+
+    // ── Sort comparer ──────────────────────────────────────
+    private class CardSortComparer : IComparer<MagicCardPhysical>
+    {
+        private readonly string _field;
+        private readonly bool _asc;
+
+        public CardSortComparer(string field, bool asc)
+        {
+            _field = field;
+            _asc = asc;
+        }
+
+        public int Compare(MagicCardPhysical? x, MagicCardPhysical? y)
+        {
+            if (x == null && y == null) return 0;
+            if (x == null) return -1;
+            if (y == null) return 1;
+
+            int cmp = _field switch
+            {
+                "cmc" => Comparer<int?>.Default.Compare(x.CmcNumber, y.CmcNumber),
+                "name" => StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name),
+                "type" => StringComparer.OrdinalIgnoreCase.Compare(x.Type ?? "", y.Type ?? ""),
+                "set" => StringComparer.OrdinalIgnoreCase.Compare(x.SetCode ?? "", y.SetCode ?? ""),
+                "rarity" => CompareRarity(x.Rarity, y.Rarity),
+                "count" => x.Count.CompareTo(y.Count),
+                _ => 0
+            };
+
+            return _asc ? cmp : -cmp;
+        }
+
+        private static int CompareRarity(string? a, string? b)
+        {
+            var order = new[] { "common", "uncommon", "rare", "mythic" };
+            var ai = Array.IndexOf(order, a?.ToLowerInvariant());
+            var bi = Array.IndexOf(order, b?.ToLowerInvariant());
+            if (ai < 0) ai = -1;
+            if (bi < 0) bi = -1;
+            return ai.CompareTo(bi);
+        }
+    }
+}

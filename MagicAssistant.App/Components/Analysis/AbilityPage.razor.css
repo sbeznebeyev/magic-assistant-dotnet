@@ -1,0 +1,33 @@
+.ability-page { padding: 12px; }
+
+.section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 600; color: #cdd6f4; margin-bottom: 12px;
+}
+.loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
+
+.ability-count { font-size: 13px; color: #a6adc8; margin-bottom: 12px; }
+
+.h-bar-chart { display: flex; flex-direction: column; gap: 6px; }
+.h-bar-row { display: flex; align-items: center; gap: 8px; }
+.h-bar-label {
+    width: 140px; min-width: 140px; font-size: 12px; color: #cdd6f4;
+    text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.h-bar-track {
+    flex: 1; height: 22px; background: #1e1e2e; border-radius: 4px; overflow: hidden;
+    border: 1px solid #313244;
+}
+.h-bar-fill {
+    height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: linear-gradient(90deg, #89b4fa, #74c7ec); min-width: 2px;
+}
+.h-bar-value {
+    width: 70px; font-size: 11px; color: #a6adc8; text-align: right; white-space: nowrap;
+}
+
+.loading-state, .empty-state, .error-state {
+    padding: 24px; text-align: center; color: #6c7086; font-size: 13px;
+}
+.error-state { color: #f38ba8; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.retry-btn { background: #3c3c3c; border: 1px solid #555; color: #ccc; padding: 4px 12px; border-radius: 4px; cursor: pointer; }

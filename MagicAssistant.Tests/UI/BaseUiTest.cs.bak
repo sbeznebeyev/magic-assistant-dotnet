@@ -1,0 +1,167 @@
+// Shared base for all UI tests — provides BunitContext + common service mocks.
+using Bunit;
+using MagicAssistant.Core.Commands;
+using MagicAssistant.Core.Queries;
+using MagicAssistant.Core.Services.BoosterGeneration;
+using MagicAssistant.Core.Services.CardSearch;
+using MagicAssistant.Core.Services.DeckAnalysis;
+using MagicAssistant.Core.Services.DeckCard;
+using MagicAssistant.Core.Services.DeckImportExport;
+using MagicAssistant.Core.Services.DeckManagement;
+using MagicAssistant.Core;
+using MagicAssistant.Core.Services.KnowledgeBaseSync;
+using MagicAssistant.Data.Contracts;
+using MagicAssistant.Http.Contracts;
+using MagicAssistant.Http.Dtos;
+using MagicAssistant.App.Components.Analysis;
+using Microsoft.Extensions.DependencyInjection;
+using RichardSzalay.MockHttp;
+
+namespace MagicAssistant.Tests.UI;
+
+public abstract class BaseUiTest
+{
+    protected BunitContext Ctx { get; private set; } = null!;
+    protected Mock<ICardSearchService> CardSearch { get; private set; } = null!;
+    protected Mock<IDeckManagementService> DeckMgmt { get; private set; } = null!;
+    protected Mock<IDeckCardService> DeckCard { get; private set; } = null!;
+    protected Mock<ICardStore<MagicCardPhysical>> CardPhysicalStore { get; private set; } = null!;
+    protected Mock<IDeckImportExportService> ImportExport { get; private set; } = null!;
+    protected Mock<IBoosterGenerationService> BoosterGen { get; private set; } = null!;
+    protected Mock<IDeckAnalysisService> DeckAnalysis { get; private set; } = null!;
+
+    [SetUp]
+    public virtual void SetUp()
+    {
+        Ctx = new BunitContext();
+        CardSearch = new Mock<ICardSearchService>();
+        DeckMgmt = new Mock<IDeckManagementService>();
+        DeckCard = new Mock<IDeckCardService>();
+        CardPhysicalStore = new Mock<ICardStore<MagicCardPhysical>>();
+        ImportExport = new Mock<IDeckImportExportService>();
+        BoosterGen = new Mock<IBoosterGenerationService>();
+        DeckAnalysis = new Mock<IDeckAnalysisService>();
+
+        CardSearch.Setup(s => s.GetTotalCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        CardSearch.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<IMagicCard>());
+        CardSearch.Setup(s => s.GetAllAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCard>());
+        CardSearch.Setup(s => s.GetCardByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MagicCard?)null);
+        CardSearch.Setup(s => s.GetPrintingsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCard>());
+
+        DeckMgmt.Setup(s => s.GetRootNodesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<CardCollectionNode>());
+        DeckMgmt.Setup(s => s.GetByIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CardCollectionNode?)null);
+
+        DeckCard.Setup(s => s.GetDeckCardsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
+
+        CardPhysicalStore.Setup(s => s.InitializeAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        CardPhysicalStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        CardPhysicalStore.Setup(s => s.AddAllAsync(It.IsAny<IEnumerable<MagicCardPhysical>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        CardPhysicalStore.Setup(s => s.RemoveAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        CardPhysicalStore.Setup(s => s.RemoveAllAsync(It.IsAny<IEnumerable<MagicCardPhysical>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        CardPhysicalStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        CardPhysicalStore.Setup(s => s.GetCardAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MagicCardPhysical?)null);
+        CardPhysicalStore.Setup(s => s.GetCardsAsync(It.IsAny<Guid>(), default))
+            .ReturnsAsync(new List<MagicCardPhysical>());
+        CardPhysicalStore.Setup(s => s.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        CardPhysicalStore.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
+
+        // Register all services
+        Ctx.Services.Add(ServiceDescriptor.Singleton(CardSearch.Object));
+        Ctx.Services.Add(ServiceDescriptor.Singleton(DeckMgmt.Object));
+        Ctx.Services.Add(ServiceDescriptor.Singleton(DeckCard.Object));
+        Ctx.Services.Add(ServiceDescriptor.Singleton(CardPhysicalStore.Object));
+        Ctx.Services.Add(ServiceDescriptor.Singleton(ImportExport.Object));
+        Ctx.Services.Add(ServiceDescriptor.Singleton(BoosterGen.Object));
+        Ctx.Services.Add(ServiceDescriptor.Singleton(DeckAnalysis.Object));
+
+        // Register Query handlers (used by SyncKnowledgeBase and UpdateMagicDBDialog)
+        var scryfallClient = new Mock<IScrayflClient>();
+        scryfallClient.Setup(s => s.GetSetsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ScryfallSetDto>());
+        Ctx.Services.Add(ServiceDescriptor.Singleton(scryfallClient.Object));
+        
+        var setsQueryHandler = new GetScryfallAvailableSetsQueryHandler(scryfallClient.Object);
+        Ctx.Services.Add(ServiceDescriptor.Singleton(setsQueryHandler));
+        
+        // Register SyncKBCommandHandler for UpdateMagicDBDialog
+        var syncService = new Mock<IKnowledgeBaseSyncService>();
+        syncService.Setup(s => s.SyncSetAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncResult { Success = true, CardsDownloaded = 0, ImagesDownloaded = 0 });
+        var syncCommandHandler = new SyncKBCommandHandler(syncService.Object);
+        Ctx.Services.Add(ServiceDescriptor.Singleton(syncCommandHandler));
+        
+        // Register SyncSetStateRegistry for UpdateMagicDBDialog
+        Ctx.Services.Add(ServiceDescriptor.Singleton(new SyncSetStateRegistry()));
+        
+        // Register mock HttpClient for analysis components
+        var mockHttp = Ctx.Services.AddMockHttpClient();
+        
+        // Mock /api/analysis/{deckId} endpoint
+        mockHttp.When("http://localhost/api/analysis/*")
+            .RespondJson(new AnalysisResultDto
+            {
+                ManaCurve = new[] { 0, 2, 4, 6, 8, 5, 3, 1 },
+                TotalCards = 30,
+                TotalManaManaCost = 75,
+                MaxRepeats = 4,
+                ColorDistribution = new Dictionary<string, int>
+                {
+                    { "White", 5 }, { "Blue", 8 }, { "Red", 7 }
+                },
+                LandCount = 18,
+                CreatureCount = 10,
+                NonCreatureCount = 2,
+                CreatureSubtypes = new Dictionary<string, int>
+                {
+                    { "Human", 4 }, { "Dragon", 3 }, { "Elf", 3 }
+                },
+                AbilityStats = new Dictionary<string, int>
+                {
+                    { "Flying", 5 }, { "First Strike", 3 }
+                }
+            });
+        
+        // Mock /api/decks/{deckId}/cards endpoint (for DeckLegalityPage)
+        mockHttp.When("http://localhost/api/decks/*/cards")
+            .RespondJson(new List<DeckCardDto>
+            {
+                new() { CardId = Guid.NewGuid().ToString(), Name = "Test Card", LegalityMap = new() },
+                new() { CardId = Guid.NewGuid().ToString(), Name = "Another Card", LegalityMap = new() }
+            });
+        
+        // Mock /api/sync/sets endpoint (for BoosterGeneratorWizard)
+        mockHttp.When("http://localhost/api/sync/sets")
+            .RespondJson(new List<ScryfallSetDto>
+            {
+                new(
+                    Id: Guid.NewGuid(),
+                    Code: "M19",
+                    Name: "Magic 2019",
+                    Uri: "https://api.scryfall.com/sets/m19",
+                    ScryfallUri: "https://scryfall.com/set/m19",
+                    SearchUri: "https://api.scryfall.com/cards/search?q=e%3Am19",
+                    ReleasedAt: "2018-08-31",
+                    SetType: "master",
+                    CardCount: 269,
+                    ParentSetCode: null,
+                    Digital: false,
+                    NonfoilOnly: false,
+                    FoilOnly: false,
+                    IconSvgUri: "https://scryfall.com/static/set-icons/m19.png"
+                )
+            });
+    }
+
+    [TearDown]
+    public virtual void TearDown() => Ctx?.Dispose();
+}

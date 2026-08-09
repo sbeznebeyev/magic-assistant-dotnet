@@ -1,0 +1,125 @@
+/* ── Wrapper ─────────────────────────────────────────── */
+.set-selector-wrapper {
+    flex: 1;
+    position: relative;
+}
+
+/* ── Trigger (inherits .sync-select base styles) ─────── */
+.set-selector-trigger {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 8px 10px !important;
+    border-radius: 5px !important;
+}
+
+/* ── Filter Input (replaces trigger text when open) ─── */
+.set-filter-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ccc;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.set-filter-input::placeholder {
+    color: #666;
+}
+
+.set-selector-trigger.open {
+    border-color: #0078d4 !important;
+}
+
+.trigger-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trigger-arrow {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-size: 10px;
+    color: #888;
+}
+
+/* ── Dropdown List (fixed to escape dialog overflow) ─── */
+.set-dropdown-list {
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Trigger border consistency ─────────────────────── */
+.set-selector-trigger {
+    border: 1px solid #555 !important;
+}
+
+/* ── Dropdown Options ────────────────────────────────── */
+.set-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.set-option:hover {
+    background: #3c3c3c;
+    color: #fff;
+}
+
+.set-option.selected {
+    background: #0078d4;
+    color: #fff;
+}
+
+/* Subset indentation: 20px right shift */
+.set-option.subset {
+    padding-left: 30px;
+}
+
+/* Empty state message */
+.set-option.empty {
+    color: #666;
+    font-style: italic;
+    cursor: default;
+}
+
+/* ── Set Icon (background-image from .set-symbol-* classes) ── */
+.set-icon {
+    width: 1.5em;
+    height: 1.5em;
+    flex-shrink: 0;
+    display: inline-block;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Bright orange ink for set icons */
+.set-symbol {
+    filter: brightness(0) saturate(1) invert(23%) sepia(89%) saturate(2821%) hue-rotate(359deg) brightness(104%) contrast(103%);
+}
+
+/* ── Label text ──────────────────────────────────────── */
+.set-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

@@ -1,0 +1,105 @@
+@*
+    AbilityPage — Keyword ability analysis (pure CSS horizontal bars)
+    Mirrors Java: ui.views.analyzers.AbilityPage + CardStoreUtils.buildAbilityStats
+    
+    Features:
+    - Horizontal bar chart showing keyword abilities by frequency
+    - Interactive hover tooltips with count and percentage
+    - Total ability count display
+    - Smooth CSS animations
+*@
+
+<div class="ability-page">
+    <div class="section-header">
+        <span>Keyword Abilities</span>
+        @if (_loading) { <span class="loading-indicator">Loading...</span> }
+    </div>
+
+    <div class="analysis-content">
+        @if (_error != null)
+        {
+            <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
+        }
+        else if (_loading && _abilities.Count == 0)
+        {
+            <div class="loading-state">Loading abilities...</div>
+        }
+        else if (_abilities.Count > 0)
+        {
+            <div class="ability-count">@_abilities.Count keyword ability@(_abilities.Count != 1 ? "ies" : "y") detected</div>
+
+            <div class="h-bar-chart">
+                @foreach (var item in _abilities)
+                {
+                    var pct = _maxAbility > 0 ? (double)item.Value / _maxAbility * 100 : 0;
+                    var totalPct = _totalCards > 0 ? (double)item.Value / _totalCards * 100 : 0;
+                    <div class="h-bar-row" style="--bar-width: @pct%;">
+                        <div class="h-bar-label">@item.Key</div>
+                        <div class="h-bar-track">
+                            <div class="h-bar-fill"></div>
+                        </div>
+                        <div class="h-bar-value">@item.Value (@totalPct.ToString("F0")%)</div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <span>No keyword abilities detected.</span>
+                <span>Add cards with abilities to see this analysis.</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<KeyValuePair<string, int>> _abilities = new();
+    private int _maxAbility;
+    private int _totalCards;
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public int DeckId { get; set; }
+    [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
+    [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DeckId <= 0) return;
+        await LoadAnalysis();
+    }
+
+    private async Task LoadAnalysis()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        try
+        {
+            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            if (cards.Count == 0)
+            {
+                _abilities = new List<KeyValuePair<string, int>>();
+                _totalCards = 0;
+            }
+            else
+            {
+                var result = AnalysisService.Analyze(cards);
+                BuildAbilityData(result);
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private async Task Reload() => await LoadAnalysis();
+
+    private void BuildAbilityData(DeckAnalysisResult result)
+    {
+        _totalCards = result.TotalCards;
+        if (result.AbilityStats.Any())
+        {
+            _abilities = result.AbilityStats.OrderByDescending(kv => kv.Value).ToList();
+            _maxAbility = _abilities.Max(a => a.Value);
+        }
+    }
+}

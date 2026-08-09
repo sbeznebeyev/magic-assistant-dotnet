@@ -1,0 +1,354 @@
+/* ── Container ─────────────────────────────────────── */
+.deck-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.deck-loading,
+.deck-error,
+.deck-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+}
+
+.deck-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #e74c3c;
+}
+
+.deck-error button {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 4px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* ── Header ────────────────────────────────────────── */
+.deck-header {
+    padding: 8px 12px;
+    border-bottom: 1px solid #3c3c3c;
+    flex-shrink: 0;
+}
+
+.deck-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.deck-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.deck-stats {
+    font-size: 12px;
+    color: #888;
+    display: flex;
+    gap: 10px;
+}
+
+.action-btn {
+    margin-left: auto;
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.action-btn:hover {
+    background: #4c4c4c;
+    color: #fff;
+}
+
+/* ── Search Bar ────────────────────────────────────── */
+.search-bar {
+    position: relative;
+    margin-bottom: 6px;
+}
+
+.search-input {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 5px 30px 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.clear-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+}
+
+.clear-btn:hover {
+    color: #ccc;
+}
+
+.filter-btn {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.filter-btn:hover {
+    color: #ccc;
+    background: #3c3c3c;
+}
+
+/* ── Sort Bar ──────────────────────────────────────── */
+.sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.sort-label {
+    font-size: 11px;
+    color: #666;
+    margin-right: 4px;
+}
+
+.sort-btn {
+    background: #2d2d2d;
+    border: 1px solid #444;
+    color: #999;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.sort-btn:hover {
+    background: #3c3c3c;
+    color: #ccc;
+}
+
+.sort-btn.active {
+    background: rgba(0, 120, 212, 0.2);
+    border-color: #0078d4;
+    color: #0078d4;
+}
+
+/* ── Card Table ────────────────────────────────────── */
+.card-table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.card-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.card-table thead th {
+    position: sticky;
+    top: 0;
+    background: #1a1a1a;
+    color: #888;
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid #3c3c3c;
+    user-select: none;
+}
+
+.card-table tbody tr {
+    cursor: pointer;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.card-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.card-table tbody tr.selected {
+    background: rgba(0, 120, 212, 0.15);
+}
+
+.card-table td {
+    padding: 4px 8px;
+    color: #ccc;
+    vertical-align: middle;
+}
+
+/* ── Column widths ─────────────────────────────────── */
+.col-count { width: 70px; text-align: center; }
+.col-name  { min-width: 160px; }
+.col-cost  { width: 80px; }
+.col-type  { width: 140px; }
+.col-set   { width: 50px; }
+.col-rarity { width: 70px; }
+.col-cmc   { width: 40px; text-align: center; }
+
+/* ── Count Control ─────────────────────────────────── */
+.count-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.count-btn {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+}
+
+.count-btn:hover {
+    background: #555;
+    color: #fff;
+}
+
+.count-value {
+    min-width: 20px;
+    text-align: center;
+    font-weight: 600;
+    color: #eee;
+}
+
+/* ── Card Name ─────────────────────────────────────── */
+.card-name {
+    font-weight: 500;
+    color: #eee;
+}
+
+/* ── Rarity Badges ─────────────────────────────────── */
+.rarity-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.rarity-common {
+    color: #aaa;
+}
+
+.rarity-uncommon {
+    color: #8ab4f8;
+}
+
+.rarity-rare {
+    color: #f5c542;
+}
+
+.rarity-mythic {
+    color: #e74c3c;
+}
+
+/* ── Edit button ─────────────────────────────────────── */
+.edit-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+tr:hover .edit-btn,
+.selected .edit-btn {
+    opacity: 1;
+}
+
+.edit-btn:hover {
+    color: #0078d4;
+}
+
+.split-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+tr:hover .split-btn,
+.selected .split-btn {
+    opacity: 1;
+}
+
+.split-btn:hover {
+    color: #f0ad4e;
+}
+
+/* ── Empty Table ───────────────────────────────────── */
+.empty-table {
+    padding: 40px 20px;
+    text-align: center;
+    color: #666;
+    font-size: 13px;
+}
+
+/* ── Footer ────────────────────────────────────────── */
+.deck-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
+    border-top: 1px solid #3c3c3c;
+    font-size: 11px;
+    color: #666;
+    flex-shrink: 0;
+}
+
+.filter-info {
+    color: #888;
+}

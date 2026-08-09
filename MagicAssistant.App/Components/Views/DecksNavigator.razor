@@ -1,0 +1,705 @@
+@using MagicAssistant.Core.Services.DeckManagement
+@using MagicAssistant.Data.Model.NavigatorNodes
+@inject IDeckManagementService DeckManagement
+
+<div class="navigator" @onkeydown="OnKeyDown">
+    <div class="navigator-kb-header">
+        <span>Knowledge Base Cards</span>
+    </div>
+
+    <div class="navigator-show-all">
+        <button class="btn-show-all" @onclick="HandleShowAllCards">Show All Cards</button>
+    </div>
+
+    @* ── Add Menu Overlay (click-outside to close, like context menu) ── *@
+    @if (_activeAddMenuNodeId != null || _showRootAddMenu)
+    {
+        <div class="add-menu-overlay" @onclick="CloseAddMenu">
+        </div>
+    }
+
+    <div class="navigator-header">
+        <span>Collections &amp; Decks</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="navigator-loading">Loading...</div>
+    }
+    else if (_error != null)
+    {
+        <div class="navigator-error">
+            <span>@_error</span>
+            <button @onclick="ReloadRoot">Retry</button>
+        </div>
+    }
+    else
+    {
+        <div class="tree-root">
+            @foreach (var node in _rootNodes)
+            {
+                <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
+                          Depth="0"
+                          SelectedId="@SelectedNode?.Id"
+                          ActiveAddMenuNodeId="@_activeAddMenuNodeId"
+                          ExpandedSet="@_expandedNodes"
+                          OnToggleExpand="ToggleNodeExpanded"
+                          OnSelectDeck="OnSelectDeck"
+                          OnContextMenuToggle="OnContextMenuToggle"
+                          OnAskCreateNode="OnAskCreateNode"
+                          OnAddMenuToggle="OnAddMenuToggle" />
+            }
+
+            @* ── Add Node Button (root level) ── *@
+            <div class="add-menu-wrapper">
+                <div class="tree-node tree-add-node" style="--depth: 0;" @onclick="ToggleRootAddMenu">
+                    <span></span>
+                    <button class="tree-add-btn" @onclick:stopPropagation="true" title="Add node">+</button>
+                    <span class="tree-label tree-add-label" style="margin-left: 6px;">add node</span>
+                </div>
+                @if (_showRootAddMenu)
+                {
+                    <div class="add-menu">
+                        <button @onclick="() => SelectAndShow(null, NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
+                        <button @onclick="() => SelectAndShow(null, NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
+                        <button @onclick="() => SelectAndShow(null, NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── Context Menu Overlay (click-outside to close) ── *@
+    @if (_activeContextMenuNodeId != null)
+    {
+        <div class="context-menu-overlay" @onclick="CloseContextMenu">
+        </div>
+        @if (_contextTarget != null)
+        {
+            <div class="context-menu-fixed" style="top: @(_contextMenuTop.ToString("F0") + "px"); left: @(_contextMenuLeft.ToString("F0") + "px");">
+                <span class="context-label">@_contextTarget.Name</span>
+                <button @onclick="() => BeginRename(_contextTarget)">✏ Rename</button>
+                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Deck)">🃏 New Deck</button>
+                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Folder)">📁 New Folder</button>
+                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Collection)">🗂 New Collection</button>
+                <hr class="context-sep" />
+                <button @onclick="() => OpenDeckProperties(_contextTarget)">⚙ Properties</button>
+                <button @onclick="() => ToggleLock(_contextTarget)">@GetLockText(_contextTarget)</button>
+                <hr class="context-sep" />
+                <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
+            </div>
+        }
+    }
+
+    @* ── Create Node Dialog (Folder / Collection / Deck) ── *@
+    @if (_showCreateDialog)
+    {
+        <div class="dialog-overlay" @onclick="CloseCreateDialog">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">@GetCreateDialogTitle()</div>
+                <input @bind="_createName" @onkeypress="OnCreateKey"
+                       placeholder="@GetCreatePlaceholder()"
+                       class="dialog-input" @ref="_createNameInput" />
+                <div class="dialog-actions">
+                    <button class="btn-primary" @onclick="ConfirmCreate">Create</button>
+                    <button class="btn-secondary" @onclick="CloseCreateDialog">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Rename Dialog ── *@
+    @if (_showRenameDialog)
+    {
+        <div class="dialog-overlay" @onclick="CloseRenameDialog">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">Rename</div>
+                <input @bind="_renameValue" @onkeypress="OnRenameKey"
+                       placeholder="New name..."
+                       class="dialog-input" @ref="_renameInput" />
+                <div class="dialog-actions">
+                    <button class="btn-primary" @onclick="ConfirmRename" disabled="@string.IsNullOrWhiteSpace(_renameValue)">Save</button>
+                    <button class="btn-secondary" @onclick="CloseRenameDialog">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Delete Confirmation ── *@
+    @if (_showDeleteConfirm)
+    {
+        <div class="dialog-overlay" @onclick="CloseDeleteConfirm">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">Delete</div>
+                <p>Delete "<strong>@_deleteTarget?.Name</strong>" and all its cards?</p>
+                <div class="dialog-actions">
+                    <button class="btn-danger" @onclick="ConfirmDelete">Delete</button>
+                    <button class="btn-secondary" @onclick="CloseDeleteConfirm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // ── Tree state ─────────────────────────────────────────
+    /// <summary>Root-level nodes from the pre-built hierarchical tree.</summary>
+    private List<NavigatorNodeBase>? _rootNodes;
+    /// <summary>Folder IDs that are visually expanded. Decoupled from data — collapse only hides.</summary>
+    private HashSet<int> _expandedNodes = new();
+
+    /// <summary>
+    /// Единый узел выбора: Deck, Collection или Sideboard (NavigatorNodeDeck.Sideboard).
+    /// </summary>
+    private NavigatorNodeBase? SelectedNode
+    {
+        get => _selectedNode;
+        set => _selectedNode = value;
+    }
+    private NavigatorNodeBase? _selectedNode;
+
+    private bool _loading;
+    private string? _error;
+
+    // ── Context menu ───────────────────────────────────────
+    /// <summary>ID of the node whose context-menu is currently open (for overlay click-outside).</summary>
+    private int? _activeContextMenuNodeId;
+    /// <summary>The node being acted on by the context menu.</summary>
+    private NavigatorNodeBase? _contextTarget;
+    /// <summary>Viewport coordinates for fixed-position context menu overlay.</summary>
+    private double _contextMenuTop;
+    private double _contextMenuLeft;
+
+    // ── Create Node Dialog ────────────────────────────────
+    /// <summary>Dialog for creating a new node (Folder/Collection/Deck).</summary>
+    private bool _showCreateDialog;
+    private string _createName = "";
+    private int? _createParentId;
+    private NodeType _createNodeType;
+    private ElementReference _createNameInput = default!;
+
+    private bool _showRenameDialog;
+    private string _renameValue = "";
+    private NavigatorNodeBase? _renameTarget;
+
+    private bool _showDeleteConfirm;
+    private NavigatorNodeBase? _deleteTarget;
+
+    // ── Root add menu ──────────────────────────────────────
+    private bool _showRootAddMenu;
+
+    /// <summary>
+    /// ID of the folder node whose add-menu is currently open (for overlay click-outside).
+    /// null = no folder add-menu open. Distinct from _showRootAddMenu.
+    /// </summary>
+    private int? _activeAddMenuNodeId;
+
+    // ── Element references for dialog focus ────────────────
+    private ElementReference _renameInput = default!;
+
+    // ── Events to parent (MainLayout) ──────────────────────
+    [Parameter] public EventCallback<int> OnDeckSelected { get; set; }
+    [Parameter] public EventCallback<NavigatorNodeBase> OnOpenProperties { get; set; }
+    [Parameter] public EventCallback OnShowAllCards { get; set; }
+
+    // ── Lifecycle ──────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRoot();
+    }
+
+    /// <summary>Focus the active dialog input after render (autofocus unreliable in Blazor Server).</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_showCreateDialog)
+        {
+            try { await _createNameInput.FocusAsync(); }
+            catch { /* element not yet in DOM */ }
+        }
+        else if (_showRenameDialog)
+        {
+            try { await _renameInput.FocusAsync(); }
+            catch { /* element not yet in DOM */ }
+        }
+    }
+
+    /// <summary>
+    /// GetNodesTreeAsync returns a pre-built hierarchical tree:
+    /// Dictionary&lt;int, NavigatorNodeBase&gt; where each folder's Children are already populated.
+    /// We extract root nodes (values whose ParentId is null) and mark all folders as expanded.
+    /// </summary>
+    private async Task LoadRoot()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var tree = await DeckManagement.GetAllNodesAsync();
+
+            // Root nodes: those not nested under any parent in the dictionary.
+            // The handler already filters ParentId == null, so all returned values are roots.
+            _rootNodes = new List<NavigatorNodeBase>(tree.Values);
+
+            // Expand all folders by default
+            CollectAllFolders(_rootNodes, _expandedNodes);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static void CollectAllFolders(IEnumerable<NavigatorNodeBase> nodes, HashSet<int> expandedSet)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is NavigatorNodeFolder folder)
+            {
+                expandedSet.Add(folder.Id);
+                if (folder.Children != null)
+                    CollectAllFolders(folder.Children, expandedSet);
+            }
+        }
+    }
+
+    // ── Tree: expand / collapse (visibility toggle) ────────
+    private void ToggleNodeExpanded(int folderId)
+    {
+        if (_expandedNodes.Contains(folderId))
+            _expandedNodes.Remove(folderId);
+        else
+            _expandedNodes.Add(folderId);
+    }
+
+    /// <summary>Выбор узла — присваиваем SelectedNode и уведомляем MainLayout.</summary>
+    private void OnSelectDeck(NavigatorNodeBase node)
+    {
+        if (SelectedNode == node) return;
+        SelectedNode = node;
+        if (node != null)
+            _ = OnDeckSelected.InvokeAsync(node.Id);
+    }
+
+    private async Task HandleShowAllCards()
+    {
+        await OnShowAllCards.InvokeAsync();
+    }
+
+    // ── Context menu ───────────────────────────────────────
+    private void OpenContextMenu(NavigatorNodeBase node)
+    {
+        _contextTarget = node;
+        _activeContextMenuNodeId = node.Id;
+        // Close any other open menus
+        _activeAddMenuNodeId = null;
+        _showRootAddMenu = false;
+    }
+
+    private void CloseContextMenu()
+    {
+        _contextTarget = null;
+        _activeContextMenuNodeId = null;
+    }
+
+    private async Task OpenDeckProperties(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnOpenProperties.InvokeAsync(node);
+    }
+
+    // ── Create Node (unified dialog → CreateNodeAsync → GetNodesBranchAsync) ──
+
+    /// <summary>Open the name-input dialog for creating a node of the given type.</summary>
+    private void ShowCreateDialog(int? parentId, NodeType nodeType)
+    {
+        CloseContextMenu();
+        _createName = "";
+        _createParentId = parentId;
+        _createNodeType = nodeType;
+        _showCreateDialog = true;
+    }
+
+    private string GetCreateDialogTitle() => _createNodeType switch
+    {
+        NodeType.Folder => "New Folder",
+        NodeType.Collection => "New Collection",
+        NodeType.Deck => "New Deck",
+        _ => "New Node"
+    };
+
+    private string GetCreatePlaceholder() => _createNodeType switch
+    {
+        NodeType.Folder => "Folder name...",
+        NodeType.Collection => "Collection name...",
+        NodeType.Deck => "Deck name...",
+        _ => "Name..."
+    };
+
+    /// <summary>
+    /// 1. DeckManagement.CreateNodeAsync(parentId, name, nodeType) → returns ID.
+    /// 2. DeckManagement.GetNodesBranchAsync(id) → returns hierarchical NavigatorNodeBase with Sideboard/Children populated.
+    /// 3. Insert into tree + auto-select.
+    /// </summary>
+    private async Task ConfirmCreate()
+    {
+        if (string.IsNullOrWhiteSpace(_createName)) return;
+        try
+        {
+            var name = _createName.Trim();
+
+            // Step 1: Create node → returns ID only
+            var createdId = await DeckManagement.CreateNodeAsync(_createParentId, name, _createNodeType);
+
+            // Step 2: Fetch the created branch — one hierarchical NavigatorNodeBase (Sideboard for Decks, Children for Folders)
+            var created = await DeckManagement.GetNodesBranchAsync(createdId);
+            if (created == null) return;
+
+            // Expand if Folder
+            if (created.NodeType == NodeType.Folder)
+                _expandedNodes.Add(created.Id);
+
+            // Step 3: Insert into tree + auto-select
+            InsertIntoTree(_createParentId, created);
+            CloseCreateDialog();
+
+            if (created.NodeType == NodeType.Deck || created.NodeType == NodeType.Collection)
+                OnSelectDeck(created);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void CloseCreateDialog()
+    {
+        _showCreateDialog = false;
+        _createName = "";
+        _createParentId = null;
+    }
+
+    private async Task OnCreateKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_createName))
+            await ConfirmCreate();
+    }
+
+    // ── Rename ─────────────────────────────────────────────
+    private ValueTask BeginRename(NavigatorNodeBase node)
+    {
+        if (node.Locked) return default;
+        CloseContextMenu();
+        _renameTarget = node;
+        _renameValue = node.Name;
+        _showRenameDialog = true;
+        return default;
+    }
+
+    private async Task ConfirmRename()
+    {
+        if (_renameTarget == null || string.IsNullOrWhiteSpace(_renameValue)) return;
+        var newName = _renameValue.Trim();
+        try
+        {
+            await DeckManagement.RenameAsync(_renameTarget.Id, newName);
+            // In-place: the node object is shared in the tree — direct mutation works
+            _renameTarget.Name = newName;
+            CloseRenameDialog();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ── Lock/Unlock ────────────────────────────────────────
+    private async Task ToggleLock(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        try
+        {
+            if (node.Locked)
+                await DeckManagement.UnlockAsync(node.Id);
+            else
+                await DeckManagement.LockAsync(node.Id);
+            // In-place mutation — shared reference in the tree
+            node.Locked = !node.Locked;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ── Delete ─────────────────────────────────────────────
+    private ValueTask AskDelete(NavigatorNodeBase node)
+    {
+        if (node.Locked) return default;
+        CloseContextMenu();
+        _deleteTarget = node;
+        _showDeleteConfirm = true;
+        return default;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget == null) return;
+        try
+        {
+            await DeckManagement.DeleteDeckAsync(_deleteTarget.Id);
+            RemoveFromTree(_deleteTarget.Id);
+            CloseDeleteConfirm();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ── Tree mutation helpers ──────────────────────────────
+    // Blazor requires a new collection reference to detect changes and re-render.
+    // We create new lists instead of mutating existing ones in-place.
+
+    /// <summary>Insert a new node into the tree at the given parent position.</summary>
+    private void InsertIntoTree(int? parentId, NavigatorNodeBase node)
+    {
+        if (parentId == null)
+        {
+            // Root level — new list reference so Blazor re-renders
+            _rootNodes = (_rootNodes?.ToList() ?? new List<NavigatorNodeBase>());
+            _rootNodes.Add(node);
+            return;
+        }
+
+        var parent = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), parentId.Value);
+        if (parent is NavigatorNodeFolder folder)
+        {
+            // New list reference so Blazor re-renders the folder's children
+            folder.Children = (folder.Children?.ToList() ?? new List<NavigatorNodeBase>());
+            folder.Children.Add(node);
+        }
+    }
+
+    /// <summary>Remove a node by ID from the tree recursively. Returns true if found and removed.</summary>
+    private bool RemoveFromTreeRecursive(ICollection<NavigatorNodeBase> nodes, int nodeId)
+    {
+        var list = nodes.ToList();
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].Id == nodeId)
+            {
+                // Remove from original collection
+                nodes.Remove(list[i]);
+                _expandedNodes.Remove(nodeId);
+                return true;
+            }
+            if (list[i] is NavigatorNodeFolder f && f.Children != null)
+            {
+                // Pass the original Children collection — mutations affect the real object
+                if (RemoveFromTreeRecursive(f.Children, nodeId))
+                {
+                    // Children was mutated — create new reference so Blazor re-renders
+                    f.Children = f.Children.ToList();
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Remove a node by ID from the tree.</summary>
+    private void RemoveFromTree(int nodeId)
+    {
+        if (_rootNodes == null) return;
+
+        // Try root level first
+        var rootIdx = _rootNodes.FindIndex(n => n.Id == nodeId);
+        if (rootIdx >= 0)
+        {
+            _rootNodes.RemoveAt(rootIdx);
+            // New list reference so Blazor re-renders
+            _rootNodes = new List<NavigatorNodeBase>(_rootNodes);
+            _expandedNodes.Remove(nodeId);
+            return;
+        }
+
+        // Recurse into children — pass original list, not a copy
+        if (RemoveFromTreeRecursive(_rootNodes, nodeId))
+        {
+            // Root-level folders had children mutated — new reference for Blazor
+            _rootNodes = new List<NavigatorNodeBase>(_rootNodes);
+        }
+    }
+
+    /// <summary>Find a node by ID in the tree.</summary>
+    private static NavigatorNodeBase? FindNodeInTree(IEnumerable<NavigatorNodeBase> nodes, int id)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.Id == id) return n;
+            if (n is NavigatorNodeFolder f && f.Children != null)
+            {
+                var found = FindNodeInTree(f.Children, id);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    // ── Root add menu ──────────────────────────────────────
+    private void ToggleRootAddMenu()
+    {
+        _showRootAddMenu = !_showRootAddMenu;
+        if (_showRootAddMenu)
+        {
+            _activeAddMenuNodeId = null; // close any folder add-menu
+        }
+    }
+
+    private void AddRootNode(NodeType type)
+    {
+        _showRootAddMenu = false;
+        _activeAddMenuNodeId = null;
+        ShowCreateDialog(null, type);
+    }
+
+    /// <summary>Close the add-menu, then show the create dialog for the given type.</summary>
+    private void SelectAndShow(int? parentId, NodeType nodeType)
+    {
+        CloseAddMenu();
+        ShowCreateDialog(parentId, nodeType);
+    }
+
+    // ── Add Menu Overlay (click-outside to close) ──────────
+    private void OnAddMenuToggle(int nodeId)
+    {
+        if (_activeAddMenuNodeId == nodeId)
+            CloseAddMenu();
+        else
+        {
+            _activeAddMenuNodeId = nodeId;
+            _showRootAddMenu = false; // close root add-menu
+        }
+    }
+
+    private void CloseAddMenu()
+    {
+        _activeAddMenuNodeId = null;
+        _showRootAddMenu = false;
+    }
+
+    private string GetLockText(NavigatorNodeBase node) => node.Locked ? "🔓 Unlock" : "🔒 Lock";
+
+    // ── Context Menu (click-outside to close) ──────────────
+    private void OnContextMenuToggle((int nodeId, double clientX, double clientY) args)
+    {
+        var (nodeId, clientX, clientY) = args;
+        if (_activeContextMenuNodeId == nodeId)
+            CloseContextMenu();
+        else
+        {
+            _contextTarget = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), nodeId);
+            _activeContextMenuNodeId = nodeId;
+            _contextMenuTop = clientY;
+            _contextMenuLeft = clientX;
+            // Close any add menus that might be open
+            _activeAddMenuNodeId = null;
+            _showRootAddMenu = false;
+        }
+    }
+
+    // ── In-tree mutations (called from TreeItem callbacks) ──
+    private async Task OnRenameNode((int id, string newName) args)
+    {
+        try
+        {
+            await DeckManagement.RenameAsync(args.id, args.newName);
+            var node = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), args.id);
+            if (node != null) node.Name = args.newName;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task OnDeleteNode(int id)
+    {
+        try
+        {
+            await DeckManagement.DeleteDeckAsync(id);
+            RemoveFromTree(id);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task OnLockToggle(int id)
+    {
+        try
+        {
+            var node = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), id);
+            if (node == null) return;
+
+            if (node.Locked)
+                await DeckManagement.UnlockAsync(id);
+            else
+                await DeckManagement.LockAsync(id);
+
+            node.Locked = !node.Locked;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ── Dialog helpers ─────────────────────────────────────
+    private void CloseRenameDialog()
+    {
+        _showRenameDialog = false;
+        _renameTarget = null;
+        _renameValue = "";
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        _showDeleteConfirm = false;
+        _deleteTarget = null;
+    }
+
+    /// <summary>Called from TreeItem when user selects a node type in the add-menu.</summary>
+    private void OnAskCreateNode((int? parentId, NodeType type) args)
+    {
+        ShowCreateDialog(args.parentId, args.type);
+    }
+
+    private async Task OnRenameKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_renameValue))
+            await ConfirmRename();
+    }
+
+    private async Task ReloadRoot()
+    {
+        await LoadRoot();
+    }
+
+    // ── Keyboard (Escape to close) ─────────────────────────
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            if (_contextTarget != null) CloseContextMenu();
+            else if (_showCreateDialog) CloseCreateDialog();
+            else if (_showRenameDialog) CloseRenameDialog();
+            else if (_showDeleteConfirm) CloseDeleteConfirm();
+        }
+    }
+}
