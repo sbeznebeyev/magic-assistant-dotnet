@@ -1,0 +1,61 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+idea
+.vs
+
+# User-specific files
+*.suo
+*.user
+*.sln.docstates
+
+*.pubxml
+
+/packages
+/.tmp
+
+# Build results
+
+[Dd]ebug/
+[Rr]elease/
+x64/
+[Bb]in/
+[Oo]bj/
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# compiled output
+/artifacts
+
+# IDEs and editors
+.idea
+/.vs
+/.vscode
+
+# build
+
+# System Files
+.DS_Store
+Thumbs.db
+log.txt
+/Other/Navicon.Mdm.Biztalk/packages
+/Other/Navicon.Mdm.TestAdapter/Navicon.Mdm.TestAdapter/Properties/PublishProfiles
+*\.vs
+*\bin
+*\obj
+*.btp.cs
+*.xsd.cs
+*.btm.cs
+*.user
+
+# Other
+artifacts
+packages
+/Tools
+
+# XML documentation files
+*.tar
+/node_modules

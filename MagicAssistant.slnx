@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="MagicAssistant.App/MagicAssistant.App.csproj" />
+  <Project Path="MagicAssistant.Core/MagicAssistant.Core.csproj" Id="93fc8946-4423-4316-ae2d-ef1f58802bd8" />
+  <Project Path="MagicAssistant.Data.Db/MagicAssistant.Data.Db.csproj" />
+  <Project Path="MagicAssistant.Data.IO/MagicAssistant.Data.IO.csproj" />
+  <Project Path="MagicAssistant.Data/MagicAssistant.Data.csproj" Id="284469cf-42f3-439f-b681-d94ffff905cc" />
+  <Project Path="MagicAssistant.Http.Scryfall/MagicAssistant.Http.Scryfall.csproj" Id="4f4afeb3-0ca4-44f6-a8a3-b17d152979c9" />
+  <Project Path="MagicAssistant.Http/MagicAssistant.Http.csproj" />
+  <Project Path="MagicAssistant.Tests/MagicAssistant.Tests.csproj" Id="b63c6339-b4af-421f-b292-230de70b749e" />
+</Solution>
