@@ -91,44 +91,46 @@
 
                 <div class="filter-field-row">
                     <label class="filter-label">Properties</label>
-                    <div class="prop-row">
-                        <span class="prop-title">Power</span>
-                        <select class="prop-op" value="@FilterViewModel.PowerOp"
-                                @onchange="@(e => FilterViewModel.PowerOp = e.Value?.ToString() ?? ">=")">
-                            <option value=">=" selected="@(FilterViewModel.PowerOp == ">=")">&gt;=</option>
-                            <option value="=" selected="@(FilterViewModel.PowerOp == "=")">=</option>
-                            <option value="<=" selected="@(FilterViewModel.PowerOp == "<=")">&#60;&#61;</option>
-                        </select>
-                        <input type="text" inputmode="decimal" class="prop-value"
-                               value="@FilterViewModel.PowerValue"
-                               @oninput="@(e => FilterViewModel.PowerValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
-                               placeholder="0.0" />
-                    </div>
-                    <div class="prop-row">
-                        <span class="prop-title">Toughness</span>
-                        <select class="prop-op" value="@FilterViewModel.ToughnessOp"
-                                @onchange="@(e => FilterViewModel.ToughnessOp = e.Value?.ToString() ?? ">=")">
-                            <option value=">=" selected="@(FilterViewModel.ToughnessOp == ">=")">&gt;=</option>
-                            <option value="=" selected="@(FilterViewModel.ToughnessOp == "=")">=</option>
-                            <option value="<=" selected="@(FilterViewModel.ToughnessOp == "<=")">&#60;&#61;</option>
-                        </select>
-                        <input type="text" inputmode="decimal" class="prop-value"
-                               value="@FilterViewModel.ToughnessValue"
-                               @oninput="@(e => FilterViewModel.ToughnessValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
-                               placeholder="0.0" />
-                    </div>
-                    <div class="prop-row">
-                        <span class="prop-title">CMC</span>
-                        <select class="prop-op" value="@FilterViewModel.CmcOp"
-                                @onchange="@(e => FilterViewModel.CmcOp = e.Value?.ToString() ?? ">=")">
-                            <option value=">=" selected="@(FilterViewModel.CmcOp == ">=")">&gt;=</option>
-                            <option value="=" selected="@(FilterViewModel.CmcOp == "=")">=</option>
-                            <option value="<=" selected="@(FilterViewModel.CmcOp == "<=")">&#60;&#61;</option>
-                        </select>
-                        <input type="text" inputmode="decimal" class="prop-value"
-                               value="@FilterViewModel.CmcValue"
-                               @oninput="@(e => FilterViewModel.CmcValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
-                               placeholder="0.0" />
+                    <div class="props-inline">
+                        <div class="prop-row">
+                            <span class="prop-title">P</span>
+                            <select class="prop-op" value="@FilterViewModel.PowerOp"
+                                    @onchange="@(e => FilterViewModel.PowerOp = e.Value?.ToString() ?? ">=")">
+                                <option value=">=" selected="@(FilterViewModel.PowerOp == ">=")">&gt;=</option>
+                                <option value="=" selected="@(FilterViewModel.PowerOp == "=")">=</option>
+                                <option value="<=" selected="@(FilterViewModel.PowerOp == "<=")">&#60;&#61;</option>
+                            </select>
+                            <input type="text" inputmode="decimal" class="prop-value"
+                                   value="@FilterViewModel.PowerValue"
+                                   @oninput="@(e => FilterViewModel.PowerValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                                   placeholder="0" />
+                        </div>
+                        <div class="prop-row">
+                            <span class="prop-title">T</span>
+                            <select class="prop-op" value="@FilterViewModel.ToughnessOp"
+                                    @onchange="@(e => FilterViewModel.ToughnessOp = e.Value?.ToString() ?? ">=")">
+                                <option value=">=" selected="@(FilterViewModel.ToughnessOp == ">=")">&gt;=</option>
+                                <option value="=" selected="@(FilterViewModel.ToughnessOp == "=")">=</option>
+                                <option value="<=" selected="@(FilterViewModel.ToughnessOp == "<=")">&#60;&#61;</option>
+                            </select>
+                            <input type="text" inputmode="decimal" class="prop-value"
+                                   value="@FilterViewModel.ToughnessValue"
+                                   @oninput="@(e => FilterViewModel.ToughnessValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                                   placeholder="0" />
+                        </div>
+                        <div class="prop-row">
+                            <span class="prop-title">Cmc</span>
+                            <select class="prop-op" value="@FilterViewModel.CmcOp"
+                                    @onchange="@(e => FilterViewModel.CmcOp = e.Value?.ToString() ?? ">=")">
+                                <option value=">=" selected="@(FilterViewModel.CmcOp == ">=")">&gt;=</option>
+                                <option value="=" selected="@(FilterViewModel.CmcOp == "=")">=</option>
+                                <option value="<=" selected="@(FilterViewModel.CmcOp == "<=")">&#60;&#61;</option>
+                            </select>
+                            <input type="text" inputmode="decimal" class="prop-value"
+                                   value="@FilterViewModel.CmcValue"
+                                   @oninput="@(e => FilterViewModel.CmcValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                                   placeholder="0" />
+                        </div>
                     </div>
                 </div>
 
