@@ -270,25 +270,40 @@
 }
 
 .prop-title {
-    font-size: 12px;
+    font-size: 15px;
     color: #ccc;
     flex-shrink: 0;
 }
 
 .prop-op {
-    background: #1e1e1e;
+    background: none;
     color: #ccc;
-    border: 1px solid #444;
+    border: none;
     padding: 4px 6px;
-    border-radius: 4px;
-    font-size: 12px;
+    font-size: 15px;
     outline: none;
     flex-shrink: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    animation: propOpGlow 4s ease-in-out infinite;
 }
 
-.prop-op:focus {
-    border-color: #0078d4;
-    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+.prop-op option {
+    background: #1e1e1e;
+    color: #ccc;
+}
+
+@keyframes propOpGlow {
+    0%, 100% {
+        color: #888;
+        text-shadow: none;
+    }
+    50% {
+        color: #6bc5ec;
+        text-shadow: 0 0 12px rgba(107, 197, 236, 0.7), 0 0 24px rgba(107, 197, 236, 0.4), 0 0 36px rgba(107, 197, 236, 0.2);
+    }
 }
 
 .prop-value {
