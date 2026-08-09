@@ -1,6 +1,6 @@
 # MagicAssistant
 
-A modern **Magic: The Gathering** deck and collection manager, built as a spiritual successor to the original Java-based [Magic Assistant](https://github.com/reflexit/magic).
+A modern **Magic: The Gathering** deck and collection manager, built as a spiritual successor to the original Java-based [Magic Assistant](https://sourceforge.net/projects/mtgbrowser/).
 
 ---
 
