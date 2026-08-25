@@ -1,0 +1,247 @@
+@* CardGalleryView — self-contained card gallery (grid view).
+   Pure presentation component: receives a page of cards from the parent
+   (already filtered/sorted/paged) and emits events. The parent owns all data
+   loading, filtering, pagination state and selection.
+   Card scale is a display-only concern — kept inside this component and
+   persisted with the same user setting as KBCardsGalleryControl. *@
+@using System.Text
+@inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
+@inject GetUserSettingQueryHandler? GetSettingQueryHandler
+
+<div class="gallery-container">
+    @if (Cards.Count == 0)
+    {
+        <div class="gallery-empty">
+            No cards to display.<br />
+            Sync sets from Scryfall to build your gallery.
+        </div>
+    }
+    else
+    {
+        @* ── Gallery Grid ── *@
+        <div class="gallery-grid" style="grid-template-columns: repeat(auto-fill, minmax(@(_cardSize)px, 1fr));">
+            @foreach (var card in Cards)
+            {
+                var isDoubleSided = card.Has2Faces;
+                var cardKey = card.Id.ToString();
+                var showBack = _sideState.GetValueOrDefault<string, bool>(cardKey);
+                <div class="@GetCardClass(card, showBack)"
+                     @onclick="@(() => SelectCard(card, cardKey))">
+                    <div class="gallery-image-wrap">
+                        @* ── Tabs area (always present for alignment) ── *@
+                        <div class="gallery-tabs-area">
+                            @if (isDoubleSided)
+                            {
+                                <button type="button"
+                                        class="tab-btn tab-front @(showBack ? "inactive" : "active")"
+                                        @onclick:stopPropagation
+                                        @onclick="@(() => ToggleSide(card, false))">front</button>
+                                <button type="button"
+                                        class="tab-btn tab-back @(showBack ? "active" : "inactive")"
+                                        @onclick:stopPropagation
+                                        @onclick="@(() => ToggleSide(card, true))">back</button>
+                            }
+                        </div>
+                        @{
+                            var imgUrl = ImageHelper.GetImageUrl(card, !showBack);
+                        }
+                        @if (!string.IsNullOrEmpty(imgUrl))
+                        {
+                            <img src="@imgUrl" alt="@card.Name" class="gallery-image" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="gallery-placeholder">
+                                <span class="placeholder-icon">🃏</span>
+                                <span class="placeholder-cmc">@card.CmcText</span>
+                            </div>
+                        }
+                    </div>
+                    <div class="gallery-card-info">
+                        <div class="gallery-card-name" title="@card.Name">@Truncate(card.Name, 20)</div>
+                        <div class="gallery-card-meta">
+                            @if (!string.IsNullOrEmpty(card.SetCode))
+                            {
+                                <span class="meta-set">@card.SetCode</span>
+                            }
+                            @if (!string.IsNullOrEmpty(card.Rarity))
+                            {
+                                <span class="rarity-badge @(GetRarityClass(card.Rarity))">@card.Rarity[0]</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Pagination + Scale Slider ── *@
+        <div class="gallery-pagination">
+            <div class="size-slider-group">
+                <button type="button" class="slider-arrow" @onclick="() => PageSizeStep(-1)">◀</button>
+                <span>Page size: </span><span class="size-value">@PageSize</span>
+                <button type="button" class="slider-arrow" @onclick="() => PageSizeStep(1)">▶</button>
+            </div>
+            <div class="pagination-buttons">
+                <button @onclick="PrevPage" disabled="@(!HasPrev)" class="page-btn">← Prev</button>
+                <span class="page-info">Page @CurrentPage / @TotalPages</span>
+                <button @onclick="NextPage" disabled="@(!HasNext)" class="page-btn">Next →</button>
+            </div>
+            <div class="size-slider-group">
+                <button type="button" class="slider-arrow" @onclick="() => CardSizeStep(-25)">◀</button>
+                <span>Scale: </span><span class="size-value">@_cardSize px</span>
+                <button type="button" class="slider-arrow" @onclick="() => CardSizeStep(25)">▶</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
+    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+
+    /// <summary>1-based index of the current page.</summary>
+    [Parameter] public int CurrentPage { get; set; } = 1;
+
+    [Parameter] public int TotalPages { get; set; }
+
+    /// <summary>Page size — must match the size used by the parent for its query.
+    /// The slider emits OnPageSizeChanged with a clamped value; the parent re-queries.</summary>
+    [Parameter] public int PageSize { get; set; } = 50;
+
+    [Parameter] public Guid? SelectedCardId { get; set; }
+
+    /// <summary>Card tile (or its side tab) clicked.</summary>
+    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+
+    /// <summary>Card selected together with the currently shown side (front/back).</summary>
+    [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnCardSideChanged { get; set; }
+
+    /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
+    [Parameter] public EventCallback OnPrevPage { get; set; }
+
+    /// <summary>Next → requested (parent re-queries page CurrentPage + 1).</summary>
+    [Parameter] public EventCallback OnNextPage { get; set; }
+
+    /// <summary>New page size requested by the slider (clamped to 1..150).</summary>
+    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    /// Состояние front/back для каждой карты: true = back, false/missing = front
+    private Dictionary<string, bool> _sideState = new();
+
+    // Gallery settings (display-only)
+    private int _cardSize = 150; // minmax base for grid columns (px)
+
+    // Shared with KBCardsGalleryControl so both galleries keep the same scale
+    private const string CardSizeSettingKey = "KBCardsGalleryControl.CardSize";
+
+    private bool HasPrev => CurrentPage > 1;
+    private bool HasNext => CurrentPage < TotalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCardSizeAsync();
+    }
+
+    private async Task SelectCard(MagicCard card, string cardKey)
+    {
+        var showBack = _sideState.GetValueOrDefault<string, bool>(cardKey);
+        await OnCardClicked.InvokeAsync(card);
+        await OnCardSideChanged.InvokeAsync((card.Id, showBack));
+    }
+
+    private async Task ToggleSide(MagicCard card, bool showBack)
+    {
+        var cardKey = card.Id.ToString();
+        if (_sideState.TryGetValue(cardKey, out var current) && current == showBack)
+        {
+            return; // уже активна
+        }
+        _sideState[cardKey] = showBack;
+        // Клик по вкладке = выбор карты + уведомление о стороне
+        await OnCardClicked.InvokeAsync(card);
+        await OnCardSideChanged.InvokeAsync((card.Id, showBack));
+    }
+
+    private async Task PageSizeStep(int delta)
+    {
+        var newSize = Math.Clamp(PageSize + delta, 1, 150);
+        if (newSize == PageSize) return;
+        await OnPageSizeChanged.InvokeAsync(newSize);
+    }
+
+    private async Task CardSizeStep(int delta)
+    {
+        _cardSize = Math.Clamp(_cardSize + delta, 100, 350);
+        await SaveCardSizeAsync();
+    }
+
+    private async Task PrevPage()
+    {
+        await OnPrevPage.InvokeAsync();
+    }
+
+    private async Task NextPage()
+    {
+        await OnNextPage.InvokeAsync();
+    }
+
+    /// <summary>Composite CSS class for the card tile: selection + side (double-sided only).</summary>
+    private string GetCardClass(MagicCard card, bool showBack)
+    {
+        var cls = new StringBuilder("gallery-card");
+        if (SelectedCardId == card.Id) cls.Append(" selected");
+        if (card.Has2Faces) cls.Append(showBack ? " gallery-card-side-back" : " gallery-card-side-front");
+        return cls.ToString();
+    }
+
+    private static string Truncate(string text, int maxLen)
+    {
+        return text.Length <= maxLen ? text : text[..(maxLen - 1)] + "…";
+    }
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+
+    // ── Settings Persistence (card scale only — page size belongs to the parent) ──
+
+    private async Task LoadCardSizeAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var cardSizeJson = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(CardSizeSettingKey));
+            if (!string.IsNullOrEmpty(cardSizeJson) && int.TryParse(cardSizeJson, out var cs))
+            {
+                _cardSize = Math.Clamp(cs, 100, 350);
+            }
+        }
+        catch
+        {
+            // default _cardSize = 150
+        }
+    }
+
+    private async Task SaveCardSizeAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(CardSizeSettingKey, _cardSize.ToString()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+}

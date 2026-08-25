@@ -245,6 +245,7 @@
                 default:
                     <KBCardsListControl FilterViewModel="@_filterViewModel"
                                         OnCardSelected="OnCardSelected"
+                                        OnCardSideChanged="OnCardSideChanged"
                                         OnOpenFilter="@(() => _showFilterDialog = true)"
                                         OnOpenSync="OnOpenSyncDialog"
                                         RefreshTrigger="@_kbRefreshTrigger" />

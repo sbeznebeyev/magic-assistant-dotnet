@@ -1,4 +1,3 @@
-@using System.Text
 @using MagicAssistant.App.Components.Shared
 @using MagicAssistant.App.Dtos
 @using MagicAssistant.App.Shared
@@ -90,6 +89,14 @@
                         </button>
                     }
                 </div>
+
+                @* ── View Mode: list / gallery toggle ── *@
+                <div class="view-mode-area">
+                    <button class="view-btn @(_viewMode == "list" ? "active" : "")"
+                            @onclick="@(() => SetViewMode("list"))" title="List view">List</button>
+                    <button class="view-btn @(_viewMode == "gallery" ? "active" : "")"
+                            @onclick="@(() => SetViewMode("gallery"))" title="Gallery view">Gallery</button>
+                </div>
                 <div class="filter-area">
                     <select value="@(GetTypeSelectValue())" @onchange="(e) => OnTypeChanged(e)" class="filter-select">
                         <option value="@_typeExpr" selected="@(FilterViewModel.TypeFilter.Count > 1)">@TypePlaceholderLabel</option>
@@ -116,55 +123,33 @@
                 <div class="kb-loading">Searching...</div>
             }
 
-            @* ── Card Table ── *@
+            @* ── Cards view: list / gallery (toggle in toolbar) ── *@
             @if (!_loading && _displayCards.Any())
             {
-                <div class="table-wrapper">
-                    <table class="card-table">
-                        <thead>
-                            <tr>
-                                <th class="col-num">#</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-cmc">CMC</th>
-                                <th class="col-cost">Cost</th>
-                                <th class="col-rarity">Rarity</th>
-                                <th class="col-set">Set</th>
-                                <th class="col-type">Type</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (var i = 0; i < _displayCards.Count; i++)
-                            {
-                                var card = _displayCards[i];
-                                <tr class="@(_selectedCardId == card.Id ? "selected" : "")"
-                                    @onclick="() => SelectCard(card)">
-                                    <td class="col-num">@((_currentPage - 1) * PageSize + i + 1)</td>
-                                    <td class="col-name">
-                                        <span class="card-name">@(card.PrintedName ?? card.Name)</span>
-                                    </td>
-                                    <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
-                                    <td class="col-cost"><MagicText Text="@ManaCost(card)" /></td>
-                                    <td class="col-rarity">
-                                        <span class="rarity-badge @(GetRarityClass(card.Rarity))">
-                                            @card.Rarity
-                                        </span>
-                                    </td>
-                                    <td class="col-set">@(card.SetCode ?? "—")</td>
-                                    <td class="col-type" title="@(card.PrintedTypeLine ?? card.Type)">@Truncate(card.PrintedTypeLine ?? card.Type, 28)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-
-                @* ── Pagination ── *@
-                <div class="gallery-pagination">
-                    <div class="pagination-buttons">
-                        <button @onclick="PrevPage" disabled="@(!_hasPrev)" class="page-btn">← Prev</button>
-                        <span class="page-info">Page @_currentPage / @_totalPages</span>
-                        <button @onclick="NextPage" disabled="@(!_hasNext)" class="page-btn">Next →</button>
-                    </div>
-                </div>
+                @if (_viewMode == "gallery")
+                {
+                    <CardGalleryView Cards="_displayCards"
+                                     CurrentPage="@_currentPage"
+                                     TotalPages="@_totalPages"
+                                     PageSize="@_pageSize"
+                                     SelectedCardId="@_selectedCardId"
+                                     OnCardClicked="SelectCard"
+                                     OnCardSideChanged="OnCardSideChanged"
+                                     OnPrevPage="PrevPage"
+                                     OnNextPage="NextPage"
+                                     OnPageSizeChanged="OnGalleryPageSizeChanged" />
+                }
+                else
+                {
+                    <CardListView Cards="_displayCards"
+                                  CurrentPage="@_currentPage"
+                                  TotalPages="@_totalPages"
+                                  PageSize="@_pageSize"
+                                  SelectedCardId="@_selectedCardId"
+                                  OnCardClicked="SelectCard"
+                                  OnPrevPage="PrevPage"
+                                  OnNextPage="NextPage" />
+                }
             }
 
             @* ── Empty State ── *@
@@ -189,7 +174,7 @@
 </div>
 
 @code {
-    private const int PageSize = 50;
+    private int _pageSize = 50; // cards per page (adjustable from the gallery view)
 
     // Data
     private List<MagicCard> _displayCards = new();
@@ -228,6 +213,10 @@
     private const int MaxSidebarWidth = 500;
     private bool _isDragging;
 
+    // View mode (list / gallery) — persisted like other UI settings
+    private string _viewMode = "list";
+    private const string ViewModeSettingKey = "KBCardsListControl.ViewMode";
+
     // Settings persistence
     private const string SplitterPositionKey = "KBCardsListControl.SplitterPosition";
 
@@ -243,22 +232,6 @@
         ["Rarity"] = "Rarity",
     };
 
-    private static string ManaCost(MagicCard magicCard)
-    {
-        if (!string.IsNullOrWhiteSpace(magicCard.ManaCost))
-            return magicCard.ManaCost;
-
-        if (magicCard.CardFaces is null || magicCard.CardFaces.Length == 0)
-            return string.Empty;
-
-        var sb = new StringBuilder(magicCard.CardFaces[0].ManaCost);
-
-        if (magicCard.CardFaces.Length > 1)
-            sb.Append($" // {magicCard.CardFaces[1].ManaCost}");
-
-        return sb.ToString();
-    }
-
     // ── Parameters ──────────────────────────────────────
     /// <summary>Central filter/sort state shared with CardFilterDialog.</summary>
     [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
@@ -266,12 +239,15 @@
     [Parameter] public EventCallback<Guid?> OnCardSelected { get; set; }
     [Parameter] public EventCallback OnOpenFilter { get; set; }
     [Parameter] public EventCallback<string> OnOpenSync { get; set; }
+    /// <summary>Gallery view: card selected with the currently shown side (front/back).</summary>
+    [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnCardSideChanged { get; set; }
     [Parameter] public int RefreshTrigger { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         FilterViewModel.Changed += OnFilterChanged;
         await LoadSplitterSettingsAsync();
+        await LoadViewModeAsync();
         await LoadSetsFromKB();
         await LoadCounts();
         await ApplyFiltersAndPagination();
@@ -652,7 +628,7 @@
                 SortField = sortField,
                 SortAsc = FilterViewModel.SortAsc,
                 Page = _currentPage,
-                PageSize = PageSize,
+                PageSize = _pageSize,
                 NameFilter = effectiveNameFilter,
                 Query = null,
                 TypeFilters = FilterViewModel.TypeFilter.Count > 0 ? FilterViewModel.TypeFilter : null,
@@ -676,7 +652,7 @@
             var result = await CardSearch!.GetPagedAsync(filter);
             _displayCards = result.Cards.Cast<MagicCard>().ToList();
             _totalCount = result.TotalCount;
-            _totalPages = (int)Math.Ceiling((double)_totalCount / PageSize);
+            _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
         }
         catch
@@ -713,6 +689,52 @@
             FilterViewModel.SortAsc = true;
         }
         FilterViewModel.Apply();  // Changed → OnFilterChanged resets page + re-queries
+    }
+
+    // ── View Mode (list / gallery) ───────────────────────
+    private async Task SetViewMode(string mode)
+    {
+        if (_viewMode == mode) return;
+        _viewMode = mode;
+        await SaveViewModeAsync();
+    }
+
+    private async Task LoadViewModeAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(ViewModeSettingKey));
+            if (json == "list" || json == "gallery")
+                _viewMode = json;
+        }
+        catch
+        {
+            // default _viewMode = "list"
+        }
+    }
+
+    private async Task SaveViewModeAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(ViewModeSettingKey, _viewMode));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    /// <summary>Gallery page-size slider → re-query from page 1 with the new size.</summary>
+    private async Task OnGalleryPageSizeChanged(int newSize)
+    {
+        _pageSize = Math.Clamp(newSize, 1, 150);
+        _currentPage = 1;
+        await ApplyFiltersAndPagination();
     }
 
     // ── Pagination ──────────────────────────────────────
@@ -764,37 +786,6 @@
         || !string.IsNullOrWhiteSpace(FilterViewModel.LayoutFilter)
         || !string.IsNullOrWhiteSpace(FilterViewModel.LegalityFilter)
         || FilterViewModel.GameChangerFilter;
-
-    // ── Helpers ─────────────────────────────────────────
-    private static string Truncate(string? text, int maxLen)
-    {
-        if (text == null) return "—";
-        return text.Length <= maxLen ? text : text[..(maxLen - 1)] + "…";
-    }
-
-    /// <summary>Format CMC: strip trailing ".0" (e.g. "3.0" → "3", "2.5" stays "2.5").</summary>
-    private static string FormatCmc(string? cmcText)
-    {
-        if (string.IsNullOrEmpty(cmcText)) 
-            return "—";
-
-        if (cmcText.EndsWith(".0"))
-            return cmcText.Replace(".0", string.Empty);
-
-        return cmcText;
-    }
-
-    private static string GetRarityClass(string? rarity)
-    {
-        return rarity?.ToLowerInvariant() switch
-        {
-            "common" => "rarity-common",
-            "uncommon" => "rarity-uncommon",
-            "rare" => "rarity-rare",
-            "mythic" => "rarity-mythic",
-            _ => ""
-        };
-    }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {

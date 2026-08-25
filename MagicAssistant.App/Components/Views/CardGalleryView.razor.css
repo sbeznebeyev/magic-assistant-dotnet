@@ -1,0 +1,304 @@
+/* ── Container (two rows: grid + pagination) — fills parent height ─────── */
+.gallery-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 8px;
+    overflow: hidden;
+}
+
+/* ── Grid area — takes ALL space above pagination, scrolls when overfilled ── */
+.gallery-grid {
+    display: grid;
+    width: 100%;
+    flex: 1 1 0; /* grow to fill, shrink when content overflows, basis 0 so height is controlled by flex */
+    min-height: 0;
+    overflow-y: auto;
+    gap: 6px;
+    align-items: start; /* cards don't stretch to fill grid track height */
+    align-content: start; /* rows pack to top, don't stretch to fill available height */
+    grid-auto-rows: min-content; /* rows shrink to content size */
+}
+
+/* ── Empty state ───────────────────────────────────── */
+.gallery-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #888;
+    font-size: 13px;
+}
+
+/* ── Card tile ─────────────────────────────────────── */
+.gallery-card {
+    display: flex;
+    flex-direction: column;
+    background: #252525;
+    border: 1px solid #383838;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.15s;
+    overflow: hidden;
+}
+
+.gallery-card:hover {
+    border-color: #0078d4;
+    box-shadow: 0 0 8px rgba(0, 120, 212, 0.3);
+}
+
+/* ── Side-specific border colors (only for double-sided) ─── */
+.gallery-card-side-front {
+    border-color: #00c853;
+}
+.gallery-card-side-front:hover {
+    border-color: #69f0ae;
+    box-shadow: 0 0 10px rgba(0, 200, 83, 0.35);
+}
+
+.gallery-card-side-back {
+    border-color: #ff6d00;
+}
+.gallery-card-side-back:hover {
+    border-color: #ffab40;
+    box-shadow: 0 0 10px rgba(255, 109, 0, 0.35);
+}
+
+/* ── Selection highlight (same blue as the list view) ─── */
+.gallery-card.selected {
+    border-color: #0078d4;
+    box-shadow: 0 0 8px rgba(0, 120, 212, 0.3);
+}
+
+/* ── Image area (wraps tabs + image) ───────────────── */
+.gallery-image-wrap {
+    width: 100%;
+    background: #1a1a1a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ── Tabs area — always present (fills tab-height for alignment) ─── */
+.gallery-tabs-area {
+    width: 100%;
+    height: 18px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* ── Tab buttons — absolute overlap, equal width + corner ─── */
+.tab-btn {
+    position: absolute;
+    top: 0;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+    cursor: pointer;
+    z-index: 1;
+    transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+    line-height: 16px;
+    text-align: center;
+}
+
+/* ── Front tab — left half + corner, diagonal \ top→bottom-right ─── */
+.tab-front {
+    left: 0;
+    width: 54%;
+    clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 0% 100%);
+}
+
+/* ── Back tab — right half + corner, diagonal / top→bottom-left ─── */
+.tab-back {
+    right: 0;
+    width: 54%;
+    clip-path: polygon(20% 0%, 100% 0%, 100% 100%, 0% 100%);
+}
+
+/* ── Active states — on top, full brightness ───────── */
+.tab-btn.active {
+    z-index: 2;
+    opacity: 1;
+}
+
+.tab-front.active {
+    background-color: #00c853;
+    color: #fff;
+}
+.tab-back.active {
+    background-color: #ff9100;
+    color: #fff;
+}
+
+/* ── Inactive states — slightly muted, not dark ─────── */
+.tab-btn.inactive {
+    z-index: 1;
+    opacity: 0.75;
+}
+.tab-front.inactive {
+    background-color: #00893a;
+    color: #c8e6c9;
+}
+.tab-back.inactive {
+    background-color: #b36200;
+    color: #ffe0b2;
+}
+
+.tab-btn:hover {
+    opacity: 1 !important;
+}
+
+/* ── Image container (below tabs) ──────────────────── */
+.gallery-image-wrap > .gallery-image,
+.gallery-image-wrap > .gallery-placeholder {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gallery-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+}
+
+/* ── Placeholder (no image) ────────────────────────── */
+.gallery-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.placeholder-icon {
+    font-size: 28px;
+    opacity: 0.5;
+}
+
+.placeholder-cmc {
+    font-size: 11px;
+    color: #666;
+    font-weight: bold;
+}
+
+/* ── Card info (name + meta) ───────────────────────── */
+.gallery-card-info {
+    padding: 3px 4px;
+}
+
+.gallery-card-name {
+    font-size: 10px;
+    color: #ccc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.gallery-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 1px;
+}
+
+.meta-set {
+    font-size: 9px;
+    color: #777;
+}
+
+/* ── Rarity badge (single letter) ──────────────────── */
+.rarity-badge {
+    font-size: 8px;
+    font-weight: bold;
+    padding: 0 3px;
+    border-radius: 2px;
+    line-height: 1.4;
+}
+
+.rarity-common   { color: #999; }
+.rarity-uncommon { color: #b8a050; }
+.rarity-rare     { color: #d4a017; }
+.rarity-mythic   { color: #e74c3c; }
+
+/* ── Pagination + Size Slider — bottom of container (no grow) ─── */
+.gallery-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 8px 12px;
+    min-height: 40px;
+    flex-shrink: 0; /* never shrink — always stays at bottom */
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid #444;
+}
+
+.pagination-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.size-slider-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: #888;
+}
+
+.slider-arrow {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 1px 5px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.slider-arrow:hover {
+    background: #383838;
+    border-color: #0078d4;
+}
+
+.page-btn {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: #383838;
+    border-color: #0078d4;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.page-info {
+    font-size: 11px;
+    color: #888;
+}
+
+.size-value {
+    text-align: right;
+    color: #0078d4;
+    font-weight: bold;
+}
