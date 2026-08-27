@@ -1,0 +1,144 @@
+@* CardListView — self-contained card table (list view).
+   Pure presentation component: receives a page of cards from the parent
+   (already filtered/sorted/paged) and emits events. The parent owns all data
+   loading, filtering, pagination state and selection. *@
+@using System.Text
+@using MagicAssistant.App.Components.Shared
+
+<div class="card-list-view">
+    <div class="table-wrapper">
+        <table class="card-table">
+            <thead>
+                <tr>
+                    <th class="col-num">#</th>
+                    <th class="col-name">Name</th>
+                    <th class="col-cmc">CMC</th>
+                    <th class="col-cost">Cost</th>
+                    <th class="col-rarity">Rarity</th>
+                    <th class="col-set">Set</th>
+                    <th class="col-type">Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < Cards.Count; i++)
+                {
+                    var card = Cards[i];
+                    <tr class="@(SelectedCardId == card.Id ? "selected" : "")"
+                        @onclick="() => SelectCard(card)">
+                        <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
+                        <td class="col-name">
+                            <span class="card-name">@(card.PrintedName ?? card.Name)</span>
+                        </td>
+                        <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
+                        <td class="col-cost"><MagicText Text="@ManaCost(card)" /></td>
+                        <td class="col-rarity">
+                            <span class="rarity-badge @(GetRarityClass(card.Rarity))">
+                                @card.Rarity
+                            </span>
+                        </td>
+                        <td class="col-set">@(card.SetCode ?? "—")</td>
+                        <td class="col-type" title="@(card.PrintedTypeLine ?? card.Type)">@Truncate(card.PrintedTypeLine ?? card.Type, 28)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* ── Pagination ── *@
+    <div class="gallery-pagination">
+        <div class="pagination-buttons">
+            <button @onclick="PrevPage" disabled="@(!HasPrev)" class="page-btn">← Prev</button>
+            <span class="page-info">Page @CurrentPage / @TotalPages</span>
+            <button @onclick="NextPage" disabled="@(!HasNext)" class="page-btn">Next →</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
+    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+
+    /// <summary>1-based index of the current page (used for the global row number in "#").</summary>
+    [Parameter] public int CurrentPage { get; set; } = 1;
+
+    [Parameter] public int TotalPages { get; set; }
+
+    /// <summary>Page size — must match the size used by the parent for its query.</summary>
+    [Parameter] public int PageSize { get; set; } = 50;
+
+    [Parameter] public Guid? SelectedCardId { get; set; }
+
+    /// <summary>Card row clicked.</summary>
+    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+
+    /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
+    [Parameter] public EventCallback OnPrevPage { get; set; }
+
+    /// <summary>Next → requested (parent re-queries page CurrentPage + 1).</summary>
+    [Parameter] public EventCallback OnNextPage { get; set; }
+
+    private bool HasPrev => CurrentPage > 1;
+    private bool HasNext => CurrentPage < TotalPages;
+
+    private async Task SelectCard(MagicCard card)
+    {
+        await OnCardClicked.InvokeAsync(card);
+    }
+
+    private async Task PrevPage()
+    {
+        await OnPrevPage.InvokeAsync();
+    }
+
+    private async Task NextPage()
+    {
+        await OnNextPage.InvokeAsync();
+    }
+
+    /// <summary>Mana cost for the Cost column; double-sided cards show "front // back".</summary>
+    private static string ManaCost(MagicCard magicCard)
+    {
+        if (!string.IsNullOrWhiteSpace(magicCard.ManaCost))
+            return magicCard.ManaCost;
+
+        if (magicCard.CardFaces is null || magicCard.CardFaces.Length == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder(magicCard.CardFaces[0].ManaCost);
+
+        if (magicCard.CardFaces.Length > 1)
+            sb.Append($" // {magicCard.CardFaces[1].ManaCost}");
+
+        return sb.ToString();
+    }
+
+    private static string Truncate(string? text, int maxLen)
+    {
+        if (text == null) return "—";
+        return text.Length <= maxLen ? text : text[..(maxLen - 1)] + "…";
+    }
+
+    /// <summary>Format CMC: strip trailing ".0" (e.g. "3.0" → "3", "2.5" stays "2.5").</summary>
+    private static string FormatCmc(string? cmcText)
+    {
+        if (string.IsNullOrEmpty(cmcText))
+            return "—";
+
+        if (cmcText.EndsWith(".0"))
+            return cmcText.Replace(".0", string.Empty);
+
+        return cmcText;
+    }
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+}

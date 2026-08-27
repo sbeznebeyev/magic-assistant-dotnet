@@ -1,10 +1,9 @@
-/* ── Container (two rows: grid + pagination) ─────── */
+/* ── Container (two rows: grid + pagination) — fills parent height ─────── */
 .gallery-container {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
-    height: 100%;
     padding: 8px;
     overflow: hidden;
 }
@@ -22,9 +21,7 @@
     grid-auto-rows: min-content; /* rows shrink to content size */
 }
 
-/* ── Loading / Error / Empty states ────────────────── */
-.gallery-loading,
-.gallery-error,
+/* ── Empty state ───────────────────────────────────── */
 .gallery-empty {
     text-align: center;
     padding: 40px 20px;
@@ -32,22 +29,6 @@
     font-size: 13px;
 }
 
-.gallery-error span {
-    color: #e74c3c;
-    margin-right: 8px;
-}
-
-.gallery-error button {
-    background: #0078d4;
-    color: white;
-    border: none;
-    padding: 4px 12px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-/* ── Grid ──────────────────────────────────────────── */
 /* ── Card tile ─────────────────────────────────────── */
 .gallery-card {
     display: flex;
@@ -80,6 +61,12 @@
 .gallery-card-side-back:hover {
     border-color: #ffab40;
     box-shadow: 0 0 10px rgba(255, 109, 0, 0.35);
+}
+
+/* ── Selection highlight (same blue as the list view) ─── */
+.gallery-card.selected {
+    border-color: #0078d4;
+    box-shadow: 0 0 8px rgba(0, 120, 212, 0.3);
 }
 
 /* ── Image area (wraps tabs + image) ───────────────── */

@@ -5,32 +5,7 @@
     overflow-y: auto;
 }
 
-/* ── Loading / Error / Empty states ────────────────── */
-.tree-loading,
-.tree-error,
-.tree-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: #888;
-    font-size: 13px;
-}
-
-.tree-error span {
-    color: #e74c3c;
-    margin-right: 8px;
-}
-
-.tree-error button {
-    background: #0078d4;
-    color: white;
-    border: none;
-    padding: 4px 12px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-/* ── Toolbar ───────────────────────────────────────── */
+/* ── Toolbar (group selector) ──────────────────────── */
 .tree-toolbar {
     display: flex;
     align-items: center;
@@ -165,4 +140,75 @@
     text-align: center;
     font-size: 11px;
     color: #666;
+}
+
+/* ── Pagination (page size stepper + prev/next) ────── */
+.tree-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 8px 12px;
+    min-height: 40px;
+}
+
+.pagination-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.size-slider-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: #888;
+}
+
+.slider-arrow {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 1px 5px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.slider-arrow:hover {
+    background: #383838;
+    border-color: #0078d4;
+}
+
+.page-btn {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: #383838;
+    border-color: #0078d4;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.page-info {
+    font-size: 11px;
+    color: #888;
+}
+
+.size-value {
+    text-align: right;
+    color: #0078d4;
+    font-weight: bold;
 }

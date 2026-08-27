@@ -172,17 +172,9 @@
 
 .set-icon {
     flex-shrink: 0;
-    width: 18px;
-    height: 18px;
+    width: 28px;
+    height: 28px;
     display: inline-block;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}
-
-/* Bright orange ink for set icons */
-.set-symbol {
-    filter: brightness(0) saturate(1) invert(23%) sepia(89%) saturate(2821%) hue-rotate(359deg) brightness(104%) contrast(103%);
 }
 
 .set-code {
@@ -310,6 +302,35 @@
     color: #0078d4;
 }
 
+/* ── View Mode Area (list / gallery toggle) — same style as sort buttons ── */
+.view-mode-area {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.view-btn {
+    background: #2d2d2d;
+    border: 1px solid #444;
+    color: #999;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.view-btn:hover {
+    background: #3c3c3c;
+    color: #ccc;
+}
+
+.view-btn.active {
+    background: rgba(0, 120, 212, 0.2);
+    border-color: #0078d4;
+    color: #0078d4;
+}
+
 /* ── Filter Area ────────────────────────────────────── */
 .filter-area {
     margin-left: auto;
@@ -373,125 +394,6 @@
     justify-content: center;
     color: #666;
     font-size: 13px;
-}
-
-/* ── Table area — fills space above pagination, scrolls when overfilled ── */
-.table-wrapper {
-    flex: 1 1 0;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-.card-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    table-layout: auto;
-}
-
-.card-table thead th {
-    position: sticky;
-    top: 0;
-    background: #1a1a1a;
-    color: #888;
-    font-weight: 500;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 6px 8px;
-    text-align: left;
-    border-bottom: 1px solid #3c3c3c;
-    user-select: none;
-}
-
-.card-table tbody tr {
-    cursor: pointer;
-    border-bottom: 1px solid #2a2a2a;
-}
-
-.card-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.card-table tbody tr.selected {
-    background: rgba(0, 120, 212, 0.15);
-}
-
-.card-table td {
-    padding: 4px 8px;
-    color: #ccc;
-    vertical-align: middle;
-}
-
-.col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
-.col-name   { width: 50%; }
-.col-cost   { width: 1%; white-space: nowrap; }
-.col-type   { width: 1%; white-space: nowrap; }
-.col-set    { width: 1%; white-space: nowrap; }
-.col-rarity { width: 1%; white-space: nowrap; }
-.col-cmc    { width: 1%; white-space: nowrap; text-align: center; font-size: 15px}
-
-.card-name {
-    font-weight: 500;
-    color: #eee;
-}
-
-.rarity-badge {
-    display: inline-block;
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 11px;
-    text-transform: capitalize;
-}
-
-.rarity-common  { color: #aaa; }
-.rarity-uncommon { color: #8ab4f8; }
-.rarity-rare     { color: #f5c542; }
-.rarity-mythic   { color: #e74c3c; }
-
-/* ── Pagination — bottom of container (no grow) ───── */
-.gallery-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
-    padding: 8px 12px;
-    min-height: 40px;
-    flex-shrink: 0;
-    background: rgba(30, 30, 30, 0.95);
-    backdrop-filter: blur(6px);
-    border-top: 1px solid #444;
-}
-
-.pagination-buttons {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.page-btn {
-    background: #2d2d2d;
-    color: #ccc;
-    border: 1px solid #444;
-    padding: 3px 10px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 11px;
-}
-
-.page-btn:hover:not(:disabled) {
-    background: #383838;
-    border-color: #0078d4;
-}
-
-.page-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
-.page-info {
-    font-size: 11px;
-    color: #888;
 }
 
 /* ── Empty State ───────────────────────────────────── */

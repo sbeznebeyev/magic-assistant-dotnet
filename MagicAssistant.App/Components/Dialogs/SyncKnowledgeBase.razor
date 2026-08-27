@@ -366,7 +366,7 @@
             if (result.Success)
             {
                 await LoadSetsFromKB();
-                // OnCompleted notifies MainLayout → RefreshTrigger++ → KBCardsListControl reloads its sets list.
+                // OnCompleted notifies MainLayout → RefreshTrigger++ → CardsListControl reloads its sets list.
                 // We do NOT close the dialog here — user stays to sync cards of selected set.
                 await OnCompleted.InvokeAsync();
             }
