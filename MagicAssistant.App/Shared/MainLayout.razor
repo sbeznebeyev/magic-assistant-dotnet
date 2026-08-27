@@ -8,6 +8,12 @@
     <div class="header">
         <span class="title">⚔ Magic Assistant</span>
         <span class="subtitle">— Card Organizer</span>
+        <span class="header-actions">
+            <span class="header-action" @onclick="OpenImportDialog" title="Import deck (current format)">Import</span>
+            <span class="header-action" @onclick="OpenExportDialog" title="Export deck">Export</span>
+            <span class="header-action" @onclick="OpenLegacyImportDialog" title="Import legacy deck (Gatherer ID + full set names)">Legacy Import</span>
+            <span class="header-action" @onclick="OpenUpdateDbDialog" title="Update DataBase from Scryfall">Update DB</span>
+        </span>
     </div>
 
     @* ── Dialogs (render only when visible) *@
@@ -36,14 +42,6 @@
         </div>
 
         <div class="panel-center">
-            <Toolbar
-                OnImportDeck="@(e => _showImportDialog = true)"
-                OnLegacyImportDeck="@(e => _showLegacyImportDialog = true)"
-                OnExportDeck="@(e => _showExportDialog = true)"
-                OnSyncKB="@(e => _showSyncDialog = true)"
-                ViewMode="@_viewMode"
-                OnViewModeChanged="@(vm => _viewMode = vm)" />
-
             <SearchControl
                 OnSearchCompleted="OnGlobalSearchCompleted"
                 OnResultCountChanged="OnGlobalSearchResultCount"
@@ -84,7 +82,6 @@
 
 @code {
     // ── Navigation State ──
-    private string _viewMode = "list";
     private int? _selectedDeckId;
     private Guid? _selectedCardId;
     private bool? _selectedCardShowBack;
@@ -112,7 +109,7 @@
 
     private MagicCardPhysical? _splitCardTarget;
 
-    /// <summary>Central filter/sort state shared between KBCardsListControl and CardFilterDialog.</summary>
+    /// <summary>Central filter/sort state shared between CardsListControl and CardFilterDialog.</summary>
     private readonly FilterViewModel _filterViewModel = new();
 
     // ── Navigation ──
@@ -146,7 +143,12 @@
         _showEditDeckPropertiesDialog = true;
     }
 
-    // ── Toolbar Actions ──
+    // ── Header Actions (clickable words in the app header) ──
+    private void OpenImportDialog() => _showImportDialog = true;
+    private void OpenExportDialog() => _showExportDialog = true;
+    private void OpenLegacyImportDialog() => _showLegacyImportDialog = true;
+    private void OpenUpdateDbDialog() => _showSyncDialog = true;
+
     // ── Dialog Openers ──
     private void OpenEditCard(MagicCardPhysical card) { _editCardTarget = card; _showEditCardDialog = true; }
 
@@ -169,7 +171,7 @@
         await InvokeAsync(() =>
         {
             _statusText = "Sync completed";
-            _kbRefreshTrigger++;  // Trigger KBCardsListControl to reload
+            _kbRefreshTrigger++;  // Trigger CardsListControl to reload
             StateHasChanged();
         });
     }
@@ -234,23 +236,12 @@
     private RenderFragment RenderKBContent()
     {
         return @<div>
-            @switch (_viewMode)
-            {
-                case "gallery":
-                    <KBCardsGalleryControl OnCardClicked="@(c => OnCardSelected(c.Id))" OnCardSideChanged="OnCardSideChanged" SelectedCardId="@_selectedCardId" />
-                    break;
-                case "tree":
-                    <KBCardsTreeView OnCardClicked="@(c => OnCardSelected(c.Id))" SelectedCardId="@_selectedCardId" />
-                    break;
-                default:
-                    <KBCardsListControl FilterViewModel="@_filterViewModel"
-                                        OnCardSelected="OnCardSelected"
-                                        OnCardSideChanged="OnCardSideChanged"
-                                        OnOpenFilter="@(() => _showFilterDialog = true)"
-                                        OnOpenSync="OnOpenSyncDialog"
-                                        RefreshTrigger="@_kbRefreshTrigger" />
-                    break;
-            }
+            <CardsListControl FilterViewModel="@_filterViewModel"
+                                OnCardSelected="OnCardSelected"
+                                OnCardSideChanged="OnCardSideChanged"
+                                OnOpenFilter="@(() => _showFilterDialog = true)"
+                                OnOpenSync="OnOpenSyncDialog"
+                                RefreshTrigger="@_kbRefreshTrigger" />
         </div>;
     }
 }

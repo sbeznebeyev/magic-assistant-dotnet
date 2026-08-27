@@ -1,0 +1,221 @@
+@* CardTreeView — self-contained card tree (grouped view).
+   Pure presentation component: receives a page of cards from the parent
+   (already filtered/sorted/paged) and emits events. The parent owns all data
+   loading, filtering, pagination state and selection.
+   Grouping (color/type/set) is a display-only concern — kept inside this
+   component and applied to the current page. *@
+
+<div class="tree-view-container">
+    @* ── Group selector ── *@
+    <div class="tree-toolbar">
+        <span class="toolbar-label">Group by:</span>
+        <button class="group-btn @(_groupBy == "color" ? "active" : "")"
+                @onclick="OnColorGroup">Color</button>
+        <button class="group-btn @(_groupBy == "type" ? "active" : "")"
+                @onclick="OnTypeGroup">Type</button>
+        <button class="group-btn @(_groupBy == "set" ? "active" : "")"
+                @onclick="OnSetGroup">Set</button>
+    </div>
+
+    @* ── Tree groups ── *@
+    <div class="tree-groups">
+        @foreach (var group in _groups)
+        {
+            <div class="tree-group">
+                <div class="group-header" @onclick="() => ToggleGroup(group.Key)">
+                    <span class="expand-icon">@(_expandedGroups.Contains(group.Key) ? "▾" : "▸")</span>
+                    <span class="group-color-dot" style="background:@GetColorHex(group.Key);"></span>
+                    <span class="group-name">@group.Key</span>
+                    <span class="group-count">(@group.Value.Count)</span>
+                </div>
+
+                @if (_expandedGroups.Contains(group.Key))
+                {
+                    <div class="group-cards">
+                        @foreach (var card in group.Value)
+                        {
+                            <div class="tree-card @(SelectedCardId.HasValue && SelectedCardId.Value == card.Id ? "selected" : "")"
+                                 @onclick="() => SelectCard(card)">
+                                <span class="card-name">@card.Name</span>
+                                <span class="card-cmc">@card.CmcText</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── Summary ── *@
+    <div class="tree-summary">
+        <span>@Cards.Count cards in @_groups.Count groups</span>
+    </div>
+
+    @* ── Pagination (page size stepper + prev/next) ── *@
+    <div class="tree-pagination">
+        <div class="size-slider-group">
+            <button type="button" class="slider-arrow" @onclick="() => PageSizeStep(-1)">◀</button>
+            <span>Page size: </span><span class="size-value">@PageSize</span>
+            <button type="button" class="slider-arrow" @onclick="() => PageSizeStep(1)">▶</button>
+        </div>
+        <div class="pagination-buttons">
+            <button @onclick="PrevPage" disabled="@(!HasPrev)" class="page-btn">← Prev</button>
+            <span class="page-info">Page @CurrentPage / @TotalPages</span>
+            <button @onclick="NextPage" disabled="@(!HasNext)" class="page-btn">Next →</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
+    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+
+    /// <summary>1-based index of the current page.</summary>
+    [Parameter] public int CurrentPage { get; set; } = 1;
+
+    [Parameter] public int TotalPages { get; set; }
+
+    /// <summary>Page size — must match the size used by the parent for its query.
+    /// The stepper emits OnPageSizeChanged with a clamped value; the parent re-queries.</summary>
+    [Parameter] public int PageSize { get; set; } = 50;
+
+    [Parameter] public Guid? SelectedCardId { get; set; }
+
+    /// <summary>Card row clicked.</summary>
+    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+
+    /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
+    [Parameter] public EventCallback OnPrevPage { get; set; }
+
+    /// <summary>Next → requested (parent re-queries page CurrentPage + 1).</summary>
+    [Parameter] public EventCallback OnNextPage { get; set; }
+
+    /// <summary>New page size requested by the stepper (clamped to 1..150).</summary>
+    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    // Grouping state (display-only — grouping is applied to the current page)
+    private Dictionary<string, List<MagicCard>> _groups = new();
+    private HashSet<string> _expandedGroups = new();
+    private string _groupBy = "color";
+    private IReadOnlyList<MagicCard>? _lastCards;
+
+    private bool HasPrev => CurrentPage > 1;
+    private bool HasNext => CurrentPage < TotalPages;
+
+    protected override void OnParametersSet()
+    {
+        // Rebuild groups when the parent hands over a new page of cards
+        if (!ReferenceEquals(Cards, _lastCards))
+        {
+            _lastCards = Cards;
+            ApplyGrouping();
+        }
+    }
+
+    private async Task SelectCard(MagicCard card)
+    {
+        await OnCardClicked.InvokeAsync(card);
+    }
+
+    private void ApplyGrouping()
+    {
+        if (Cards.Count == 0)
+        {
+            _groups = new Dictionary<string, List<MagicCard>>();
+            _expandedGroups = new HashSet<string>();
+            return;
+        }
+
+        var dict = new Dictionary<string, List<MagicCard>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var card in Cards)
+        {
+            string key = _groupBy switch
+            {
+                "color" => card.ColorType ?? "Colorless",
+                "type"  => GetPrimaryType(card.Type),
+                "set"   => card.SetCode ?? "Unknown",
+                _       => "Uncategorized"
+            };
+
+            if (!dict.TryGetValue(key, out var list))
+            {
+                list = new List<MagicCard>();
+                dict[key] = list;
+            }
+            list.Add(card);
+        }
+
+        // Sort groups by count descending
+        _groups = dict.OrderByDescending(g => g.Value.Count)
+                      .ToDictionary(g => g.Key, g => g.Value, StringComparer.OrdinalIgnoreCase);
+
+        // Expand all groups initially
+        _expandedGroups = new HashSet<string>(_groups.Keys);
+    }
+
+    private static string GetPrimaryType(string? typeLine)
+    {
+        if (string.IsNullOrEmpty(typeLine)) return "Unknown";
+
+        // Extract the primary type (first word before " - " or ":")
+        var separatorPos = Math.Max(
+            typeLine.IndexOf(" - ", StringComparison.OrdinalIgnoreCase),
+            typeLine.IndexOf(" :", StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (separatorPos > 0)
+            return typeLine[..separatorPos].Trim();
+        return typeLine.Trim();
+    }
+
+    private void SetGroupBy(string groupBy)
+    {
+        _groupBy = groupBy;
+        ApplyGrouping();
+    }
+
+    // Explicit parameterless overloads for Razor @onclick bindings
+    private void OnColorGroup() => SetGroupBy("color");
+    private void OnTypeGroup() => SetGroupBy("type");
+    private void OnSetGroup() => SetGroupBy("set");
+
+    private void ToggleGroup(string key)
+    {
+        if (_expandedGroups.Contains(key))
+            _expandedGroups.Remove(key);
+        else
+            _expandedGroups.Add(key);
+    }
+
+    private async Task PageSizeStep(int delta)
+    {
+        var newSize = Math.Clamp(PageSize + delta, 1, 150);
+        if (newSize == PageSize) return;
+        await OnPageSizeChanged.InvokeAsync(newSize);
+    }
+
+    private async Task PrevPage()
+    {
+        await OnPrevPage.InvokeAsync();
+    }
+
+    private async Task NextPage()
+    {
+        await OnNextPage.InvokeAsync();
+    }
+
+    private static string GetColorHex(string colorType)
+    {
+        return colorType.ToLowerInvariant() switch
+        {
+            "w" or "monow" => "#ffffff",
+            "u" or "monou" => "#5bc0de",
+            "b" or "monob" => "#888",
+            "r" or "monor" => "#e74c3c",
+            "g" or "monog" => "#2ecc71",
+            "colorless" or "c" => "#666",
+            _ => "#f0ad4e"  // multi-color default
+        };
+    }
+}

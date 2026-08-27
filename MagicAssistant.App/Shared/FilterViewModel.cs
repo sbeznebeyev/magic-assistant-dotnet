@@ -27,7 +27,7 @@ public static class ColorFilterFlags
 /// <summary>
 /// Central view model for KB card list filtering and sorting.
 /// All filter/sort UI components mutate this single instance.
-/// KBCardsListControl subscribes to Changed event and re-queries.
+/// CardsListControl subscribes to Changed event and re-queries.
 /// CardFilterDialog is the central control interface for full filter management.
 ///
 /// Note: Uses standard C# event (Action) — not EventCallback, because
@@ -55,7 +55,7 @@ public class FilterViewModel
     /// External components should use <see cref="SetNewRarityFilter(string)" /> instead of mutating directly.</summary>
     public List<string> Rarity { get; set; } = new();
 
-    /// <summary>Name filter (debounced in KBCardsListControl, 3+ chars).</summary>
+    /// <summary>Name filter (debounced in CardsListControl, 3+ chars).</summary>
     public string NameFilter { get; set; } = string.Empty;
 
     /// <summary>Card type filters — multiple values combined as OR expression (item1 OR item2 OR ...).</summary>

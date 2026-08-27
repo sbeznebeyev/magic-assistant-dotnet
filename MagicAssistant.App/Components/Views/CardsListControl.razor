@@ -96,6 +96,8 @@
                             @onclick="@(() => SetViewMode("list"))" title="List view">List</button>
                     <button class="view-btn @(_viewMode == "gallery" ? "active" : "")"
                             @onclick="@(() => SetViewMode("gallery"))" title="Gallery view">Gallery</button>
+                    <button class="view-btn @(_viewMode == "tree" ? "active" : "")"
+                            @onclick="@(() => SetViewMode("tree"))" title="Tree view">Tree</button>
                 </div>
                 <div class="filter-area">
                     <select value="@(GetTypeSelectValue())" @onchange="(e) => OnTypeChanged(e)" class="filter-select">
@@ -138,6 +140,18 @@
                                      OnPrevPage="PrevPage"
                                      OnNextPage="NextPage"
                                      OnPageSizeChanged="OnGalleryPageSizeChanged" />
+                }
+                else if (_viewMode == "tree")
+                {
+                    <CardTreeView Cards="_displayCards"
+                                  CurrentPage="@_currentPage"
+                                  TotalPages="@_totalPages"
+                                  PageSize="@_pageSize"
+                                  SelectedCardId="@_selectedCardId"
+                                  OnCardClicked="SelectCard"
+                                  OnPrevPage="PrevPage"
+                                  OnNextPage="NextPage"
+                                  OnPageSizeChanged="OnGalleryPageSizeChanged" />
                 }
                 else
                 {
@@ -219,6 +233,7 @@
 
     // Settings persistence
     private const string SplitterPositionKey = "KBCardsListControl.SplitterPosition";
+    private const string PageSizeSettingKey = "CardsListControl.PageSize";
 
     // Refresh trigger tracking
     private int _previousRefreshTrigger;
@@ -248,6 +263,7 @@
         FilterViewModel.Changed += OnFilterChanged;
         await LoadSplitterSettingsAsync();
         await LoadViewModeAsync();
+        await LoadPageSizeAsync();
         await LoadSetsFromKB();
         await LoadCounts();
         await ApplyFiltersAndPagination();
@@ -706,7 +722,7 @@
         try
         {
             var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(ViewModeSettingKey));
-            if (json == "list" || json == "gallery")
+            if (json == "list" || json == "gallery" || json == "tree")
                 _viewMode = json;
         }
         catch
@@ -729,12 +745,47 @@
         }
     }
 
-    /// <summary>Gallery page-size slider → re-query from page 1 with the new size.</summary>
+    /// <summary>Page-size stepper (gallery/tree) → re-query from page 1 with the new size.</summary>
     private async Task OnGalleryPageSizeChanged(int newSize)
     {
         _pageSize = Math.Clamp(newSize, 1, 150);
         _currentPage = 1;
+        await SavePageSizeAsync();
         await ApplyFiltersAndPagination();
+    }
+
+    // ── Page Size Persistence (same pattern as splitter position / view mode) ──
+
+    private async Task LoadPageSizeAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(PageSizeSettingKey));
+            if (!string.IsNullOrEmpty(json) && int.TryParse(json, out var ps))
+            {
+                _pageSize = Math.Clamp(ps, 1, 150);
+            }
+        }
+        catch
+        {
+            // default _pageSize = 50
+        }
+    }
+
+    private async Task SavePageSizeAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(PageSizeSettingKey, _pageSize.ToString()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
     }
 
     // ── Pagination ──────────────────────────────────────

@@ -3,7 +3,8 @@
    (already filtered/sorted/paged) and emits events. The parent owns all data
    loading, filtering, pagination state and selection.
    Card scale is a display-only concern — kept inside this component and
-   persisted with the same user setting as KBCardsGalleryControl. *@
+   persisted under the legacy "KBCardsGalleryControl.CardSize" setting key
+   (kept for continuity with the removed KBCardsGalleryControl). *@
 @using System.Text
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
@@ -131,7 +132,7 @@
     // Gallery settings (display-only)
     private int _cardSize = 150; // minmax base for grid columns (px)
 
-    // Shared with KBCardsGalleryControl so both galleries keep the same scale
+    // Legacy setting key — kept for continuity with the removed KBCardsGalleryControl
     private const string CardSizeSettingKey = "KBCardsGalleryControl.CardSize";
 
     private bool HasPrev => CurrentPage > 1;

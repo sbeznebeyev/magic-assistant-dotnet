@@ -40,6 +40,25 @@
     font-size: 11px;
 }
 
+/* === Header actions (clickable words, right of the title) === */
+.header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.header-action {
+    color: #ccc;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.header-action:hover {
+    color: #0078d4;
+}
+
 /* === Main grid - 3 columns === */
 .main-grid {
     display: flex;
@@ -78,43 +97,6 @@
     background-color: #252526;
     overflow-y: auto;
     flex-shrink: 0;
-}
-
-/* === Toolbar (child component — use ::deep) === */
-::deep .toolbar {
-    display: flex;
-    align-items: center;
-    padding: 2px 8px;
-    background-color: #2d2d2d;
-    border-bottom: 1px solid #444;
-    height: 32px;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-::deep .toolbar button {
-    background-color: #3c3c3c;
-    color: #ccc;
-    border: 1px solid #555;
-    padding: 2px 10px;
-    font-size: 12px;
-    cursor: pointer;
-    border-radius: 2px;
-}
-
-::deep .toolbar button:hover {
-    background-color: #4c4c4c;
-    border-color: #666;
-}
-
-::deep .toolbar select,
-::deep .view-mode-select {
-    background-color: #3c3c3c;
-    color: #ccc;
-    border: 1px solid #555;
-    padding: 2px 6px;
-    font-size: 12px;
-    border-radius: 2px;
 }
 
 /* === Tab bar (child component — use ::deep) === */

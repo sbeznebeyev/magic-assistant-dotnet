@@ -184,7 +184,7 @@
 </div>
 
 @code {
-    /// <summary>Shared filter/sort view model — mutations here propagate to KBCardsListControl.</summary>
+    /// <summary>Shared filter/sort view model — mutations here propagate to CardsListControl.</summary>
     [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
 
     // ── Rarity MultiSelectList ──
@@ -207,10 +207,10 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
-    /// <summary>Apply: fire Changed event so KBCardsListControl re-queries via InvokeAsync.</summary>
+    /// <summary>Apply: fire Changed event so CardsListControl re-queries via InvokeAsync.</summary>
     private async Task OnApply()
     {
-        FilterViewModel.Apply();  // fires Changed → KBCardsListControl wraps in InvokeAsync
+        FilterViewModel.Apply();  // fires Changed → CardsListControl wraps in InvokeAsync
         await Close();
     }
 
