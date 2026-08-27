@@ -1,0 +1,4 @@
+# Force LF line endings in the working tree on all platforms (Windows/Linux).
+# Prevents CRLF rewrites by editors/IDEs/git checkouts across the mixed
+# Windows-host + Linux-container workflow.
+* text=auto eol=lf

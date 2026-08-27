@@ -172,17 +172,9 @@
 
 .set-icon {
     flex-shrink: 0;
-    width: 18px;
-    height: 18px;
+    width: 28px;
+    height: 28px;
     display: inline-block;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}
-
-/* Bright orange ink for set icons */
-.set-symbol {
-    filter: brightness(0) saturate(1) invert(23%) sepia(89%) saturate(2821%) hue-rotate(359deg) brightness(104%) contrast(103%);
 }
 
 .set-code {

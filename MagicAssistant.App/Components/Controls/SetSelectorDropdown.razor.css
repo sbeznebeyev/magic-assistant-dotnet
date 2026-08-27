@@ -101,20 +101,12 @@
     cursor: default;
 }
 
-/* ── Set Icon (background-image from .set-symbol-* classes) ── */
+/* ── Set Icon (gold gradient + mask — global .set-symbol in site.css) ── */
 .set-icon {
-    width: 1.5em;
-    height: 1.5em;
+    width: 28px;
+    height: 28px;
     flex-shrink: 0;
     display: inline-block;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}
-
-/* Bright orange ink for set icons */
-.set-symbol {
-    filter: brightness(0) saturate(1) invert(23%) sepia(89%) saturate(2821%) hue-rotate(359deg) brightness(104%) contrast(103%);
 }
 
 /* ── Label text ──────────────────────────────────────── */
