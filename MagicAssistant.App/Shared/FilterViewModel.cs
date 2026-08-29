@@ -119,7 +119,7 @@ public class FilterViewModel
     /// <summary>When true, filters only Game Changer cards (Commander banned list). False = no filter.</summary>
     public bool GameChangerFilter { get; set; }
 
-    // ── Collection filters (active only when LocationId is set) ──
+    // ── Collection filters (active only when CurrentCollectionId is set) ──
 
     /// <summary>Ownership filter: "all" | "owned" | "borrowed". Default "all" = no filter.</summary>
     public string Ownership { get; set; } = "all";
@@ -145,11 +145,11 @@ public class FilterViewModel
     /// <summary>Only cards with a non-empty comment (Deck.Comment).</summary>
     public bool HasComment { get; set; }
 
-    // ── Location (navigation state) ──
+    // ── Current collection (navigation state) ──
 
     /// <summary>Collection node Id currently displayed in the card list (deck/sideboard/collection/folder).
     /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
-    public int? LocationId { get; set; }
+    public int? CurrentCollectionId { get; set; }
 
     // ── Sort properties ──
 

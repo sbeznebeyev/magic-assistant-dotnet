@@ -117,10 +117,12 @@
                     </select>
                     <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
                     <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
-                    @if (FilterViewModel.LocationId.HasValue)
+                    @if (FilterViewModel.CurrentCollectionId.HasValue
+                        && FixedCollectionId.HasValue
+                        && FilterViewModel.CurrentCollectionId != FixedCollectionId)
                     {
                         <button class="move-btn" @onclick="OnMoveClick" disabled="@(_selectedCardId == null)"
-                                title="@(_selectedCardId == null ? "Select a card to move" : "Move selected card to another location")">📦 Move</button>
+                                title="@(_selectedCardId == null ? "Select a card to move" : "Move selected card to the fixed collection")">📦 Move</button>
                     }
                 </div>
             </div>
@@ -171,6 +173,8 @@
                                   OnCountChanged="ChangeCardCount"
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
+                                  KbAddMode="@(FilterViewModel.CurrentCollectionId is null && FixedCollectionId.HasValue)"
+                                  OnKbAddRequested="AddCardToFixed"
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
                                   OnPrevPage="PrevPage"
@@ -282,8 +286,13 @@
     /// <summary>Split requested for a location card (deck mode only, Count &gt; 1).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnSplitCard { get; set; }
 
-    /// <summary>Open the location picker to move the selected card (deck mode only).</summary>
-    [Parameter] public EventCallback OnOpenLocationPicker { get; set; }
+    /// <summary>Pinned operation target (MainLayout._fixedCollectionId).
+    /// KB-mode (+) and quick Move work against it.</summary>
+    [Parameter] public int? FixedCollectionId { get; set; }
+
+    /// <summary>Quick move: send the selected card (with all copies) to the fixed collection.
+    /// Available only when a different collection is viewed (current != fixed, both set).</summary>
+    [Parameter] public EventCallback<MagicCardPhysical> OnMoveToFixed { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -674,7 +683,7 @@
                 PageSize = _pageSize,
                 NameFilter = effectiveNameFilter,
                 Query = string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery) ? null : FilterViewModel.SearchQuery.Trim(),
-                LocationFilter = FilterViewModel.LocationId,
+                LocationFilter = FilterViewModel.CurrentCollectionId,
                 TypeFilters = FilterViewModel.TypeFilter.Count > 0 ? FilterViewModel.TypeFilter : null,
                 Artist = string.IsNullOrEmpty(FilterViewModel.Artist) ? null : FilterViewModel.Artist,
                 ColorType = string.IsNullOrEmpty(FilterViewModel.ColorType) ? null : FilterViewModel.ColorType,
@@ -709,8 +718,8 @@
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
 
             // Location mode: physical instances for count display and per-card actions
-            _physicalByCardId = FilterViewModel.LocationId.HasValue
-                ? (await DeckCardService.GetDeckCardsAsync(FilterViewModel.LocationId.Value)).ToDictionary(p => p.Card.Id, p => p)
+            _physicalByCardId = FilterViewModel.CurrentCollectionId.HasValue
+                ? (await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value)).ToDictionary(p => p.Card.Id, p => p)
                 : null;
         }
         catch
@@ -751,22 +760,26 @@
 
     private async Task ChangeCardCount((MagicCardPhysical card, int delta) e)
     {
-        if (!FilterViewModel.LocationId.HasValue) return;
+        if (!FilterViewModel.CurrentCollectionId.HasValue) return;
         var (card, delta) = e;
         var newCount = card.Count + delta;
         if (newCount < 0) return;
 
         if (newCount == 0)
-            await DeckCardService.RemoveCardsAsync(FilterViewModel.LocationId.Value, new[] { card.Id }, false);
+            await DeckCardService.RemoveCardsAsync(FilterViewModel.CurrentCollectionId.Value, new[] { card.Id }, false);
         else
-            await DeckCardService.UpdateCardAsync(FilterViewModel.LocationId.Value, card.Id,
+            await DeckCardService.UpdateCardAsync(FilterViewModel.CurrentCollectionId.Value, card.Id,
                 new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = newCount });
 
-        // Record the action in the shared queue (only after a successful DB write)
-        ActionsQueue.Enqueue(new LastActionItem(
-            card.Card,
-            Math.Abs(delta),
-            delta > 0 ? LastActionOperationEnum.Add : LastActionOperationEnum.Sub));
+        // Record the action in the shared queue — only when operating on the fixed collection itself
+        // (operations on a merely viewed collection are not part of its history).
+        if (FilterViewModel.CurrentCollectionId == FixedCollectionId)
+        {
+            ActionsQueue.Enqueue(new LastActionItem(
+                card.Card,
+                Math.Abs(delta),
+                delta > 0 ? LastActionOperationEnum.Add : LastActionOperationEnum.Sub));
+        }
 
         // Re-query current page + refresh count map (no page reset)
         await ApplyFiltersAndPagination();
@@ -780,10 +793,21 @@
             await OnSplitCard.InvokeAsync(card);
     }
 
-    /// <summary>Notification callback — no data, so plain EventCallback (docs 08_events, rule 1).</summary>
+    /// <summary>Look up the selected physical instance and hand it to MainLayout for the quick move.</summary>
     private async Task OnMoveClick()
     {
-        await OnOpenLocationPicker.InvokeAsync();
+        if (_selectedCardId is null) return;
+        if (_physicalByCardId?.TryGetValue(_selectedCardId.Value, out var physical) != true) return;
+        await OnMoveToFixed.InvokeAsync(physical);
+    }
+
+    /// <summary>KB mode: add one copy of the card to the fixed collection (merge semantics if already present).</summary>
+    private async Task AddCardToFixed(MagicCard card)
+    {
+        if (!FixedCollectionId.HasValue) return;
+
+        await DeckCardService.MaterializeFromIdsAsync(FixedCollectionId.Value, new[] { card.Id });
+        ActionsQueue.Enqueue(new LastActionItem(card, 1, LastActionOperationEnum.Add));
     }
 
     // ── Sort — through single channel ────────────────────
@@ -939,7 +963,7 @@
         || FilterViewModel.IsFoil
         || FilterViewModel.HasForTrade
         || FilterViewModel.HasComment
-        || FilterViewModel.LocationId.HasValue;
+        || FilterViewModel.CurrentCollectionId.HasValue;
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {

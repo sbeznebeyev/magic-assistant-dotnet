@@ -37,6 +37,13 @@
                                             @onclick="() => ChangeCount(physical, 1)" title="Increase count">+</button>
                                 </div>
                             }
+                            else if (KbAddMode)
+                            {
+                                <div class="count-control">
+                                    <button class="count-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => AddToFixed(card)" title="Add to fixed collection">+</button>
+                                </div>
+                            }
                             else
                             {
                                 @((CurrentPage - 1) * PageSize + i + 1)
@@ -116,6 +123,12 @@
     /// <summary>Split requested for a location card (only when Count &gt; 1).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnSplitRequested { get; set; }
 
+    /// <summary>KB mode with a fixed collection set: show a (+) button that adds the card to it.</summary>
+    [Parameter] public bool KbAddMode { get; set; }
+
+    /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
+    [Parameter] public EventCallback<MagicCard> OnKbAddRequested { get; set; }
+
     private bool HasPrev => CurrentPage > 1;
     private bool HasNext => CurrentPage < TotalPages;
 
@@ -142,6 +155,8 @@
     private async Task EditCard(MagicCardPhysical card) => await OnEditRequested.InvokeAsync(card);
 
     private async Task SplitCard(MagicCardPhysical card) => await OnSplitRequested.InvokeAsync(card);
+
+    private async Task AddToFixed(MagicCard card) => await OnKbAddRequested.InvokeAsync(card);
 
     /// <summary>Mana cost for the Cost column; double-sided cards show "front // back".</summary>
     private static string ManaCost(MagicCard magicCard)

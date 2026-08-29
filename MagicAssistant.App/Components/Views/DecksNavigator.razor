@@ -40,7 +40,7 @@
             {
                 <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
                           Depth="0"
-                          SelectedId="@SelectedNode?.Id"
+                          SelectedId="@SelectedNodeId"
                           ActiveAddMenuNodeId="@_activeAddMenuNodeId"
                           ExpandedSet="@_expandedNodes"
                           OnToggleExpand="ToggleNodeExpanded"
@@ -148,16 +148,6 @@
     /// <summary>Folder IDs that are visually expanded. Decoupled from data — collapse only hides.</summary>
     private HashSet<int> _expandedNodes = new();
 
-    /// <summary>
-    /// Единый узел выбора: Deck, Collection или Sideboard (NavigatorNodeDeck.Sideboard).
-    /// </summary>
-    private NavigatorNodeBase? SelectedNode
-    {
-        get => _selectedNode;
-        set => _selectedNode = value;
-    }
-    private NavigatorNodeBase? _selectedNode;
-
     private bool _loading;
     private string? _error;
 
@@ -201,6 +191,13 @@
     [Parameter] public EventCallback<int> OnDeckSelected { get; set; }
     [Parameter] public EventCallback<NavigatorNodeBase> OnOpenProperties { get; set; }
     [Parameter] public EventCallback OnShowAllCards { get; set; }
+
+    /// <summary>A node (and its subtree) was deleted — MainLayout drops any context referencing it.</summary>
+    [Parameter] public EventCallback<int> OnNodeDeleted { get; set; }
+
+    /// <summary>Currently displayed collection node (MainLayout._currentCollectionId).
+    /// The tree highlight is a pure projection of this value — the navigator holds no selection state of its own.</summary>
+    [Parameter] public int? SelectedNodeId { get; set; }
 
     // ── Lifecycle ──────────────────────────────────────────
     protected override async Task OnInitializedAsync()
@@ -275,15 +272,14 @@
             _expandedNodes.Add(folderId);
     }
 
-    /// <summary>Выбор узла — присваиваем SelectedNode и уведомляем MainLayout.
-    /// Локация (FilterViewModel.LocationId) меняется только для Collection/Deck/Sideboard;
-    /// папки локацию не выбирают.</summary>
-    private void OnSelectDeck(NavigatorNodeBase node)
+    /// <summary>Selection request from the tree (deck/collection/SB). The highlight follows
+    /// the SelectedNodeId parameter — MainLayout owns the selection state.
+    /// Folders are not locations and never select; re-clicking the displayed node is a no-op.</summary>
+    private async Task OnSelectDeck(NavigatorNodeBase node)
     {
-        if (SelectedNode == node) return;
-        SelectedNode = node;
-        if (node != null && node.NodeType != NodeType.Folder)
-            _ = OnDeckSelected.InvokeAsync(node.Id);
+        if (node.NodeType == NodeType.Folder) return;
+        if (node.Id == SelectedNodeId) return;
+        await OnDeckSelected.InvokeAsync(node.Id);
     }
 
     private async Task HandleShowAllCards()
@@ -369,7 +365,7 @@
             CloseCreateDialog();
 
             if (created.NodeType == NodeType.Deck || created.NodeType == NodeType.Collection)
-                OnSelectDeck(created);
+                await OnSelectDeck(created);
         }
         catch (Exception ex)
         {
@@ -452,9 +448,11 @@
         if (_deleteTarget == null) return;
         try
         {
-            await DeckManagement.DeleteDeckAsync(_deleteTarget.Id);
-            RemoveFromTree(_deleteTarget.Id);
+            var deletedId = _deleteTarget.Id;
+            await DeckManagement.DeleteDeckAsync(deletedId);
+            RemoveFromTree(deletedId);
             CloseDeleteConfirm();
+            await OnNodeDeleted.InvokeAsync(deletedId);
         }
         catch (Exception ex)
         {

@@ -174,7 +174,7 @@
                 </div>
 
                 @* ── Collection filters — only when a location (deck/collection/sideboard) is selected ── *@
-                @if (FilterViewModel.LocationId.HasValue)
+                @if (FilterViewModel.CurrentCollectionId.HasValue)
                 {
                     <div class="filter-field-row collection-filters">
                         <label class="filter-label">Collection</label>

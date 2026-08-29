@@ -23,13 +23,12 @@
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
     @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
-    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_selectedDeckId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
-    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_selectedDeckId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
+    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_currentCollectionId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
+    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
     @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
-    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_selectedDeckId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
-    @if (_showLocationPicker) { <LocationPickerDialog IsOpen="@_showLocationPicker" OnSelected="OnLocationSelected" IsOpenChanged="@(v => _showLocationPicker = v)" /> }
-    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_selectedDeckId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
+    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
+    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_currentCollectionId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
     
 
     @* ── Main Grid ── *@
@@ -38,13 +37,15 @@
             <div class="navigator-scroll">
                 <DecksNavigator
                     OnDeckSelected="OnDeckSelected"
-                    OnOpenProperties="@(async n => await OnOpenPropertiesFromNav(n))"
-                    OnShowAllCards="OnShowKB" />
+                    OnOpenProperties="OnOpenPropertiesFromNav"
+                    OnShowAllCards="OnShowKB"
+                    OnNodeDeleted="OnNodeDeleted"
+                    SelectedNodeId="@_currentCollectionId" />
                 @* TODO: Fix NullReferenceException in child components *@
             </div>
 
             <hr class="divider" />
-            <LastActions Queue="@_lastActionsQueue" ActiveName="@_activeNodeName" LocationId="@_selectedDeckId" />
+            <LastActions Queue="@_lastActionsQueue" ActiveName="@_fixedNodeName" FixedCollectionId="@_fixedCollectionId" />
         </div>
 
         <div class="panel-center">
@@ -54,13 +55,13 @@
 
             <div style="height:4px"></div>
 
-            @if (_selectedDeckId != null)
+            @if (_currentCollectionId != null)
             {
                 <TabBar ActiveTab="@ActiveTab" OnTabSelected="@(tab => ActiveTab = tab)" />
             }
 
-            <div class="content-area" @key="_selectedDeckId">
-                @if (_selectedDeckId != null)
+            <div class="content-area" @key="_currentCollectionId">
+                @if (_currentCollectionId != null)
                 {
                     @RenderDeckContent()
                 }
@@ -87,8 +88,15 @@
 
 @code {
     // ── Navigation State ──
-    private int? _selectedDeckId;
-    private string? _activeNodeName;
+    /// <summary>Collection node currently displayed in the center panel (null = Knowledge Base).</summary>
+    private int? _currentCollectionId;
+
+    /// <summary>Pinned operation target: LastActions and KB-mode card adds work against it.
+    /// Only DecksNavigator selection can change it.</summary>
+    private int? _fixedCollectionId;
+
+    /// <summary>Name of the fixed collection — LastActions "Active:" line.</summary>
+    private string? _fixedNodeName;
     private Guid? _selectedCardId;
     private bool? _selectedCardShowBack;
     private string ActiveTab = "cards";
@@ -106,7 +114,6 @@
 
     private bool _showFilterDialog;
     private bool _showSplitDialog;
-    private bool _showLocationPicker;
     private bool _showEditDeckPropertiesDialog;
 
     // ── Dialog Data ──
@@ -130,20 +137,31 @@
             _selectedCardShowBack = e.showBack;
         }
     }
-    private async Task OnDeckSelected(int deckId)
+    /// <summary>Navigator selection — the ONLY writer of _fixedCollectionId. Sets both contexts.</summary>
+    private async Task OnDeckSelected(int nodeId)
     {
-        var deckChanged = _selectedDeckId != deckId;
-        _selectedDeckId = deckId;
+        var fixedChanged = _fixedCollectionId != nodeId;
+        _currentCollectionId = nodeId;
+        _fixedCollectionId = nodeId;
         ActiveTab = "cards";
-        _filterViewModel.LocationId = deckId;
-        _activeNodeName = await GetNodeNameAsync(deckId);
+        _filterViewModel.CurrentCollectionId = nodeId;
+        _fixedNodeName = await GetNodeNameAsync(nodeId);
         _filterViewModel.Apply();
-        // History is not stored across decks — fresh queue for the new active location.
-        if (deckChanged)
+        // History is not stored across working collections — fresh queue when the fixed one changes.
+        if (fixedChanged)
             _lastActionsQueue.Clear();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>InstancesView jump — display context only; the fixed collection (operation target) is untouched.</summary>
+    private void OnDeckSelectedFromInstance(int deckId)
+    {
+        _currentCollectionId = deckId;
+        ActiveTab = "cards";
+        _filterViewModel.CurrentCollectionId = deckId;
+        _filterViewModel.Apply();
         InvokeAsync(StateHasChanged);
     }
-    private async Task OnDeckSelectedFromInstance(int deckId) => await OnDeckSelected(deckId);
 
     /// <summary>Resolves the display name of a navigation node (collection/deck/sideboard).</summary>
     private async Task<string?> GetNodeNameAsync(int nodeId)
@@ -159,24 +177,20 @@
         }
     }
 
-    /// <summary>Switch center panel to Knowledge Base view.</summary>
+    /// <summary>Switch center panel to Knowledge Base view.
+    /// The fixed collection survives — KB card adds keep targeting it.</summary>
     private void OnShowKB()
     {
-        _selectedDeckId = null;
-        _activeNodeName = null;
+        _currentCollectionId = null;
         _selectedCardId = null;
-        _filterViewModel.LocationId = null;
+        _filterViewModel.CurrentCollectionId = null;
         _filterViewModel.Apply();
-        // Leaving deck context entirely — history is not stored.
-        _lastActionsQueue.Clear();
     }
 
-    private async Task OnOpenPropertiesFromNav(NavigatorNodeBase node)
+    /// <summary>Properties is a dialog, not navigation: only the display context changes.</summary>
+    private void OnOpenPropertiesFromNav(NavigatorNodeBase node)
     {
-        // Opening Properties switches the active node — queue history dies with the old context.
-        if (_selectedDeckId != node.Id)
-            _lastActionsQueue.Clear();
-        _selectedDeckId = node.Id;
+        _currentCollectionId = node.Id;
         _showEditDeckPropertiesDialog = true;
     }
 
@@ -240,62 +254,70 @@
 
 
     private void OnSplitDone() { _statusText = "Card split"; StateHasChanged(); }
-    /// <summary>Move the currently selected card from the open deck to the picked location.</summary>
-    private async Task OnLocationSelected(LocationResult result)
+    /// <summary>Quick move: the selected card (with all its copies) moves from the viewed collection to the fixed one.</summary>
+    private async Task OnMoveToFixed(MagicCardPhysical card)
     {
-        if (_selectedDeckId == null || _selectedCardId == null)
-        {
-            _statusText = "Select a card first";
-            _showLocationPicker = false;
-            return;
-        }
-
-        var targetId = result.DeckId;
-        if (result.IsSideboard)
-        {
-            // Resolve the hidden sideboard child (NodeType=3) of the picked deck.
-            NavigatorNodeDeck? deck;
-            try
-            {
-                deck = (await DeckManagement.GetNodesBranchAsync(result.DeckId)) as NavigatorNodeDeck;
-            }
-            catch
-            {
-                deck = null;  // e.g. legacy deck without a sideboard child
-            }
-
-            if (deck?.Sideboard is null)
-            {
-                _statusText = "Target sideboard not found";
-                return;  // dialog stays open — user can pick another target
-            }
-
-            targetId = deck.Sideboard.Id;
-        }
-
-        if (targetId == _selectedDeckId.Value)
-        {
-            _statusText = "Source and target must differ";
-            return;  // dialog stays open — user can pick another target
-        }
+        if (_currentCollectionId == null || _fixedCollectionId == null) return;
+        if (_currentCollectionId == _fixedCollectionId) return;
 
         try
         {
-            var moved = await DeckCardService.MoveCardsAsync(_selectedDeckId.Value, new[] { _selectedCardId.Value }, targetId);
+            var moved = await DeckCardService.MoveCardsAsync(_currentCollectionId.Value, new[] { card.Id }, _fixedCollectionId.Value);
             if (moved > 0)
             {
-                _statusText = $"Moved card to location {targetId}";
-                _showLocationPicker = false;
-                _kbRefreshTrigger++;  // reload the deck list
+                // Addition to the working collection — record it in LastActions.
+                _lastActionsQueue.Enqueue(new LastActionItem(card.Card, card.Count, LastActionOperationEnum.Add));
+                _statusText = $"Moved card to location {_fixedCollectionId.Value}";
+                _kbRefreshTrigger++;  // reload the viewed list
             }
             else
             {
-                _statusText = "Nothing to move — card not found in this deck";
+                _statusText = "Nothing to move — card not found in this collection";
             }
         }
         catch (Exception ex)
         {
             _statusText = $"Move failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>A node was deleted in the navigator — drop any context that references it (direct hit or folder cascade).</summary>
+    private async Task OnNodeDeleted(int deletedNodeId)
+    {
+        var fixedGone = _fixedCollectionId.HasValue && await IsNodeGoneAsync(_fixedCollectionId.Value);
+
+        // Validate the display context only if it differs from the fixed one (same node → reuse the check).
+        var currentGone = _currentCollectionId.HasValue
+            && (_currentCollectionId == _fixedCollectionId ? fixedGone : await IsNodeGoneAsync(_currentCollectionId.Value));
+
+        if (fixedGone)
+        {
+            _fixedCollectionId = null;
+            _fixedNodeName = null;
+            _lastActionsQueue.Clear();
+        }
+
+        // Same for the display context (deleting the viewed collection left a ghost before).
+        if (currentGone)
+        {
+            _currentCollectionId = null;
+            _selectedCardId = null;
+            _filterViewModel.CurrentCollectionId = null;
+            _filterViewModel.Apply();
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<bool> IsNodeGoneAsync(int nodeId)
+    {
+        try
+        {
+            return await DeckManagement.GetByIdAsync(nodeId) is null;
+        }
+        catch
+        {
+            return true;  // unreachable node — treat as gone
         }
     }
     private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
@@ -306,13 +328,13 @@
     private RenderFragment RenderDeckContent() => @<div>
         @switch (ActiveTab)
         {
-            case "curve": <ManaCurvePage DeckId="@_selectedDeckId!.Value" /> break;
-            case "colors": <SpellColourPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "creatures": <CreaturePage DeckId="@_selectedDeckId!.Value" /> break;
-            case "types": <TypePage DeckId="@_selectedDeckId!.Value" /> break;
-            case "abilities": <AbilityPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "info": <InfoPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "legality": <DeckLegalityPage DeckId="@_selectedDeckId!.Value" /> break;
+            case "curve": <ManaCurvePage DeckId="@_currentCollectionId!.Value" /> break;
+            case "colors": <SpellColourPage DeckId="@_currentCollectionId!.Value" /> break;
+            case "creatures": <CreaturePage DeckId="@_currentCollectionId!.Value" /> break;
+            case "types": <TypePage DeckId="@_currentCollectionId!.Value" /> break;
+            case "abilities": <AbilityPage DeckId="@_currentCollectionId!.Value" /> break;
+            case "info": <InfoPage DeckId="@_currentCollectionId!.Value" /> break;
+            case "legality": <DeckLegalityPage DeckId="@_currentCollectionId!.Value" /> break;
             case "collector": <CollectorView /> break;
             default:
                 <CardsListControl FilterViewModel="@_filterViewModel"
@@ -322,9 +344,10 @@
                                   OnOpenSync="OnOpenSyncDialog"
                                   RefreshTrigger="@_kbRefreshTrigger"
                                   ActionsQueue="@_lastActionsQueue"
+                                  FixedCollectionId="@_fixedCollectionId"
                                   OnEditCard="OpenEditCard"
                                   OnSplitCard="OpenSplit"
-                                  OnOpenLocationPicker="@(() => _showLocationPicker = true)" />
+                                  OnMoveToFixed="OnMoveToFixed" />
                 break;
         }
     </div>;
@@ -338,7 +361,8 @@
                                 OnOpenFilter="@(() => _showFilterDialog = true)"
                                 OnOpenSync="OnOpenSyncDialog"
                                 RefreshTrigger="@_kbRefreshTrigger"
-                                ActionsQueue="@_lastActionsQueue" />
+                                ActionsQueue="@_lastActionsQueue"
+                                FixedCollectionId="@_fixedCollectionId" />
         </div>;
     }
 }

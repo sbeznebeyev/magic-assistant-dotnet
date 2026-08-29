@@ -74,7 +74,8 @@
 @code {
     [Parameter] public required LastActionsQueue Queue { get; set; }
     [Parameter] public string? ActiveName { get; set; }
-    [Parameter] public int? LocationId { get; set; }
+    /// <summary>Pinned operation target — totals are computed in this collection.</summary>
+    [Parameter] public int? FixedCollectionId { get; set; }
 
     private Dictionary<Guid, int> _countsByCardId = new();
 
@@ -102,7 +103,7 @@
     /// <summary>Current per-card counts in the active location (totals after the recorded operation).</summary>
     private async Task ReloadCountsAsync()
     {
-        if (!LocationId.HasValue)
+        if (!FixedCollectionId.HasValue)
         {
             _countsByCardId = new();
             return;
@@ -110,7 +111,7 @@
 
         try
         {
-            var cards = await DeckCardService!.GetDeckCardsAsync(LocationId.Value);
+            var cards = await DeckCardService!.GetDeckCardsAsync(FixedCollectionId.Value);
             _countsByCardId = cards
                 .GroupBy(c => c.Card.Id)
                 .ToDictionary(g => g.Key, g => g.Sum(x => x.Count));
