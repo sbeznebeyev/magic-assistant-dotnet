@@ -358,3 +358,86 @@
 .other-checkbox input[type="checkbox"] {
     accent-color: #0078d4;
 }
+
+/* ── Collection filters (location mode only) ─────────── */
+.collection-filters {
+    border-top: 1px solid #383838;
+    padding-top: 10px;
+    gap: 8px;
+}
+
+.collection-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.collection-group-title {
+    width: 110px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #999;
+}
+
+.ownership-options,
+.tag-options {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.owner-option,
+.tag-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #ccc;
+    cursor: pointer;
+    user-select: none;
+}
+
+.owner-option input[type="radio"],
+.tag-option input[type="checkbox"] {
+    accent-color: #0078d4;
+    margin: 0;
+}
+
+.range-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.range-input {
+    width: 64px;
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.range-input:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+.range-sep {
+    color: #666;
+}
+
+/* Collection section is read-only while the feature is disabled */
+.collection-filters input[type="radio"]:disabled,
+.collection-filters input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.collection-filters input[type="number"]:disabled {
+    color: #666;
+    background: #191919;
+    cursor: not-allowed;
+}

@@ -119,6 +119,32 @@ public class FilterViewModel
     /// <summary>When true, filters only Game Changer cards (Commander banned list). False = no filter.</summary>
     public bool GameChangerFilter { get; set; }
 
+    // ── Collection filters (active only when LocationId is set) ──
+
+    /// <summary>Ownership filter: "all" | "owned" | "borrowed". Default "all" = no filter.</summary>
+    public string Ownership { get; set; } = "all";
+
+    /// <summary>Minimum card count in the location (Deck.Count). Parsed at query time. Empty string = inactive.</summary>
+    public string MinCount { get; set; } = string.Empty;
+
+    /// <summary>Maximum card count in the location (Deck.Count). Parsed at query time. Empty string = inactive.</summary>
+    public string MaxCount { get; set; } = string.Empty;
+
+    /// <summary>Minimum price in USD (Cards.Usd). Parsed at query time. Empty string = inactive.</summary>
+    public string MinPrice { get; set; } = string.Empty;
+
+    /// <summary>Maximum price in USD (Cards.Usd). Parsed at query time. Empty string = inactive.</summary>
+    public string MaxPrice { get; set; } = string.Empty;
+
+    /// <summary>Foil filter — carried to the DB layer, not used in SQL yet (no foil flag column exists).</summary>
+    public bool IsFoil { get; set; }
+
+    /// <summary>Only cards marked For Trade (Deck.ForTradeCount &gt; 0).</summary>
+    public bool HasForTrade { get; set; }
+
+    /// <summary>Only cards with a non-empty comment (Deck.Comment).</summary>
+    public bool HasComment { get; set; }
+
     // ── Location (navigation state) ──
 
     /// <summary>Collection node Id currently displayed in the card list (deck/sideboard/collection/folder).
@@ -244,5 +270,15 @@ public class FilterViewModel
         LayoutFilter = string.Empty;
         LegalityFilter = string.Empty;
         GameChangerFilter = false;
+
+        // Collection filters (location mode)
+        Ownership = "all";
+        MinCount = string.Empty;
+        MaxCount = string.Empty;
+        MinPrice = string.Empty;
+        MaxPrice = string.Empty;
+        IsFoil = false;
+        HasForTrade = false;
+        HasComment = false;
     }
 }

@@ -62,6 +62,32 @@ public class CardListFilter
     /// <summary>When true, filters only cards where GameChanger = 1.</summary>
     public bool GameChangerFilter { get; init; }
 
+    // ── Collection filters — applied only when LocationFilter is set ──
+
+    /// <summary>Ownership filter: "all" | "owned" | "borrowed". "all"/null = no filter. Maps to Deck.IsOwn.</summary>
+    public string? Ownership { get; init; }
+
+    /// <summary>Minimum card count in the location (Deck.Count &gt;= value). Null = inactive.</summary>
+    public int? MinCount { get; init; }
+
+    /// <summary>Maximum card count in the location (Deck.Count &lt;= value). Null = inactive.</summary>
+    public int? MaxCount { get; init; }
+
+    /// <summary>Minimum price in USD (CAST(Cards.Usd AS REAL) &gt;= value). Null = inactive.</summary>
+    public float? MinPrice { get; init; }
+
+    /// <summary>Maximum price in USD (CAST(Cards.Usd AS REAL) &lt;= value). Null = inactive.</summary>
+    public float? MaxPrice { get; init; }
+
+    /// <summary>Foil filter — carried to the DB layer, intentionally not used in SQL yet (no foil flag column exists).</summary>
+    public bool IsFoil { get; init; }
+
+    /// <summary>Only cards marked For Trade (Deck.ForTradeCount IS NOT NULL AND &gt; 0). Requires LocationFilter.</summary>
+    public bool HasForTrade { get; init; }
+
+    /// <summary>Only cards with a non-empty comment (Deck.Comment). Requires LocationFilter.</summary>
+    public bool HasComment { get; init; }
+
     public int Offset => (Page - 1) * PageSize;
 
     /// Valid sort column names in the Cards table.

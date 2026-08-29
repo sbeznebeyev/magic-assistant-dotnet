@@ -682,6 +682,42 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             fromClause = @"FROM Cards
                 INNER JOIN Deck d ON d.CardId = Cards.Id AND d.CollectionId = @LocationId";
             parameters.Add("LocationId", filter.LocationFilter.Value);
+
+            // Collection filters — location mode only (alias d exists here).
+            if (!string.IsNullOrEmpty(filter.Ownership) && filter.Ownership != "all")
+            {
+                whereParts.Add(filter.Ownership == "owned" ? "d.IsOwn = 1" : "d.IsOwn = 0");
+            }
+            if (filter.MinCount.HasValue)
+            {
+                whereParts.Add("d.Count >= @MinCount");
+                parameters.Add("MinCount", filter.MinCount.Value);
+            }
+            if (filter.MaxCount.HasValue)
+            {
+                whereParts.Add("d.Count <= @MaxCount");
+                parameters.Add("MaxCount", filter.MaxCount.Value);
+            }
+            // Price range on Cards.Usd (TEXT from Scryfall — cast to REAL; guard NULL/empty).
+            if (filter.MinPrice.HasValue)
+            {
+                whereParts.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) >= @MinPrice)");
+                parameters.Add("MinPrice", filter.MinPrice.Value);
+            }
+            if (filter.MaxPrice.HasValue)
+            {
+                whereParts.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) <= @MaxPrice)");
+                parameters.Add("MaxPrice", filter.MaxPrice.Value);
+            }
+            if (filter.HasForTrade)
+            {
+                whereParts.Add("d.ForTradeCount IS NOT NULL AND d.ForTradeCount > 0");
+            }
+            if (filter.HasComment)
+            {
+                whereParts.Add("d.Comment IS NOT NULL AND d.Comment != ''");
+            }
+            // filter.IsFoil — placeholder: no foil flag column yet, intentionally not used in SQL.
         }
 
         var whereClause = whereParts.Count > 0 ? "WHERE " + string.Join(" AND ", whereParts) : "";

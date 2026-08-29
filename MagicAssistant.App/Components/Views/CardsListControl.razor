@@ -688,6 +688,15 @@
                 LayoutFilter = string.IsNullOrEmpty(FilterViewModel.LayoutFilter) ? null : FilterViewModel.LayoutFilter,
                 LegalityFilter = string.IsNullOrEmpty(FilterViewModel.LegalityFilter) ? null : FilterViewModel.LegalityFilter,
                 GameChangerFilter = FilterViewModel.GameChangerFilter,
+                // Collection filters (location mode)
+                Ownership = FilterViewModel.Ownership,
+                MinCount = ParseCountFilter(FilterViewModel.MinCount),
+                MaxCount = ParseCountFilter(FilterViewModel.MaxCount),
+                MinPrice = ParsePriceFilter(FilterViewModel.MinPrice),
+                MaxPrice = ParsePriceFilter(FilterViewModel.MaxPrice),
+                IsFoil = FilterViewModel.IsFoil,
+                HasForTrade = FilterViewModel.HasForTrade,
+                HasComment = FilterViewModel.HasComment,
             };
 
             var result = await CardSearch!.GetPagedAsync(filter);
@@ -723,6 +732,15 @@
 
         return new NumericPropertyFilter { Operator = op, Value = num };
     }
+
+    /// <summary>Parse a card count filter (Deck.Count). Returns null if empty/non-integer (filter inactive).</summary>
+    private static int? ParseCountFilter(string value) =>
+        int.TryParse(value?.Trim(), out var num) ? num : null;
+
+    /// <summary>Parse a price filter in USD (Cards.Usd). Returns null if empty/non-numeric (filter inactive).</summary>
+    private static float? ParsePriceFilter(string value) =>
+        float.TryParse(value?.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var num)
+            ? num : null;
 
     // ── Location mode: per-card actions ───────────────────────────────────
     private Dictionary<Guid, int>? GetCountMap() =>
@@ -903,6 +921,15 @@
         || !string.IsNullOrWhiteSpace(FilterViewModel.LayoutFilter)
         || !string.IsNullOrWhiteSpace(FilterViewModel.LegalityFilter)
         || FilterViewModel.GameChangerFilter
+        // Collection filters (location mode)
+        || FilterViewModel.Ownership != "all"
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MinCount)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MaxCount)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MinPrice)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MaxPrice)
+        || FilterViewModel.IsFoil
+        || FilterViewModel.HasForTrade
+        || FilterViewModel.HasComment
         || FilterViewModel.LocationId.HasValue;
 
     async ValueTask IAsyncDisposable.DisposeAsync()

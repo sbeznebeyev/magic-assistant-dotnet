@@ -29,7 +29,6 @@
     @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
     @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_selectedDeckId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
     @if (_showLocationPicker) { <LocationPickerDialog IsOpen="@_showLocationPicker" OnSelected="OnLocationSelected" IsOpenChanged="@(v => _showLocationPicker = v)" /> }
-    @if (_showDeckFilterDialog) { <DeckFilterDialog IsOpen="@_showDeckFilterDialog" OnFilterApplied="OnDeckFilterApplied" IsOpenChanged="@(v => _showDeckFilterDialog = v)" /> }
     @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_selectedDeckId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
     
 
@@ -102,7 +101,6 @@
     private bool _showFilterDialog;
     private bool _showSplitDialog;
     private bool _showLocationPicker;
-    private bool _showDeckFilterDialog;
     private bool _showEditDeckPropertiesDialog;
 
     // ── Dialog Data ──
@@ -266,7 +264,6 @@
             _statusText = $"Move failed: {ex.Message}";
         }
     }
-    private void OnDeckFilterApplied(DeckFilterResult result) => _statusText = "Deck filter applied";
     private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
     // ── Global Search ──
     private void OnGlobalSearchCompleted(string query) => _statusText = string.IsNullOrEmpty(query) ? "Ready" : $"Search: \"{query}\"";

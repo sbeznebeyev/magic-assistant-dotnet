@@ -172,6 +172,77 @@
                         Game Changer
                     </button>
                 </div>
+
+                @* ── Collection filters — only when a location (deck/collection/sideboard) is selected ── *@
+                @if (FilterViewModel.LocationId.HasValue)
+                {
+                    <div class="filter-field-row collection-filters">
+                        <label class="filter-label">Collection</label>
+
+                        <div class="collection-group">
+                            <span class="collection-group-title">Ownership</span>
+                            <div class="ownership-options">
+                                @* Read-only for now — the Collection feature is disabled pending wiring *@
+                                <label class="owner-option">
+                                    <input type="radio" name="ownership-filter" value="all" checked="@(FilterViewModel.Ownership == "all")" @onchange="OnOwnershipChanged" disabled />
+                                    <span>All</span>
+                                </label>
+                                <label class="owner-option">
+                                    <input type="radio" name="ownership-filter" value="owned" checked="@(FilterViewModel.Ownership == "owned")" @onchange="OnOwnershipChanged" disabled />
+                                    <span>Owned</span>
+                                </label>
+                                <label class="owner-option">
+                                    <input type="radio" name="ownership-filter" value="borrowed" checked="@(FilterViewModel.Ownership == "borrowed")" @onchange="OnOwnershipChanged" disabled />
+                                    <span>Borrowed</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="collection-group">
+                            <span class="collection-group-title">Card Count</span>
+                            <div class="range-row">
+                                <input type="number" min="1" max="4" value="@FilterViewModel.MinCount"
+                                       @oninput="(e) => FilterViewModel.MinCount = SanitizeNumericInput(e.Value?.ToString())"
+                                       class="range-input" placeholder="Min" disabled />
+                                <span class="range-sep">—</span>
+                                <input type="number" min="1" max="4" value="@FilterViewModel.MaxCount"
+                                       @oninput="(e) => FilterViewModel.MaxCount = SanitizeNumericInput(e.Value?.ToString())"
+                                       class="range-input" placeholder="Max" disabled />
+                            </div>
+                        </div>
+
+                        <div class="collection-group">
+                            <span class="collection-group-title">Price Range ($)</span>
+                            <div class="range-row">
+                                <input type="number" min="0" step="0.01" value="@FilterViewModel.MinPrice"
+                                       @oninput="(e) => FilterViewModel.MinPrice = SanitizeNumericInput(e.Value?.ToString())"
+                                       class="range-input" placeholder="Min" disabled />
+                                <span class="range-sep">—</span>
+                                <input type="number" min="0" step="0.01" value="@FilterViewModel.MaxPrice"
+                                       @oninput="(e) => FilterViewModel.MaxPrice = SanitizeNumericInput(e.Value?.ToString())"
+                                       class="range-input" placeholder="Max" disabled />
+                            </div>
+                        </div>
+
+                        <div class="collection-group">
+                            <span class="collection-group-title">Special Tags</span>
+                            <div class="tag-options">
+                                <label class="tag-option">
+                                    <input type="checkbox" checked="@FilterViewModel.IsFoil" @onchange="@(() => FilterViewModel.IsFoil = !FilterViewModel.IsFoil)" disabled />
+                                    <span>Foil</span>
+                                </label>
+                                <label class="tag-option">
+                                    <input type="checkbox" checked="@FilterViewModel.HasForTrade" @onchange="@(() => FilterViewModel.HasForTrade = !FilterViewModel.HasForTrade)" disabled />
+                                    <span>For Trade</span>
+                                </label>
+                                <label class="tag-option">
+                                    <input type="checkbox" checked="@FilterViewModel.HasComment" @onchange="@(() => FilterViewModel.HasComment = !FilterViewModel.HasComment)" disabled />
+                                    <span>Has Comment</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                }
         </div>
 
         @* ── Footer ── *@
@@ -333,10 +404,15 @@
         FilterViewModel.ColorFilters[flag] = !FilterViewModel.ColorFilters[flag];
     }
 
-    // ── Numeric input sanitization (Power / Toughness / CMC) ──
+    /// <summary>Ownership radio change — the value comes from the input's value attribute (all/owned/borrowed).</summary>
+    private void OnOwnershipChanged(ChangeEventArgs e) => FilterViewModel.Ownership = e.Value?.ToString() ?? "all";
+
+    // ── Numeric input sanitization (Power / Toughness / CMC / Collection ranges) ──
     /// <summary>Strip all non-numeric characters except a single dot. Replaces comma with dot.</summary>
-    private static string SanitizeNumericInput(string input)
+    private static string SanitizeNumericInput(string? input)
     {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+
         // Replace comma with dot (European input)
         input = input.Replace(',', '.');
 
