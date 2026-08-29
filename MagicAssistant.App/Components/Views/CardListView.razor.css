@@ -55,6 +55,79 @@
     vertical-align: middle;
 }
 
+.count-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.count-btn {
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+}
+
+.count-btn:hover {
+    background: #555;
+    color: #fff;
+}
+
+.count-value {
+    min-width: 20px;
+    text-align: center;
+    font-weight: 600;
+    color: #eee;
+}
+
+.edit-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+tr:hover .edit-btn,
+.selected .edit-btn {
+    opacity: 1;
+}
+
+.edit-btn:hover {
+    color: #0078d4;
+}
+
+.split-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+tr:hover .split-btn,
+.selected .split-btn {
+    opacity: 1;
+}
+
+.split-btn:hover {
+    color: #0078d4;
+}
+
 .col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
 .col-name   { width: 50%; }
 .col-cost   { width: 1%; white-space: nowrap; }

@@ -43,9 +43,8 @@
 
         <div class="panel-center">
             <SearchControl
-                OnSearchCompleted="OnGlobalSearchCompleted"
-                OnResultCountChanged="OnGlobalSearchResultCount"
-                InDeckView="false" />
+                FilterViewModel="@_filterViewModel"
+                OnSearchCompleted="OnGlobalSearchCompleted" />
 
             <div style="height:4px"></div>
 
@@ -126,6 +125,8 @@
     {
         _selectedDeckId = deckId;
         ActiveTab = "cards";
+        _filterViewModel.LocationId = deckId;
+        _filterViewModel.Apply();
         InvokeAsync(StateHasChanged);
     }
     private void OnDeckSelectedFromInstance(int deckId) => OnDeckSelected(deckId);
@@ -135,6 +136,8 @@
     {
         _selectedDeckId = null;
         _selectedCardId = null;
+        _filterViewModel.LocationId = null;
+        _filterViewModel.Apply();
     }
 
     private async Task OnOpenPropertiesFromNav(NavigatorNodeBase node)
@@ -207,8 +210,7 @@
     private void OnDeckFilterApplied(DeckFilterResult result) => _statusText = "Deck filter applied";
     private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
     // ── Global Search ──
-    private void OnGlobalSearchCompleted(string query) => _statusText = $"Search: \"{query}\"";
-    private void OnGlobalSearchResultCount(int count) => _statusText = $"{count} result(s) found";
+    private void OnGlobalSearchCompleted(string query) => _statusText = string.IsNullOrEmpty(query) ? "Ready" : $"Search: \"{query}\"";
 
     // ── Content Rendering (RenderFragment with Razor syntax — per Microsoft docs) ──
     private RenderFragment RenderDeckContent() => @<div>
@@ -223,12 +225,14 @@
             case "legality": <DeckLegalityPage DeckId="@_selectedDeckId!.Value" /> break;
             case "collector": <CollectorView /> break;
             default:
-                <DeckView DeckId="@_selectedDeckId!.Value"
-                          OnCardSelected="OnCardSelectedNonNullable"
-                          OnEditCard="OpenEditCard"
-                          OnSplitCard="OpenSplit"
-                          OnOpenDeckFilter="@(() => _showDeckFilterDialog = true)"
-                          OnOpenLocationPicker="@(() => _showLocationPicker = true)" />
+                <CardsListControl FilterViewModel="@_filterViewModel"
+                                  OnCardSelected="OnCardSelected"
+                                  OnCardSideChanged="OnCardSideChanged"
+                                  OnOpenFilter="@(() => _showFilterDialog = true)"
+                                  OnOpenSync="OnOpenSyncDialog"
+                                  RefreshTrigger="@_kbRefreshTrigger"
+                                  OnEditCard="OpenEditCard"
+                                  OnSplitCard="OpenSplit" />
                 break;
         }
     </div>;

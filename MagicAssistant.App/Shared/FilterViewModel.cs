@@ -58,6 +58,9 @@ public class FilterViewModel
     /// <summary>Name filter (debounced in CardsListControl, 3+ chars).</summary>
     public string NameFilter { get; set; } = string.Empty;
 
+    /// <summary>FTS5 full-text search query (raw FTS syntax: "phrase", name:term, OR/AND/NOT). Empty = inactive.</summary>
+    public string SearchQuery { get; set; } = string.Empty;
+
     /// <summary>Card type filters — multiple values combined as OR expression (item1 OR item2 OR ...).</summary>
     /// <remarks>External components should use <see cref="SetNewTypeFilter(string)" /> and
     /// <see cref="SetTypeFilters(IEnumerable{string})" /> instead of mutating this property directly.</remarks>
@@ -115,6 +118,12 @@ public class FilterViewModel
 
     /// <summary>When true, filters only Game Changer cards (Commander banned list). False = no filter.</summary>
     public bool GameChangerFilter { get; set; }
+
+    // ── Location (navigation state) ──
+
+    /// <summary>Collection node Id currently displayed in the card list (deck/sideboard/collection/folder).
+    /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
+    public int? LocationId { get; set; }
 
     // ── Sort properties ──
 
@@ -204,6 +213,7 @@ public class FilterViewModel
         SetCodes = new List<string>();
         Rarity = new List<string>();
         NameFilter = string.Empty;
+        SearchQuery = string.Empty;
         TypeFilter = new List<string>();
         Artist = string.Empty;
         ColorType = string.Empty;

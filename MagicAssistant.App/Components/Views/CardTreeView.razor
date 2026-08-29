@@ -36,7 +36,7 @@
                         {
                             <div class="tree-card @(SelectedCardId.HasValue && SelectedCardId.Value == card.Id ? "selected" : "")"
                                  @onclick="() => SelectCard(card)">
-                                <span class="card-name">@card.Name</span>
+                                <span class="card-name">@card.Name@(Counts != null && Counts.TryGetValue(card.Id, out var count) && count > 1 ? $" ×{count}" : "")</span>
                                 <span class="card-cmc">@card.CmcText</span>
                             </div>
                         }
@@ -92,6 +92,9 @@
 
     /// <summary>New page size requested by the stepper (clamped to 1..150).</summary>
     [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    /// <summary>Copy counts per card Id (location mode). Null = KB mode — no counts shown.</summary>
+    [Parameter] public Dictionary<Guid, int>? Counts { get; set; }
 
     // Grouping state (display-only — grouping is applied to the current page)
     private Dictionary<string, List<MagicCard>> _groups = new();

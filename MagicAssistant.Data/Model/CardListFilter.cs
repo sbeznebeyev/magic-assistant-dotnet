@@ -20,6 +20,11 @@ public class CardListFilter
     /// <summary>Full-text search query (applied via FTS5 on Name/Type/OracleText/Artist).</summary>
     public string? Query { get; init; }
 
+    /// <summary>Location filter: Collection node Id (deck/sideboard/collection/folder).
+    /// When set, only cards present in that location are returned (INNER JOIN Deck).
+    /// Null = full Knowledge Base.</summary>
+    public int? LocationFilter { get; init; }
+
     /// <summary>Card name filter (LIKE-based). Searches PrintedName/Name on Cards, plus all face names on CardFaces for double-faced cards.</summary>
     public string? NameFilter { get; init; }
 

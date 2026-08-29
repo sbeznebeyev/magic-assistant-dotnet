@@ -23,11 +23,37 @@
                 @for (var i = 0; i < Cards.Count; i++)
                 {
                     var card = Cards[i];
+                    var physical = Physicals?.GetValueOrDefault(card.Id);
                     <tr class="@(SelectedCardId == card.Id ? "selected" : "")"
                         @onclick="() => SelectCard(card)">
-                        <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
+                        <td class="col-num">
+                            @if (physical != null)
+                            {
+                                <div class="count-control">
+                                    <button class="count-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => ChangeCount(physical, -1)" title="Decrease count">−</button>
+                                    <span class="count-value">@physical.Count</span>
+                                    <button class="count-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => ChangeCount(physical, 1)" title="Increase count">+</button>
+                                </div>
+                            }
+                            else
+                            {
+                                @((CurrentPage - 1) * PageSize + i + 1)
+                            }
+                        </td>
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
+                            @if (physical != null)
+                            {
+                                <button class="edit-btn" @onclick:stopPropagation="true"
+                                        @onclick="() => EditCard(physical)" title="Edit card">✎</button>
+                                @if (physical.Count > 1)
+                                {
+                                    <button class="split-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => SplitCard(physical)" title="Split pile">⫯</button>
+                                }
+                            }
                         </td>
                         <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
                         <td class="col-cost"><MagicText Text="@ManaCost(card)" /></td>
@@ -77,6 +103,19 @@
     /// <summary>Next → requested (parent re-queries page CurrentPage + 1).</summary>
     [Parameter] public EventCallback OnNextPage { get; set; }
 
+    /// <summary>Physical instances of the cards in the current location (deck/sideboard/collection).
+    /// Null = KB mode — no count controls rendered.</summary>
+    [Parameter] public Dictionary<Guid, MagicCardPhysical>? Physicals { get; set; }
+
+    /// <summary>Count changed by ±1 (location mode only).</summary>
+    [Parameter] public EventCallback<(MagicCardPhysical card, int delta)> OnCountChanged { get; set; }
+
+    /// <summary>Edit requested for a location card.</summary>
+    [Parameter] public EventCallback<MagicCardPhysical> OnEditRequested { get; set; }
+
+    /// <summary>Split requested for a location card (only when Count &gt; 1).</summary>
+    [Parameter] public EventCallback<MagicCardPhysical> OnSplitRequested { get; set; }
+
     private bool HasPrev => CurrentPage > 1;
     private bool HasNext => CurrentPage < TotalPages;
 
@@ -94,6 +133,15 @@
     {
         await OnNextPage.InvokeAsync();
     }
+
+    private async Task ChangeCount(MagicCardPhysical card, int delta)
+    {
+        await OnCountChanged.InvokeAsync((card, delta));
+    }
+
+    private async Task EditCard(MagicCardPhysical card) => await OnEditRequested.InvokeAsync(card);
+
+    private async Task SplitCard(MagicCardPhysical card) => await OnSplitRequested.InvokeAsync(card);
 
     /// <summary>Mana cost for the Cost column; double-sided cards show "front // back".</summary>
     private static string ManaCost(MagicCard magicCard)

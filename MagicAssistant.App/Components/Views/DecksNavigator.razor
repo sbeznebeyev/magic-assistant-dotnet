@@ -275,12 +275,14 @@
             _expandedNodes.Add(folderId);
     }
 
-    /// <summary>Выбор узла — присваиваем SelectedNode и уведомляем MainLayout.</summary>
+    /// <summary>Выбор узла — присваиваем SelectedNode и уведомляем MainLayout.
+    /// Локация (FilterViewModel.LocationId) меняется только для Collection/Deck/Sideboard;
+    /// папки локацию не выбирают.</summary>
     private void OnSelectDeck(NavigatorNodeBase node)
     {
         if (SelectedNode == node) return;
         SelectedNode = node;
-        if (node != null)
+        if (node != null && node.NodeType != NodeType.Folder)
             _ = OnDeckSelected.InvokeAsync(node.Id);
     }
 

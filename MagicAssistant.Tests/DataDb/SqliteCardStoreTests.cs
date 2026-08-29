@@ -655,6 +655,55 @@ public class SqliteCardStoreTests
             "Batch resolution of 50 cards should return all 50 via a single query");
     }
 
+    [Test]
+    public async Task GetPagedAsync_LocationFilter_ReturnsOnlyCardsInLocation()
+    {
+        // Arrange: 3 cards in KB, 2 of them present in a deck
+        var cards = new[]
+        {
+            CreateTestCard(Guid.NewGuid(), "Lightning Bolt"),
+            CreateTestCard(Guid.NewGuid(), "Counterspell"),
+            CreateTestCard(Guid.NewGuid(), "Force of Will"),
+        };
+        await _store.AddAllAsync(cards);
+
+        var collectionStore = new SqliteCollectionStore(_dbPath);
+        await collectionStore.InitializeAsync();
+        var deck = await collectionStore.CreateDeckAsync("Test Deck");
+        await collectionStore.AddAllAsync(new[]
+        {
+            new MagicCardPhysical(cards[0], Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 },
+            new MagicCardPhysical(cards[1], Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 },
+        });
+
+        // Act: paged query restricted to the deck location
+        var result = await _store.GetPagedAsync(new CardListFilter
+        {
+            LocationFilter = deck.Id,
+            Page = 1,
+            PageSize = 50,
+        });
+
+        // Assert: only the 2 cards in the deck; KB-only card excluded
+        Assert.That(result.TotalCount, Is.EqualTo(2));
+        var names = result.Cards.Select(c => c.Name).ToList();
+        Assert.That(names, Does.Contain("Lightning Bolt"));
+        Assert.That(names, Does.Contain("Counterspell"));
+        Assert.That(names, Does.Not.Contain("Force of Will"));
+
+        // Act: location + FTS query — intersection of both conditions
+        var ftsResult = await _store.GetPagedAsync(new CardListFilter
+        {
+            LocationFilter = deck.Id,
+            Query = "bolt",
+            Page = 1,
+            PageSize = 50,
+        });
+
+        Assert.That(ftsResult.TotalCount, Is.EqualTo(1));
+        Assert.That(ftsResult.Cards.Single().Name, Is.EqualTo("Lightning Bolt"));
+    }
+
     private MagicCard CreateTestCard(Guid cardId, string name)
     {
         return new MagicCard

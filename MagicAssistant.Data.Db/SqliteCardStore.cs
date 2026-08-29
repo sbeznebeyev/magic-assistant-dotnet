@@ -673,6 +673,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             whereParts.Add("GameChanger = 1");
         }
 
+        // Location filter: restrict to cards present in a specific collection node
+        // (deck/sideboard/collection/folder). Composite PK (CollectionId, CardId)
+        // guarantees one row per card — no duplicates in pagination.
+        var fromClause = "FROM Cards";
+        if (filter.LocationFilter.HasValue)
+        {
+            fromClause = @"FROM Cards
+                INNER JOIN Deck d ON d.CardId = Cards.Id AND d.CollectionId = @LocationId";
+            parameters.Add("LocationId", filter.LocationFilter.Value);
+        }
+
         var whereClause = whereParts.Count > 0 ? "WHERE " + string.Join(" AND ", whereParts) : "";
 
         // Validate sort field
@@ -682,13 +693,13 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             ? filter.SortField : CardListFilter.SortFields.Name;
 
         // Count query
-        var countSql = $"SELECT COUNT(*) FROM Cards {whereClause}";
+        var countSql = $"SELECT COUNT(*) {fromClause} {whereClause}";
         var totalCount = await conn.QuerySingleAsync<int>(countSql, parameters);
 
         // Data query with sorting and pagination
         var sortDirection = filter.SortAsc ? "ASC" : "DESC";
         var dataSql = $@"
-            SELECT * FROM Cards
+            SELECT Cards.* {fromClause}
             {whereClause}
             ORDER BY [{sortField}] {sortDirection}
             LIMIT @Limit OFFSET @Offset";

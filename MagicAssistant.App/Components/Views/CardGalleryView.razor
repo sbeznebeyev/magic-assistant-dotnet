@@ -29,6 +29,10 @@
                 <div class="@GetCardClass(card, showBack)"
                      @onclick="@(() => SelectCard(card, cardKey))">
                     <div class="gallery-image-wrap">
+                        @if (Counts != null && Counts.TryGetValue(card.Id, out var count) && count > 1)
+                        {
+                            <span class="count-badge">×@count</span>
+                        }
                         @* ── Tabs area (always present for alignment) ── *@
                         <div class="gallery-tabs-area">
                             @if (isDoubleSided)
@@ -125,6 +129,9 @@
 
     /// <summary>New page size requested by the slider (clamped to 1..150).</summary>
     [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    /// <summary>Copy counts per card Id (location mode). Null = KB mode — no badges.</summary>
+    [Parameter] public Dictionary<Guid, int>? Counts { get; set; }
 
     /// Состояние front/back для каждой карты: true = back, false/missing = front
     private Dictionary<string, bool> _sideState = new();
