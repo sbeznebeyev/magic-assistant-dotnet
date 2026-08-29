@@ -117,6 +117,11 @@
                     </select>
                     <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
                     <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
+                    @if (FilterViewModel.LocationId.HasValue)
+                    {
+                        <button class="move-btn" @onclick="OnMoveClick" disabled="@(_selectedCardId == null)"
+                                title="@(_selectedCardId == null ? "Select a card to move" : "Move selected card to another location")">📦 Move</button>
+                    }
                 </div>
             </div>
 
@@ -273,6 +278,9 @@
 
     /// <summary>Split requested for a location card (deck mode only, Count &gt; 1).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnSplitCard { get; set; }
+
+    /// <summary>Open the location picker to move the selected card (deck mode only).</summary>
+    [Parameter] public EventCallback OnOpenLocationPicker { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -716,7 +724,7 @@
         return new NumericPropertyFilter { Operator = op, Value = num };
     }
 
-    // ── Location mode: per-card actions (ported from DeckView) ─────────────
+    // ── Location mode: per-card actions ───────────────────────────────────
     private Dictionary<Guid, int>? GetCountMap() =>
         _physicalByCardId?.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
 
@@ -743,6 +751,12 @@
     {
         if (card.Count > 1)
             await OnSplitCard.InvokeAsync(card);
+    }
+
+    /// <summary>Notification callback — no data, so plain EventCallback (docs 08_events, rule 1).</summary>
+    private async Task OnMoveClick()
+    {
+        await OnOpenLocationPicker.InvokeAsync();
     }
 
     // ── Sort — through single channel ────────────────────

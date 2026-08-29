@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject KbRefreshService KbRefresh
+@inject IDeckCardService DeckCardService
+@inject IDeckManagementService DeckManagement
 @using MagicAssistant.App.Services
 @using MagicAssistant.Data.Model.NavigatorNodes
 
@@ -206,7 +208,64 @@
 
 
     private void OnSplitDone() { _statusText = "Card split"; StateHasChanged(); }
-    private void OnLocationSelected(LocationResult result) => _statusText = $"Location: {result.DeckId}";
+    /// <summary>Move the currently selected card from the open deck to the picked location.</summary>
+    private async Task OnLocationSelected(LocationResult result)
+    {
+        if (_selectedDeckId == null || _selectedCardId == null)
+        {
+            _statusText = "Select a card first";
+            _showLocationPicker = false;
+            return;
+        }
+
+        var targetId = result.DeckId;
+        if (result.IsSideboard)
+        {
+            // Resolve the hidden sideboard child (NodeType=3) of the picked deck.
+            NavigatorNodeDeck? deck;
+            try
+            {
+                deck = (await DeckManagement.GetNodesBranchAsync(result.DeckId)) as NavigatorNodeDeck;
+            }
+            catch
+            {
+                deck = null;  // e.g. legacy deck without a sideboard child
+            }
+
+            if (deck?.Sideboard is null)
+            {
+                _statusText = "Target sideboard not found";
+                return;  // dialog stays open — user can pick another target
+            }
+
+            targetId = deck.Sideboard.Id;
+        }
+
+        if (targetId == _selectedDeckId.Value)
+        {
+            _statusText = "Source and target must differ";
+            return;  // dialog stays open — user can pick another target
+        }
+
+        try
+        {
+            var moved = await DeckCardService.MoveCardsAsync(_selectedDeckId.Value, new[] { _selectedCardId.Value }, targetId);
+            if (moved > 0)
+            {
+                _statusText = $"Moved card to location {targetId}";
+                _showLocationPicker = false;
+                _kbRefreshTrigger++;  // reload the deck list
+            }
+            else
+            {
+                _statusText = "Nothing to move — card not found in this deck";
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusText = $"Move failed: {ex.Message}";
+        }
+    }
     private void OnDeckFilterApplied(DeckFilterResult result) => _statusText = "Deck filter applied";
     private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
     // ── Global Search ──
@@ -232,7 +291,8 @@
                                   OnOpenSync="OnOpenSyncDialog"
                                   RefreshTrigger="@_kbRefreshTrigger"
                                   OnEditCard="OpenEditCard"
-                                  OnSplitCard="OpenSplit" />
+                                  OnSplitCard="OpenSplit"
+                                  OnOpenLocationPicker="@(() => _showLocationPicker = true)" />
                 break;
         }
     </div>;

@@ -385,6 +385,26 @@
     background: rgba(255, 68, 68, 0.12);
 }
 
+.move-btn {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.move-btn:hover:not([disabled]) {
+    background: #3d3d3d;
+}
+
+.move-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* ── Loading ───────────────────────────────────────── */
 .kb-loading {
     flex: 1 1 0;
