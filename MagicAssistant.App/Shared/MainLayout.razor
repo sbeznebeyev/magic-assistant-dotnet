@@ -35,11 +35,16 @@
     @* ── Main Grid ── *@
     <div class="main-grid">
         <div class="panel-left">
-            <DecksNavigator
-                OnDeckSelected="OnDeckSelected"
-                OnOpenProperties="@(async n => await OnOpenPropertiesFromNav(n))"
-                OnShowAllCards="OnShowKB" />
-            @* TODO: Fix NullReferenceException in child components *@
+            <div class="navigator-scroll">
+                <DecksNavigator
+                    OnDeckSelected="OnDeckSelected"
+                    OnOpenProperties="@(async n => await OnOpenPropertiesFromNav(n))"
+                    OnShowAllCards="OnShowKB" />
+                @* TODO: Fix NullReferenceException in child components *@
+            </div>
+
+            <hr class="divider" />
+            <LastActions Queue="@_lastActionsQueue" ActiveName="@_activeNodeName" LocationId="@_selectedDeckId" />
         </div>
 
         <div class="panel-center">
@@ -83,6 +88,7 @@
 @code {
     // ── Navigation State ──
     private int? _selectedDeckId;
+    private string? _activeNodeName;
     private Guid? _selectedCardId;
     private bool? _selectedCardShowBack;
     private string ActiveTab = "cards";
@@ -111,6 +117,9 @@
     /// <summary>Central filter/sort state shared between CardsListControl and CardFilterDialog.</summary>
     private readonly FilterViewModel _filterViewModel = new();
 
+    /// <summary>In-memory queue of the last card actions, displayed by LastActions.</summary>
+    private readonly LastActionsQueue _lastActionsQueue = new();
+
     // ── Navigation ──
     private void OnCardSelected(Guid? cardId) => _selectedCardId = cardId;
     private void OnCardSelectedNonNullable(Guid cardId) => _selectedCardId = cardId;
@@ -121,27 +130,52 @@
             _selectedCardShowBack = e.showBack;
         }
     }
-    private void OnDeckSelected(int deckId)
+    private async Task OnDeckSelected(int deckId)
     {
+        var deckChanged = _selectedDeckId != deckId;
         _selectedDeckId = deckId;
         ActiveTab = "cards";
         _filterViewModel.LocationId = deckId;
+        _activeNodeName = await GetNodeNameAsync(deckId);
         _filterViewModel.Apply();
+        // History is not stored across decks — fresh queue for the new active location.
+        if (deckChanged)
+            _lastActionsQueue.Clear();
         InvokeAsync(StateHasChanged);
     }
-    private void OnDeckSelectedFromInstance(int deckId) => OnDeckSelected(deckId);
+    private async Task OnDeckSelectedFromInstance(int deckId) => await OnDeckSelected(deckId);
+
+    /// <summary>Resolves the display name of a navigation node (collection/deck/sideboard).</summary>
+    private async Task<string?> GetNodeNameAsync(int nodeId)
+    {
+        try
+        {
+            var node = await DeckManagement.GetByIdAsync(nodeId);
+            return node?.Name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>Switch center panel to Knowledge Base view.</summary>
     private void OnShowKB()
     {
         _selectedDeckId = null;
+        _activeNodeName = null;
         _selectedCardId = null;
         _filterViewModel.LocationId = null;
         _filterViewModel.Apply();
+        // Leaving deck context entirely — history is not stored.
+        _lastActionsQueue.Clear();
     }
 
     private async Task OnOpenPropertiesFromNav(NavigatorNodeBase node)
     {
+        // Opening Properties switches the active node — queue history dies with the old context.
+        if (_selectedDeckId != node.Id)
+            _lastActionsQueue.Clear();
         _selectedDeckId = node.Id;
         _showEditDeckPropertiesDialog = true;
     }
@@ -287,6 +321,7 @@
                                   OnOpenFilter="@(() => _showFilterDialog = true)"
                                   OnOpenSync="OnOpenSyncDialog"
                                   RefreshTrigger="@_kbRefreshTrigger"
+                                  ActionsQueue="@_lastActionsQueue"
                                   OnEditCard="OpenEditCard"
                                   OnSplitCard="OpenSplit"
                                   OnOpenLocationPicker="@(() => _showLocationPicker = true)" />
@@ -302,7 +337,8 @@
                                 OnCardSideChanged="OnCardSideChanged"
                                 OnOpenFilter="@(() => _showFilterDialog = true)"
                                 OnOpenSync="OnOpenSyncDialog"
-                                RefreshTrigger="@_kbRefreshTrigger" />
+                                RefreshTrigger="@_kbRefreshTrigger"
+                                ActionsQueue="@_lastActionsQueue" />
         </div>;
     }
 }

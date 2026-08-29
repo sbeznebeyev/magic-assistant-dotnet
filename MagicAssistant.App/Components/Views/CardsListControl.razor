@@ -273,6 +273,9 @@
     [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnCardSideChanged { get; set; }
     [Parameter] public int RefreshTrigger { get; set; }
 
+    /// <summary>Shared in-memory queue of the last card actions — count changes are recorded here for LastActions.</summary>
+    [Parameter] public required LastActionsQueue ActionsQueue { get; set; }
+
     /// <summary>Edit requested for a location card (deck mode only).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnEditCard { get; set; }
 
@@ -758,6 +761,12 @@
         else
             await DeckCardService.UpdateCardAsync(FilterViewModel.LocationId.Value, card.Id,
                 new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = newCount });
+
+        // Record the action in the shared queue (only after a successful DB write)
+        ActionsQueue.Enqueue(new LastActionItem(
+            card.Card,
+            Math.Abs(delta),
+            delta > 0 ? LastActionOperationEnum.Add : LastActionOperationEnum.Sub));
 
         // Re-query current page + refresh count map (no page reset)
         await ApplyFiltersAndPagination();

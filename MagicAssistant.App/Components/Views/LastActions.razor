@@ -1,0 +1,144 @@
+@implements IDisposable
+@inject IDeckCardService DeckCardService
+
+<div class="last-actions-view">
+    <div class="section-header">
+        <span>Last actions</span>
+    </div>
+
+    <div class="active-line">
+        <span class="active-label">Active:</span>
+        <span class="active-name" title="@GetActiveName()">@GetActiveName()</span>
+    </div>
+
+    @if (Queue.Items.Count == 0)
+    {
+        <div class="view-empty">No actions yet</div>
+    }
+    else
+    {
+        <div class="actions-list">
+            @foreach (var item in Queue.Items)
+            {
+                var isAdd = item.Operation == LastActionOperationEnum.Add;
+                <div class="action-row">
+
+                    @* Card image (same as PrintingsView) *@
+                    <div class="action-img">
+                        @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(item.Card, true)))
+                        {
+                            <img src="@ImageHelper.GetImageUrl(item.Card, true)" alt="front" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="action-img-placeholder">?</span>
+                        }
+                    </div>
+
+                    @* Info (same as PrintingsView) *@
+                    <div class="action-info">
+                        <div class="action-name">@item.Card.Name</div>
+                        <div class="action-meta">
+                            @if (!string.IsNullOrEmpty(item.Card.SetCode))
+                            {
+                                <span class="meta-set" title="Set">@item.Card.SetCode</span>
+                            }
+                            @if (!string.IsNullOrEmpty(item.Card.Rarity))
+                            {
+                                <span class="meta-rarity @(GetRarityClass(item.Card.Rarity))">
+                                    @item.Card.Rarity
+                                </span>
+                            }
+                            @if (item.Card.CmcNumber > 0)
+                            {
+                                <span class="meta-cmc">@item.Card.CmcText</span>
+                            }
+                            @if (!string.IsNullOrEmpty(item.Card.Language))
+                            {
+                                <span class="meta-lang" title="Language">@item.Card.Language.ToUpperInvariant()</span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Delta + total (instead of collector number) *@
+                    <div class="action-count">
+                        <span class="action-delta @(isAdd ? "add" : "sub")">@(isAdd ? $"+{item.Count}" : $"-{item.Count}")</span>
+                        <span class="action-total">(@GetTotal(item.Card.Id))</span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public required LastActionsQueue Queue { get; set; }
+    [Parameter] public string? ActiveName { get; set; }
+    [Parameter] public int? LocationId { get; set; }
+
+    private Dictionary<Guid, int> _countsByCardId = new();
+
+    protected override void OnInitialized()
+    {
+        Queue.Changed += OnQueueChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ReloadCountsAsync();
+    }
+
+    /// <summary>Central handler: reload totals + re-render when the queue changes.
+    /// Called from LastActionsQueue.Changed (Action event) — wraps async work in InvokeAsync.</summary>
+    private void OnQueueChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await ReloadCountsAsync();
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>Current per-card counts in the active location (totals after the recorded operation).</summary>
+    private async Task ReloadCountsAsync()
+    {
+        if (!LocationId.HasValue)
+        {
+            _countsByCardId = new();
+            return;
+        }
+
+        try
+        {
+            var cards = await DeckCardService!.GetDeckCardsAsync(LocationId.Value);
+            _countsByCardId = cards
+                .GroupBy(c => c.Card.Id)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Count));
+        }
+        catch
+        {
+            _countsByCardId = new();
+        }
+    }
+
+    private int GetTotal(Guid cardId) => _countsByCardId.TryGetValue(cardId, out var count) ? count : 0;
+
+    private string GetActiveName() => string.IsNullOrWhiteSpace(ActiveName) ? "—" : ActiveName;
+
+    private static string GetRarityClass(string? rarity)
+    {
+        return rarity?.ToLowerInvariant() switch
+        {
+            "common" => "rarity-common",
+            "uncommon" => "rarity-uncommon",
+            "rare" => "rarity-rare",
+            "mythic" => "rarity-mythic",
+            _ => ""
+        };
+    }
+
+    public void Dispose()
+    {
+        Queue.Changed -= OnQueueChanged;
+    }
+}
