@@ -109,6 +109,50 @@
     border-color: #ffa500;
 }
 
+/* ── Pin buttons (occupy the 24px gutter like the folder arrow; invisible until
+   row hover or pinned — visibility, not display, so nothing ever shifts).
+   No circle, no fill — just ink: white when inactive, red when pinned. ─────── */
+.tree-pin-btn {
+    flex-shrink: 0;
+    /* 18×18 button centered in the 24px gutter — the 3px margins keep icon alignment with folder arrows */
+    width: 18px;
+    height: 18px;
+    margin: 0 3px;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    background: transparent;
+    border: none;
+    color: #fff;
+    transition: color 0.2s ease, filter 0.2s ease;
+}
+
+.tree-pin-btn svg {
+    display: block;
+    fill: currentColor;
+    /* the rendered pin size lives here — markup carries no width/height */
+    width: 16px;
+    height: 16px;
+}
+
+.tree-node:hover .tree-pin-btn {
+    visibility: visible;
+}
+
+.tree-pin-btn:hover {
+    /* glow follows the ink color (white or red) — no rectangular halo */
+    filter: drop-shadow(0 0 4px currentColor);
+}
+
+.tree-pin-btn.pinned {
+    /* stays visible after the mouse leaves — until unpinned or another node is pinned */
+    visibility: visible;
+    color: #ff0000;
+}
+
 /* ── Add Menu (child level — scoped to TreeItem) ─────── */
 .add-menu-wrapper {
     position: relative;

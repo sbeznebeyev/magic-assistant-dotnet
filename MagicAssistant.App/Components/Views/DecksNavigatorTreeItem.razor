@@ -5,9 +5,9 @@
     @if (Node.NodeType == NodeType.Folder)
     {
         var folder = (NavigatorNodeFolder)Node;
-        <div class="tree-node @(SelectedId == Node.Id ? "selected" : "")"
-                 style="--depth: @Depth;"
-                 @oncontextmenu:preventDefault="true">
+        <div class="tree-node"
+             style="--depth: @Depth;"
+             @oncontextmenu:preventDefault="true">
 
                 <span class="tree-toggle" @onclick:stopPropagation="true"
                       @onclick="OnToggleClick">
@@ -39,10 +39,12 @@
                 <DecksNavigatorTreeItem @key="child.Id + child.Name" Node="@child"
                           Depth="@(Depth + 1)"
                           SelectedId="@SelectedId"
+                          PinnedId="@PinnedId"
                           ActiveAddMenuNodeId="@ActiveAddMenuNodeId"
                           ExpandedSet="@ExpandedSet"
                           OnToggleExpand="@OnToggleExpand"
                           OnSelectDeck="@OnSelectDeck"
+                          OnPinToggled="@OnPinToggled"
                           OnContextMenuToggle="@OnContextMenuToggle"
                           OnAskCreateNode="@OnAskCreateNode"
                           OnAddMenuToggle="@OnAddMenuToggle" />
@@ -74,7 +76,10 @@
                  @onclick="OnSelectClick"
                  @oncontextmenu:preventDefault="true">
 
-                <span class="@(Depth > 0 ? "tree-spacer" : "")"></span>
+                <button class="tree-pin-btn @(PinnedId == Node.Id ? "pinned" : "")" @onclick:stopPropagation="true"
+                        @onclick="() => OnPinClick(Node)" title="@(PinnedId == Node.Id ? "Unpin" : "Pin")">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></svg>
+                </button>
                 <span class="deck-nav-ico deck-nav-deck-ico"></span>
 
                 <span class="tree-label">@Node.Name</span>
@@ -90,10 +95,15 @@
                 <span class="tree-actions">
                     @if (deck.Sideboard != null)
                     {
-                        <button class="tree-sb-btn @(SelectedId == deck.Sideboard?.Id ? "selected" : "")" @onclick:stopPropagation="true"
-                                @onclick="() => OnSideboardClick(deck.Sideboard)"
-                                title="Sideboard @(deck.Sideboard.CardCount) cards">
-                            SB@(deck.Sideboard.CardCount > 0 ? " " + deck.Sideboard.CardCount : "")
+                        var sideboard = deck.Sideboard;
+                        <button class="tree-pin-btn @(PinnedId == sideboard.Id ? "pinned" : "")" @onclick:stopPropagation="true"
+                                @onclick="() => OnPinClick(sideboard)" title="@(PinnedId == sideboard.Id ? "Unpin sideboard" : "Pin sideboard")">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></svg>
+                        </button>
+                        <button class="tree-sb-btn @(SelectedId == sideboard.Id ? "selected" : "")" @onclick:stopPropagation="true"
+                                @onclick="() => OnSideboardClick(sideboard)"
+                                title="Sideboard @(sideboard.CardCount) cards">
+                            SB@(sideboard.CardCount > 0 ? " " + sideboard.CardCount : "")
                         </button>
                     }
                     <button class="tree-more-btn" @onclick:stopPropagation="true"
@@ -108,7 +118,10 @@
              @onclick="OnSelectClick"
              @oncontextmenu:preventDefault="true">
 
-            <span class="@(Depth > 0 ? "tree-spacer" : "")"></span>
+            <button class="tree-pin-btn @(PinnedId == Node.Id ? "pinned" : "")" @onclick:stopPropagation="true"
+                    @onclick="() => OnPinClick(Node)" title="@(PinnedId == Node.Id ? "Unpin" : "Pin")">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></svg>
+            </button>
             <span class="deck-nav-ico deck-nav-col-ico"></span>
 
             <span class="tree-label">@Node.Name</span>
@@ -133,6 +146,8 @@
     [Parameter] public required NavigatorNodeBase Node { get; set; }
     [Parameter] public int Depth { get; set; }
     [Parameter] public int? SelectedId { get; set; }
+    /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId) — drives the .pinned state of the Pin buttons.</summary>
+    [Parameter] public int? PinnedId { get; set; }
     /// <summary>ID of the folder whose add-menu is currently open. Each instance computes its own visibility.</summary>
     [Parameter] public int? ActiveAddMenuNodeId { get; set; }
 
@@ -143,6 +158,8 @@
 
     [Parameter] public EventCallback<int> OnToggleExpand { get; set; } = default!;
     [Parameter] public required EventCallback<NavigatorNodeBase> OnSelectDeck { get; set; }
+    /// <summary>Pin button click — the clicked node (carries Id/Locked/Name). Folders have no Pin buttons.</summary>
+    [Parameter] public EventCallback<NavigatorNodeBase> OnPinToggled { get; set; } = default!;
     [Parameter] public EventCallback<(int nodeId, double clientX, double clientY)> OnContextMenuToggle { get; set; } = default!;
     /// <summary>Requests parent to open the name-input dialog for creating a node.</summary>
     [Parameter] public EventCallback<(int? parentId, NodeType type)> OnAskCreateNode { get; set; } = default!;
@@ -158,6 +175,11 @@
     private async Task OnSideboardClick(NavigatorNodeBase sideboard)
     {
         await OnSelectDeck.InvokeAsync(sideboard);
+    }
+
+    private async Task OnPinClick(NavigatorNodeBase node)
+    {
+        await OnPinToggled.InvokeAsync(node);
     }
 
     private async Task OnToggleClick()

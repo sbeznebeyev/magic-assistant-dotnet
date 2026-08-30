@@ -118,8 +118,8 @@
                     <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
                     <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
                     @if (FilterViewModel.CurrentCollectionId.HasValue
-                        && FixedCollectionId.HasValue
-                        && FilterViewModel.CurrentCollectionId != FixedCollectionId)
+                        && PinnedCollectionId.HasValue
+                        && FilterViewModel.CurrentCollectionId != PinnedCollectionId)
                     {
                         <button class="move-btn" @onclick="OnMoveClick" disabled="@(_selectedCardId == null)"
                                 title="@(_selectedCardId == null ? "Select a card to move" : "Move selected card to the fixed collection")">📦 Move</button>
@@ -173,8 +173,8 @@
                                   OnCountChanged="ChangeCardCount"
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
-                                  KbAddMode="@(FilterViewModel.CurrentCollectionId is null && FixedCollectionId.HasValue)"
-                                  OnKbAddRequested="AddCardToFixed"
+                                  KbAddMode="@(FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue)"
+                                  OnKbAddRequested="AddCardToPinned"
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
                                   OnPrevPage="PrevPage"
@@ -288,13 +288,13 @@
     /// <summary>Split requested for a location card (deck mode only, Count &gt; 1).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnSplitCard { get; set; }
 
-    /// <summary>Pinned operation target (MainLayout._fixedCollectionId).
+    /// <summary>Pinned operation target (MainLayout._pinnedCollection.CollectionId).
     /// KB-mode (+) and quick Move work against it.</summary>
-    [Parameter] public int? FixedCollectionId { get; set; }
+    [Parameter] public int? PinnedCollectionId { get; set; }
 
-    /// <summary>Quick move: send the selected card (with all copies) to the fixed collection.
-    /// Available only when a different collection is viewed (current != fixed, both set).</summary>
-    [Parameter] public EventCallback<MagicCardPhysical> OnMoveToFixed { get; set; }
+    /// <summary>Quick move: send the selected card (with all copies) to the pinned collection.
+    /// Available only when a different collection is viewed (current != pinned, both set).</summary>
+    [Parameter] public EventCallback<MagicCardPhysical> OnMoveToPinned { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -795,16 +795,16 @@
     {
         if (_selectedCardId is null) return;
         if (_physicalByCardId?.TryGetValue(_selectedCardId.Value, out var physical) != true) return;
-        await OnMoveToFixed.InvokeAsync(physical);
+        await OnMoveToPinned.InvokeAsync(physical);
     }
 
-    /// <summary>KB mode: add one copy of the card to the fixed collection (merge semantics if already present).</summary>
-    private async Task AddCardToFixed(MagicCard card)
+    /// <summary>KB mode: add one copy of the card to the pinned collection (merge semantics if already present).</summary>
+    private async Task AddCardToPinned(MagicCard card)
     {
-        if (!FixedCollectionId.HasValue) return;
+        if (!PinnedCollectionId.HasValue) return;
 
-        await DeckCardService.MaterializeFromIdsAsync(FixedCollectionId.Value, new[] { card.Id });
-        await OnCardOperation.InvokeAsync(new CardOperationRecord(FixedCollectionId.Value, card, 1, LastActionOperationEnum.Add));
+        await DeckCardService.MaterializeFromIdsAsync(PinnedCollectionId.Value, new[] { card.Id });
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(PinnedCollectionId.Value, card, 1, LastActionOperationEnum.Add));
     }
 
     // ── Sort — through single channel ────────────────────

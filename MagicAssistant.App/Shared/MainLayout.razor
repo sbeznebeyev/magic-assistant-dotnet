@@ -23,12 +23,12 @@
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
     @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
-    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_currentCollectionId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
-    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
+    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_currentCollection.CollectionId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
+    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
     @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
-    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
-    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_currentCollectionId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
+    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
+    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_currentCollection.CollectionId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
     
 
     @* ── Main Grid ── *@
@@ -36,11 +36,14 @@
         <div class="panel-left">
             <div class="navigator-scroll">
                 <DecksNavigator
+                    @ref="_navigator"
                     OnDeckSelected="OnDeckSelected"
+                    OnPinToggled="OnPinToggled"
                     OnOpenProperties="OnOpenPropertiesFromNav"
                     OnShowAllCards="OnShowKB"
                     OnNodeDeleted="OnNodeDeleted"
-                    SelectedNodeId="@_currentCollectionId" />
+                    SelectedNodeId="@_currentCollection.CollectionId"
+                    PinnedNodeId="@_pinnedCollection.CollectionId" />
                 @* TODO: Fix NullReferenceException in child components *@
             </div>
 
@@ -55,13 +58,13 @@
 
             <div style="height:4px"></div>
 
-            @if (_currentCollectionId != null)
+            @if (_currentCollection.CollectionId != null)
             {
                 <TabBar ActiveTab="@ActiveTab" OnTabSelected="@(tab => ActiveTab = tab)" />
             }
 
-            <div class="content-area" @key="_currentCollectionId">
-                @if (_currentCollectionId != null)
+            <div class="content-area" @key="_currentCollection.CollectionId">
+                @if (_currentCollection.CollectionId != null)
                 {
                     @RenderDeckContent()
                 }
@@ -88,12 +91,16 @@
 
 @code {
     // ── Navigation State ──
-    /// <summary>Collection node currently displayed in the center panel (null = Knowledge Base).</summary>
-    private int? _currentCollectionId;
+    /// <summary>Collection node currently displayed in the center panel (CollectionId == null = Knowledge Base).</summary>
+    private LockableCollection _currentCollection = new();
 
     /// <summary>Pinned operation target: LastActions and KB-mode card adds work against it.
-    /// Only DecksNavigator selection can change it.</summary>
-    private int? _fixedCollectionId;
+    /// Changed exclusively by the navigator's Pin buttons (plus a defensive clear
+    /// in OnNodeDeleted when the pinned node is deleted).</summary>
+    private LockableCollection _pinnedCollection = new();
+
+    /// <summary>Component reference — external selections (InstancesView jump) are delegated to the navigator.</summary>
+    private DecksNavigator? _navigator;
 
 
     private Guid? _selectedCardId;
@@ -136,25 +143,36 @@
             _selectedCardShowBack = e.showBack;
         }
     }
-    /// <summary>Navigator selection — the ONLY writer of _fixedCollectionId. Sets both contexts.</summary>
-    private async Task OnDeckSelected(int nodeId)
+    /// <summary>Navigator selection — sets the display context only.
+    /// _pinnedCollection is changed exclusively by the navigator's Pin buttons.</summary>
+    private async Task OnDeckSelected(LockableCollection c)
     {
-        _currentCollectionId = nodeId;
-        _fixedCollectionId = nodeId;
+        _currentCollection = c;
         ActiveTab = "cards";
-        _filterViewModel.CurrentCollectionId = nodeId;
+        _filterViewModel.CurrentCollectionId = c.CollectionId;
         _filterViewModel.Apply();
         await InvokeAsync(StateHasChanged);
     }
 
-    /// <summary>InstancesView jump — display context only; the fixed collection (operation target) is untouched.</summary>
-    private void OnDeckSelectedFromInstance(int deckId)
+    /// <summary>Pin toggle from the navigator — the ONLY writer of _pinnedCollection.
+    /// Clicking an already-pinned node unpins it (silently). Pinning reports to the status bar.</summary>
+    private void OnPinToggled(LockableCollection c)
     {
-        _currentCollectionId = deckId;
-        ActiveTab = "cards";
-        _filterViewModel.CurrentCollectionId = deckId;
-        _filterViewModel.Apply();
-        InvokeAsync(StateHasChanged);
+        if (_pinnedCollection.CollectionId == c.CollectionId)
+            _pinnedCollection = new();  // unpin — no status message
+        else
+        {
+            _pinnedCollection = c;
+            _statusText = $"Pinned {c.Name}";  // side effect of setting PinnedCollection
+        }
+    }
+
+    /// <summary>InstancesView jump — delegates the selection to the navigator: it highlights its own node
+    /// and reports back the (Id, Locked) pair through the standard OnDeckSelected path.</summary>
+    private async Task OnDeckSelectedFromInstance(int deckId)
+    {
+        if (_navigator == null) return;
+        await _navigator.SelectNodeAsync(deckId);
     }
 
     /// <summary>Resolves the display name of a navigation node (collection/deck/sideboard).</summary>
@@ -175,7 +193,7 @@
     /// The fixed collection survives — KB card adds keep targeting it.</summary>
     private void OnShowKB()
     {
-        _currentCollectionId = null;
+        _currentCollection = new();
         _selectedCardId = null;
         _filterViewModel.CurrentCollectionId = null;
         _filterViewModel.Apply();
@@ -184,7 +202,7 @@
     /// <summary>Properties is a dialog, not navigation: only the display context changes.</summary>
     private void OnOpenPropertiesFromNav(NavigatorNodeBase node)
     {
-        _currentCollectionId = node.Id;
+        _currentCollection = new LockableCollection { CollectionId = node.Id, IsLocked = node.Locked, Name = node.Name };
         _showEditDeckPropertiesDialog = true;
     }
 
@@ -248,20 +266,20 @@
 
 
     private void OnSplitDone() { _statusText = "Card split"; StateHasChanged(); }
-    /// <summary>Quick move: the selected card (with all its copies) moves from the viewed collection to the fixed one.</summary>
-    private async Task OnMoveToFixed(MagicCardPhysical card)
+    /// <summary>Quick move: the selected card (with all its copies) moves from the viewed collection to the pinned one.</summary>
+    private async Task OnMoveToPinned(MagicCardPhysical card)
     {
-        if (_currentCollectionId == null || _fixedCollectionId == null) return;
-        if (_currentCollectionId == _fixedCollectionId) return;
+        if (_currentCollection.CollectionId == null || _pinnedCollection.CollectionId == null) return;
+        if (_currentCollection.CollectionId == _pinnedCollection.CollectionId) return;
 
         try
         {
-            var moved = await DeckCardService.MoveCardsAsync(_currentCollectionId.Value, new[] { card.Id }, _fixedCollectionId.Value);
+            var moved = await DeckCardService.MoveCardsAsync(_currentCollection.CollectionId.Value, new[] { card.Id }, _pinnedCollection.CollectionId.Value);
             if (moved > 0)
             {
                 // Addition to the working collection — record it in LastActions.
-                await RecordLastActionAsync(new CardOperationRecord(_fixedCollectionId.Value, card.Card, moved, LastActionOperationEnum.Add));
-                _statusText = $"Moved card to location {_fixedCollectionId.Value}";
+                await RecordLastActionAsync(new CardOperationRecord(_pinnedCollection.CollectionId.Value, card.Card, moved, LastActionOperationEnum.Add));
+                _statusText = $"Moved card to location {_pinnedCollection.CollectionId.Value}";
                 _kbRefreshTrigger++;  // reload the viewed list
             }
             else
@@ -287,21 +305,22 @@
     /// <summary>A node was deleted in the navigator — drop any context that references it (direct hit or folder cascade).</summary>
     private async Task OnNodeDeleted(int deletedNodeId)
     {
-        var fixedGone = _fixedCollectionId.HasValue && await IsNodeGoneAsync(_fixedCollectionId.Value);
+        var pinnedGone = _pinnedCollection.CollectionId.HasValue && await IsNodeGoneAsync(_pinnedCollection.CollectionId.Value);
 
-        // Validate the display context only if it differs from the fixed one (same node → reuse the check).
-        var currentGone = _currentCollectionId.HasValue
-            && (_currentCollectionId == _fixedCollectionId ? fixedGone : await IsNodeGoneAsync(_currentCollectionId.Value));
+        // Validate the display context only if it differs from the pinned one (same node → reuse the check).
+        var currentGone = _currentCollection.CollectionId.HasValue
+            && (_currentCollection.CollectionId == _pinnedCollection.CollectionId ? pinnedGone : await IsNodeGoneAsync(_currentCollection.CollectionId.Value));
 
-        if (fixedGone)
+        // A deleted pinned node would leave a ghost — drop it (defensive, not a user action).
+        if (pinnedGone)
         {
-            _fixedCollectionId = null;
+            _pinnedCollection = new();
         }
 
         // Same for the display context (deleting the viewed collection left a ghost before).
         if (currentGone)
         {
-            _currentCollectionId = null;
+            _currentCollection = new();
             _selectedCardId = null;
             _filterViewModel.CurrentCollectionId = null;
             _filterViewModel.Apply();
@@ -329,13 +348,13 @@
     private RenderFragment RenderDeckContent() => @<div>
         @switch (ActiveTab)
         {
-            case "curve": <ManaCurvePage DeckId="@_currentCollectionId!.Value" /> break;
-            case "colors": <SpellColourPage DeckId="@_currentCollectionId!.Value" /> break;
-            case "creatures": <CreaturePage DeckId="@_currentCollectionId!.Value" /> break;
-            case "types": <TypePage DeckId="@_currentCollectionId!.Value" /> break;
-            case "abilities": <AbilityPage DeckId="@_currentCollectionId!.Value" /> break;
-            case "info": <InfoPage DeckId="@_currentCollectionId!.Value" /> break;
-            case "legality": <DeckLegalityPage DeckId="@_currentCollectionId!.Value" /> break;
+            case "curve": <ManaCurvePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "colors": <SpellColourPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "creatures": <CreaturePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "types": <TypePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "abilities": <AbilityPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "info": <InfoPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "legality": <DeckLegalityPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
             case "collector": <CollectorView /> break;
             default:
                 <CardsListControl FilterViewModel="@_filterViewModel"
@@ -345,10 +364,10 @@
                                   OnOpenSync="OnOpenSyncDialog"
                                   RefreshTrigger="@_kbRefreshTrigger"
                                   OnCardOperation="RecordLastActionAsync"
-                                  FixedCollectionId="@_fixedCollectionId"
+                                  PinnedCollectionId="@_pinnedCollection.CollectionId"
                                   OnEditCard="OpenEditCard"
                                   OnSplitCard="OpenSplit"
-                                  OnMoveToFixed="OnMoveToFixed" />
+                                  OnMoveToPinned="OnMoveToPinned" />
                 break;
         }
     </div>;
@@ -363,7 +382,7 @@
                                 OnOpenSync="OnOpenSyncDialog"
                                 RefreshTrigger="@_kbRefreshTrigger"
                                 OnCardOperation="RecordLastActionAsync"
-                                FixedCollectionId="@_fixedCollectionId" />
+                                PinnedCollectionId="@_pinnedCollection.CollectionId" />
         </div>;
     }
 }

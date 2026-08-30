@@ -40,11 +40,13 @@
             {
                 <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
                           Depth="0"
-                          SelectedId="@SelectedNodeId"
+                          SelectedId="@_lastSelectedNodeId"
+                          PinnedId="@PinnedNodeId"
                           ActiveAddMenuNodeId="@_activeAddMenuNodeId"
                           ExpandedSet="@_expandedNodes"
                           OnToggleExpand="ToggleNodeExpanded"
                           OnSelectDeck="OnSelectDeck"
+                          OnPinToggled="OnPinToggle"
                           OnContextMenuToggle="OnContextMenuToggle"
                           OnAskCreateNode="OnAskCreateNode"
                           OnAddMenuToggle="OnAddMenuToggle" />
@@ -148,6 +150,12 @@
     /// <summary>Folder IDs that are visually expanded. Decoupled from data — collapse only hides.</summary>
     private HashSet<int> _expandedNodes = new();
 
+    /// <summary>Highlighted node: the last non-null SelectedNodeId seen. In KB mode
+    /// (SelectedNodeId == null) the previous highlight is kept, so "Show All Cards"
+    /// does not deselect a deck/collection/sideboard. A stale id after node deletion
+    /// is harmless — the node is gone from the tree and ids are never reused.</summary>
+    private int? _lastSelectedNodeId;
+
     private bool _loading;
     private string? _error;
 
@@ -188,18 +196,34 @@
     private ElementReference _renameInput = default!;
 
     // ── Events to parent (MainLayout) ──────────────────────
-    [Parameter] public EventCallback<int> OnDeckSelected { get; set; }
+    /// <summary>Selected node as a LockableCollection (Id, Locked, Name) built from the node's state.</summary>
+    [Parameter] public EventCallback<LockableCollection> OnDeckSelected { get; set; }
+
+    /// <summary>Pin button click — the clicked node as a LockableCollection.
+    /// These buttons are the only source that changes MainLayout._pinnedCollection.</summary>
+    [Parameter] public EventCallback<LockableCollection> OnPinToggled { get; set; }
     [Parameter] public EventCallback<NavigatorNodeBase> OnOpenProperties { get; set; }
     [Parameter] public EventCallback OnShowAllCards { get; set; }
 
     /// <summary>A node (and its subtree) was deleted — MainLayout drops any context referencing it.</summary>
     [Parameter] public EventCallback<int> OnNodeDeleted { get; set; }
 
-    /// <summary>Currently displayed collection node (MainLayout._currentCollectionId).
-    /// The tree highlight is a pure projection of this value — the navigator holds no selection state of its own.</summary>
+    /// <summary>Currently displayed collection node (MainLayout._currentCollection.CollectionId).
+    /// While non-null the highlight follows it; in KB mode (null) the navigator keeps
+    /// its last selection, so "Show All Cards" does not clear the highlighted node.</summary>
     [Parameter] public int? SelectedNodeId { get; set; }
 
+    /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId)
+    /// — drives the .pinned state of the Pin buttons in the tree.</summary>
+    [Parameter] public int? PinnedNodeId { get; set; }
+
     // ── Lifecycle ──────────────────────────────────────────
+    protected override void OnParametersSet()
+    {
+        if (SelectedNodeId.HasValue)
+            _lastSelectedNodeId = SelectedNodeId;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadRoot();
@@ -273,13 +297,40 @@
     }
 
     /// <summary>Selection request from the tree (deck/collection/SB). The highlight follows
-    /// the SelectedNodeId parameter — MainLayout owns the selection state.
+    /// the last non-null SelectedNodeId (see _lastSelectedNodeId).
     /// Folders are not locations and never select; re-clicking the displayed node is a no-op.</summary>
     private async Task OnSelectDeck(NavigatorNodeBase node)
     {
         if (node.NodeType == NodeType.Folder) return;
         if (node.Id == SelectedNodeId) return;
-        await OnDeckSelected.InvokeAsync(node.Id);
+        await OnDeckSelected.InvokeAsync(ToLockable(node));
+    }
+
+    /// <summary>Builds the navigation payload (Id, Locked, Name) from a tree node.</summary>
+    private static LockableCollection ToLockable(NavigatorNodeBase node) => new()
+    {
+        CollectionId = node.Id,
+        IsLocked = node.Locked,
+        Name = node.Name
+    };
+
+    /// <summary>
+    /// Selects a node by id through the same path as a click in the tree
+    /// (external sources, e.g. the InstancesView jump). The node's own (Id, Locked)
+    /// pair is reported to MainLayout via OnDeckSelected. No-op if the node is not in the tree.
+    /// </summary>
+    public async Task SelectNodeAsync(int nodeId)
+    {
+        var node = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), nodeId);
+        if (node == null) return;
+        await OnSelectDeck(node);
+    }
+
+    /// <summary>Pin button click — passes the clicked node up as a LockableCollection; MainLayout toggles the pin.
+    /// Folders have no Pin buttons, so only deck/collection/sideboard nodes arrive here.</summary>
+    private async Task OnPinToggle(NavigatorNodeBase node)
+    {
+        await OnPinToggled.InvokeAsync(ToLockable(node));
     }
 
     private async Task HandleShowAllCards()
