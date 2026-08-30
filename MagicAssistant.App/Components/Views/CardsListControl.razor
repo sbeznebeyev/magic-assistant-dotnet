@@ -278,7 +278,9 @@
     [Parameter] public int RefreshTrigger { get; set; }
 
     /// <summary>Shared in-memory queue of the last card actions — count changes are recorded here for LastActions.</summary>
-    [Parameter] public required LastActionsQueue ActionsQueue { get; set; }
+    /// <summary>Records an Add/Sub card operation in the rolling LastActions history.
+    /// Target = the collection the card was added to / removed from (current in deck mode, fixed in KB mode).</summary>
+    [Parameter] public EventCallback<CardOperationRecord> OnCardOperation { get; set; }
 
     /// <summary>Edit requested for a location card (deck mode only).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnEditCard { get; set; }
@@ -771,15 +773,10 @@
             await DeckCardService.UpdateCardAsync(FilterViewModel.CurrentCollectionId.Value, card.Id,
                 new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = newCount });
 
-        // Record the action in the shared queue — only when operating on the fixed collection itself
-        // (operations on a merely viewed collection are not part of its history).
-        if (FilterViewModel.CurrentCollectionId == FixedCollectionId)
-        {
-            ActionsQueue.Enqueue(new LastActionItem(
-                card.Card,
-                Math.Abs(delta),
-                delta > 0 ? LastActionOperationEnum.Add : LastActionOperationEnum.Sub));
-        }
+        // Record the operation in the rolling LastActions history — labeled with the target collection.
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(
+            FilterViewModel.CurrentCollectionId.Value, card.Card,
+            Math.Abs(delta), delta > 0 ? LastActionOperationEnum.Add : LastActionOperationEnum.Sub));
 
         // Re-query current page + refresh count map (no page reset)
         await ApplyFiltersAndPagination();
@@ -807,7 +804,7 @@
         if (!FixedCollectionId.HasValue) return;
 
         await DeckCardService.MaterializeFromIdsAsync(FixedCollectionId.Value, new[] { card.Id });
-        ActionsQueue.Enqueue(new LastActionItem(card, 1, LastActionOperationEnum.Add));
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(FixedCollectionId.Value, card, 1, LastActionOperationEnum.Add));
     }
 
     // ── Sort — through single channel ────────────────────

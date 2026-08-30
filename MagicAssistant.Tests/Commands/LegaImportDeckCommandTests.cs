@@ -461,6 +461,8 @@ public class LegacyImportDeckCommandTests
         public Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default) => Task.FromResult(Array.Empty<MagicCardPhysical>() as ICollection<MagicCardPhysical>);
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default) => Task.FromResult(new Dictionary<Guid, OwnCountStats>());
+        public Task<Dictionary<(int CollectionId, Guid CardId), int>> GetCardCountsAsync(IEnumerable<int> collectionIds, IEnumerable<Guid> cardIds, CancellationToken ct = default)
+            => Task.FromResult(new Dictionary<(int CollectionId, Guid CardId), int>());
         public Task<Collection> CreateCollectionAsync(string name, int? parentId, CancellationToken ct = default)
         {
             var id = _nextId++;

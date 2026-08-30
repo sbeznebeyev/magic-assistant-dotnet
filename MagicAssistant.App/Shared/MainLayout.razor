@@ -45,7 +45,7 @@
             </div>
 
             <hr class="divider" />
-            <LastActions Queue="@_lastActionsQueue" ActiveName="@_fixedNodeName" FixedCollectionId="@_fixedCollectionId" />
+            <LastActions Queue="@_lastActionsQueue" />
         </div>
 
         <div class="panel-center">
@@ -95,8 +95,7 @@
     /// Only DecksNavigator selection can change it.</summary>
     private int? _fixedCollectionId;
 
-    /// <summary>Name of the fixed collection — LastActions "Active:" line.</summary>
-    private string? _fixedNodeName;
+
     private Guid? _selectedCardId;
     private bool? _selectedCardShowBack;
     private string ActiveTab = "cards";
@@ -140,16 +139,11 @@
     /// <summary>Navigator selection — the ONLY writer of _fixedCollectionId. Sets both contexts.</summary>
     private async Task OnDeckSelected(int nodeId)
     {
-        var fixedChanged = _fixedCollectionId != nodeId;
         _currentCollectionId = nodeId;
         _fixedCollectionId = nodeId;
         ActiveTab = "cards";
         _filterViewModel.CurrentCollectionId = nodeId;
-        _fixedNodeName = await GetNodeNameAsync(nodeId);
         _filterViewModel.Apply();
-        // History is not stored across working collections — fresh queue when the fixed one changes.
-        if (fixedChanged)
-            _lastActionsQueue.Clear();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -266,7 +260,7 @@
             if (moved > 0)
             {
                 // Addition to the working collection — record it in LastActions.
-                _lastActionsQueue.Enqueue(new LastActionItem(card.Card, card.Count, LastActionOperationEnum.Add));
+                await RecordLastActionAsync(new CardOperationRecord(_fixedCollectionId.Value, card.Card, moved, LastActionOperationEnum.Add));
                 _statusText = $"Moved card to location {_fixedCollectionId.Value}";
                 _kbRefreshTrigger++;  // reload the viewed list
             }
@@ -281,6 +275,15 @@
         }
     }
 
+    /// <summary>Records an Add/Sub card operation in the rolling LastActions history.
+    /// The entry is labeled with the target collection's display name (Location).
+    /// The queue is never reset — entries from different collections coexist, each carrying its own location.</summary>
+    private async Task RecordLastActionAsync(CardOperationRecord op)
+    {
+        var location = await GetNodeNameAsync(op.TargetCollectionId);
+        _lastActionsQueue.Enqueue(new LastActionItem(op.TargetCollectionId, location ?? "?", op.Card, op.Count, op.Operation));
+    }
+
     /// <summary>A node was deleted in the navigator — drop any context that references it (direct hit or folder cascade).</summary>
     private async Task OnNodeDeleted(int deletedNodeId)
     {
@@ -293,8 +296,6 @@
         if (fixedGone)
         {
             _fixedCollectionId = null;
-            _fixedNodeName = null;
-            _lastActionsQueue.Clear();
         }
 
         // Same for the display context (deleting the viewed collection left a ghost before).
@@ -343,7 +344,7 @@
                                   OnOpenFilter="@(() => _showFilterDialog = true)"
                                   OnOpenSync="OnOpenSyncDialog"
                                   RefreshTrigger="@_kbRefreshTrigger"
-                                  ActionsQueue="@_lastActionsQueue"
+                                  OnCardOperation="RecordLastActionAsync"
                                   FixedCollectionId="@_fixedCollectionId"
                                   OnEditCard="OpenEditCard"
                                   OnSplitCard="OpenSplit"
@@ -361,7 +362,7 @@
                                 OnOpenFilter="@(() => _showFilterDialog = true)"
                                 OnOpenSync="OnOpenSyncDialog"
                                 RefreshTrigger="@_kbRefreshTrigger"
-                                ActionsQueue="@_lastActionsQueue"
+                                OnCardOperation="RecordLastActionAsync"
                                 FixedCollectionId="@_fixedCollectionId" />
         </div>;
     }

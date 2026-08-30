@@ -73,4 +73,11 @@ public interface IDeckCardService
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
     Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sum of counts for the given card IDs within the given decks/collections (exact collection rows only).
+    /// Lightweight alternative to GetDeckCardsAsync when only totals are needed.
+    /// Returns (CollectionId, CardId) → total count; absent keys mean the card is not present in that collection (treat as 0).
+    /// </summary>
+    Task<Dictionary<(int CollectionId, Guid CardId), int>> GetDeckCardCountsAsync(ICollection<int> collectionIds, ICollection<Guid> cardIds, CancellationToken ct = default);
 }

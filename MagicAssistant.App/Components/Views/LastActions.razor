@@ -1,14 +1,11 @@
+@using Microsoft.Extensions.Logging
 @implements IDisposable
 @inject IDeckCardService DeckCardService
+@inject ILogger<LastActions> Logger
 
 <div class="last-actions-view">
     <div class="section-header">
         <span>Last actions</span>
-    </div>
-
-    <div class="active-line">
-        <span class="active-label">Active:</span>
-        <span class="active-name" title="@GetActiveName()">@GetActiveName()</span>
     </div>
 
     @if (Queue.Items.Count == 0)
@@ -23,47 +20,52 @@
                 var isAdd = item.Operation == LastActionOperationEnum.Add;
                 <div class="action-row">
 
-                    @* Card image (same as PrintingsView) *@
-                    <div class="action-img">
-                        @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(item.Card, true)))
-                        {
-                            <img src="@ImageHelper.GetImageUrl(item.Card, true)" alt="front" loading="lazy" />
-                        }
-                        else
-                        {
-                            <span class="action-img-placeholder">?</span>
-                        }
-                    </div>
+                    @* Location label — the queue is never reset, so each entry carries its own collection *@
+                    <div class="action-location" title="@item.Location">@item.Location</div>
 
-                    @* Info (same as PrintingsView) *@
-                    <div class="action-info">
-                        <div class="action-name">@item.Card.Name</div>
-                        <div class="action-meta">
-                            @if (!string.IsNullOrEmpty(item.Card.SetCode))
+                    <div class="action-body">
+                        @* Card image (same as PrintingsView) *@
+                        <div class="action-img">
+                            @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(item.Card, true)))
                             {
-                                <span class="meta-set" title="Set">@item.Card.SetCode</span>
+                                <img src="@ImageHelper.GetImageUrl(item.Card, true)" alt="front" loading="lazy" />
                             }
-                            @if (!string.IsNullOrEmpty(item.Card.Rarity))
+                            else
                             {
-                                <span class="meta-rarity @(GetRarityClass(item.Card.Rarity))">
-                                    @item.Card.Rarity
-                                </span>
-                            }
-                            @if (item.Card.CmcNumber > 0)
-                            {
-                                <span class="meta-cmc">@item.Card.CmcText</span>
-                            }
-                            @if (!string.IsNullOrEmpty(item.Card.Language))
-                            {
-                                <span class="meta-lang" title="Language">@item.Card.Language.ToUpperInvariant()</span>
+                                <span class="action-img-placeholder">?</span>
                             }
                         </div>
-                    </div>
 
-                    @* Delta + total (instead of collector number) *@
-                    <div class="action-count">
-                        <span class="action-delta @(isAdd ? "add" : "sub")">@(isAdd ? $"+{item.Count}" : $"-{item.Count}")</span>
-                        <span class="action-total">(@GetTotal(item.Card.Id))</span>
+                        @* Info (same as PrintingsView) *@
+                        <div class="action-info">
+                            <div class="action-name">@item.Card.Name</div>
+                            <div class="action-meta">
+                                @if (!string.IsNullOrEmpty(item.Card.SetCode))
+                                {
+                                    <span class="meta-set" title="Set">@item.Card.SetCode</span>
+                                }
+                                @if (!string.IsNullOrEmpty(item.Card.Rarity))
+                                {
+                                    <span class="meta-rarity @(GetRarityClass(item.Card.Rarity))">
+                                        @item.Card.Rarity
+                                    </span>
+                                }
+                                @if (item.Card.CmcNumber > 0)
+                                {
+                                    <span class="meta-cmc">@item.Card.CmcText</span>
+                                }
+                                @if (!string.IsNullOrEmpty(item.Card.Language))
+                                {
+                                    <span class="meta-lang" title="Language">@item.Card.Language.ToUpperInvariant()</span>
+                                }
+                            </div>
+                        </div>
+
+                        @* Delta + total in the entry's own location *@
+                        <div class="action-count">
+                            <span class="action-delta @(isAdd ? "add" : "sub")">@(isAdd ? $"+{item.Count}" : $"-{item.Count}")</span>
+                            <span class="action-total">@GetTotal(item)</span>
+                        </div>
                     </div>
                 </div>
             }
@@ -73,58 +75,61 @@
 
 @code {
     [Parameter] public required LastActionsQueue Queue { get; set; }
-    [Parameter] public string? ActiveName { get; set; }
-    /// <summary>Pinned operation target — totals are computed in this collection.</summary>
-    [Parameter] public int? FixedCollectionId { get; set; }
 
-    private Dictionary<Guid, int> _countsByCardId = new();
+    /// <summary>Totals per (LocationId, CardId) for the queued entries.</summary>
+    private Dictionary<(int CollectionId, Guid CardId), int> _counts = new();
 
     protected override void OnInitialized()
     {
         Queue.Changed += OnQueueChanged;
     }
 
-    protected override async Task OnParametersSetAsync()
-    {
-        await ReloadCountsAsync();
-    }
-
     /// <summary>Central handler: reload totals + re-render when the queue changes.
-    /// Called from LastActionsQueue.Changed (Action event) — wraps async work in InvokeAsync.</summary>
+    /// Called from LastActionsQueue.Changed (Action event). The delegate is synchronous, so the
+    /// callback cannot be awaited — every exception is handled inside the callback (logged),
+    /// so nothing is dropped on the renderer.</summary>
     private void OnQueueChanged()
     {
         InvokeAsync(async () =>
         {
-            await ReloadCountsAsync();
-            StateHasChanged();
+            try
+            {
+                await ReloadCountsAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "LastActions refresh failed.");
+            }
         });
     }
 
-    /// <summary>Current per-card counts in the active location (totals after the recorded operation).</summary>
+    /// <summary>Totals per (location, card) for the queued entries — one grouped query over the
+    /// distinct locations and cards in the queue. Best-effort: on failure totals show "—".</summary>
     private async Task ReloadCountsAsync()
     {
-        if (!FixedCollectionId.HasValue)
+        if (Queue.Items.Count == 0)
         {
-            _countsByCardId = new();
+            _counts = new();
             return;
         }
 
         try
         {
-            var cards = await DeckCardService!.GetDeckCardsAsync(FixedCollectionId.Value);
-            _countsByCardId = cards
-                .GroupBy(c => c.Card.Id)
-                .ToDictionary(g => g.Key, g => g.Sum(x => x.Count));
+            var collectionIds = Queue.Items.Select(i => i.LocationId).Distinct().ToList();
+            var cardIds = Queue.Items.Select(i => i.Card.Id).Distinct().ToList();
+            _counts = await DeckCardService!.GetDeckCardCountsAsync(collectionIds, cardIds);
         }
-        catch
+        catch (Exception ex)
         {
-            _countsByCardId = new();
+            Logger.LogWarning(ex, "Failed to load LastActions totals; showing —.");
+            _counts = new();
         }
     }
 
-    private int GetTotal(Guid cardId) => _countsByCardId.TryGetValue(cardId, out var count) ? count : 0;
-
-    private string GetActiveName() => string.IsNullOrWhiteSpace(ActiveName) ? "—" : ActiveName;
+    /// <summary>Total copies of the entry's card in its own location after the operation; "—" if unknown.</summary>
+    private string GetTotal(LastActionItem item) =>
+        _counts.TryGetValue((item.LocationId, item.Card.Id), out var count) ? $"({count})" : "—";
 
     private static string GetRarityClass(string? rarity)
     {

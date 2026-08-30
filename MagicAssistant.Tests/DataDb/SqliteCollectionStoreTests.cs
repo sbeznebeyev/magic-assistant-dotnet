@@ -333,6 +333,83 @@ public class SqliteCollectionStoreTests
     }
 
     [Test]
+    public async Task GetCardCountsAsync_SumsCountsForRequestedCardsOnly()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+
+        // card1 ×3 (merged across two rows), card2 ×2 — request only card1 + an absent card
+        await _store.AddAllAsync(new[]
+        {
+            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 },
+            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 },
+            new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 },
+        });
+
+        var result = await _store.GetCardCountsAsync(new[] { deck.Id }, new[] { _id_1, _scryfall_id_1 });
+
+        Assert.That(result, Has.Count.EqualTo(1), "Only requested cards present in the collection should be returned");
+        Assert.That(result[(deck.Id, _id_1)], Is.EqualTo(3), "Counts of merged duplicate rows must be summed");
+    }
+
+    [Test]
+    public async Task GetCardCountsAsync_ReturnsEmpty_ForEmptyIdList()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+
+        Assert.That(await _store.GetCardCountsAsync(new[] { deck.Id }, Array.Empty<Guid>()), Is.Empty);
+        Assert.That(await _store.GetCardCountsAsync(Array.Empty<int>(), new[] { _id_1 }), Is.Empty);
+    }
+
+    [Test]
+    public async Task GetCardCountsAsync_ReturnsPerCollectionTotals_ForMultipleCollections()
+    {
+        var deck1 = await _store.CreateDeckAsync("Deck 1");
+        var deck2 = await _store.CreateDeckAsync("Deck 2");
+
+        // Same card in both decks with different counts + a card only in deck1
+        await _store.AddAllAsync(new[]
+        {
+            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck1.Id, deck1.Name, false), true) { Count = 2 },
+            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck2.Id, deck2.Name, false), true) { Count = 5 },
+            new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck1.Id, deck1.Name, false), true) { Count = 1 },
+        });
+
+        var result = await _store.GetCardCountsAsync(new[] { deck1.Id, deck2.Id }, new[] { _id_1, _id_2 });
+
+        Assert.That(result[(deck1.Id, _id_1)], Is.EqualTo(2));
+        Assert.That(result[(deck2.Id, _id_1)], Is.EqualTo(5), "Per-collection totals must not be merged across collections");
+        Assert.That(result[(deck1.Id, _id_2)], Is.EqualTo(1));
+        Assert.That(result.ContainsKey((deck2.Id, _id_2)), Is.False, "Card absent from deck2 must have no key");
+    }
+
+    [Test]
+    public async Task GetCardCountsAsync_ExcludesSideboardRows()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        // Find sideboard node (query directly — GetChildrenAsync filters out sideboards)
+        int sbId;
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            var sbRows = (await conn.QueryAsync<int>(
+                "SELECT Id FROM Collection WHERE ParentId = @DeckId AND NodeType = 3",
+                new { DeckId = deck.Id })).ToList();
+            Assert.That(sbRows, Has.Count.EqualTo(1));
+            sbId = sbRows[0];
+        }
+
+        var mainCard = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Main" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 };
+        var sbCard = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Main" }, Location.FromId(sbId, "Sideboard", true), true) { Count = 5 };
+
+        await _store.AddAsync(mainCard);
+        await _store.AddAsync(sbCard);
+
+        var result = await _store.GetCardCountsAsync(new[] { deck.Id }, new[] { _id_1 });
+
+        Assert.That(result[(deck.Id, _id_1)], Is.EqualTo(2), "Sideboard rows must be excluded — same as GetDeckCardsAsync");
+    }
+
+    [Test]
     public async Task GetAllAsync_ReturnsAllPhysicalCards()
     {
         var deck1 = await _store.CreateDeckAsync("Deck 1");

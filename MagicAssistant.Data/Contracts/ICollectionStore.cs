@@ -79,6 +79,13 @@ public interface ICollectionStore
     /// </summary>
     Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Sum of counts for the given card IDs within the given collections (exact collection rows only).
+    /// Returns (CollectionId, CardId) → total count; absent keys mean the card is not present in that collection (treat as 0).
+    /// Lightweight alternative to GetDeckCardsAsync when only totals are needed.
+    /// </summary>
+    Task<Dictionary<(int CollectionId, Guid CardId), int>> GetCardCountsAsync(IEnumerable<int> collectionIds, IEnumerable<Guid> cardIds, CancellationToken ct = default);
+
     // ═══════════════════════════════════════════════════════════
     //  Card CRUD — implemented by SqliteCollectionStore via ICardStore&lt;MagicCardPhysical&gt;
     //  Exposed here so vertical services can work with ICollectionStore directly.

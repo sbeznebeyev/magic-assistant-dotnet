@@ -272,4 +272,13 @@ public class DeckCardService : IDeckCardService
 
         return _collectionStore.GetDeckWithSideboardAsync(deckId, ct);
     }
+
+    /// <inheritdoc />
+    public Task<Dictionary<(int CollectionId, Guid CardId), int>> GetDeckCardCountsAsync(ICollection<int> collectionIds, ICollection<Guid> cardIds, CancellationToken ct = default)
+    {
+        if (collectionIds == null || !collectionIds.Any())
+            throw new ArgumentException("At least one collection ID is required.", nameof(collectionIds));
+
+        return _collectionStore.GetCardCountsAsync(collectionIds, cardIds, ct);
+    }
 }

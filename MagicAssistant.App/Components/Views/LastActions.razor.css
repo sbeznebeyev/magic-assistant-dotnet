@@ -18,30 +18,6 @@
     border-bottom: 1px solid #3c3c3c;
 }
 
-/* ── Active location line ───────────────────────────────────────── */
-.active-line {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    font-size: 11px;
-    color: #888;
-    border-bottom: 1px solid #3c3c3c;
-}
-
-.active-label {
-    flex-shrink: 0;
-}
-
-.active-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: #ccc;
-    font-weight: 500;
-}
-
 /* ── States ─────────────────────────────────────────────────────── */
 .view-empty {
     padding: 12px;
@@ -58,10 +34,25 @@
 
 .action-row {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 2px;
     padding: 4px 8px;
     border-left: 2px solid transparent;
+}
+
+/* ── Location label (top of each entry) ─────────────────────────── */
+.action-location {
+    font-size: 10px;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.action-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .action-row:hover {

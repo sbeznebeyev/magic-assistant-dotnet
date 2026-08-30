@@ -531,6 +531,34 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
     }
 
+    /// <inheritdoc />
+    public async Task<Dictionary<(int CollectionId, Guid CardId), int>> GetCardCountsAsync(IEnumerable<int> collectionIds, IEnumerable<Guid> cardIds, CancellationToken ct = default)
+    {
+        var colls = collectionIds.Distinct().ToList();
+        var ids = cardIds.Distinct().ToList();
+        if (colls.Count == 0 || ids.Count == 0)
+            return new Dictionary<(int CollectionId, Guid CardId), int>();
+
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+
+        // Parameterized IN clauses for SQLite compatibility
+        var collPlaceholders = string.Join(",", colls.Select((_, i) => $"@c{i}"));
+        var cardPlaceholders = string.Join(",", ids.Select((_, i) => $"@id{i}"));
+        var parameters = new DynamicParameters();
+        for (int i = 0; i < colls.Count; i++)
+            parameters.Add($"@c{i}", colls[i]);
+        for (int i = 0; i < ids.Count; i++)
+            parameters.Add($"@id{i}", ids[i]);
+
+        var rows = await conn.QueryAsync<(int CollectionId, Guid CardId, int Count)>(
+            $"SELECT CollectionId, CardId, SUM(Count) AS Count FROM Deck " +
+            $"WHERE CollectionId IN ({collPlaceholders}) AND CardId IN ({cardPlaceholders}) GROUP BY CollectionId, CardId",
+            parameters);
+
+        return rows.ToDictionary(r => (r.CollectionId, r.CardId), r => r.Count);
+    }
+
     /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
