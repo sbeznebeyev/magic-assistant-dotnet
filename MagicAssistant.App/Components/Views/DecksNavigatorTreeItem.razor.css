@@ -192,4 +192,46 @@
     color: #fff;
 }
 
+/* ── Lock Button (deck/collection rows only — mirrors the Pin button: ───────
+   hidden until row hover or locked — visibility, not display, so nothing ever shifts).
+   No circle, no fill — just ink: white when inactive, amber when locked. ─────── */
+.tree-lock-btn {
+    flex-shrink: 0;
+    /* 18×18 button centered in the 24px gutter — same geometry as the pin */
+    width: 18px;
+    height: 18px;
+    margin: 0 3px;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    background: transparent;
+    border: none;
+    color: #fff;
+    transition: color 0.2s ease, filter 0.2s ease;
+}
+
+.tree-lock-btn svg {
+    display: block;
+    fill: currentColor;
+    width: 16px;
+    height: 16px;
+}
+
+.tree-node:hover .tree-lock-btn {
+    visibility: visible;
+}
+
+.tree-lock-btn:hover {
+    filter: drop-shadow(0 0 4px currentColor);
+}
+
+.tree-lock-btn.locked {
+    /* stays visible after the mouse leaves — until unlocked */
+    visibility: visible;
+    color: #ffb300;
+}
+
 

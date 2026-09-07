@@ -90,7 +90,9 @@ public class DeckManagementService : IDeckManagementService
         if (id <= 0)
             throw new ArgumentException("Invalid ID.", nameof(id));
 
-        return await _lockNodeHandler.Handle(new LockNodeCommand(id), ct);
+        var result = await _lockNodeHandler.Handle(new LockNodeCommand(id), ct);
+        await SetSideboardLockAsync(id, locked: true, ct);
+        return result;
     }
 
     /// <inheritdoc />
@@ -99,7 +101,26 @@ public class DeckManagementService : IDeckManagementService
         if (id <= 0)
             throw new ArgumentException("Invalid ID.", nameof(id));
 
-        return await _unlockNodeHandler.Handle(new UnlockNodeCommand(id), ct);
+        var result = await _unlockNodeHandler.Handle(new UnlockNodeCommand(id), ct);
+        await SetSideboardLockAsync(id, locked: false, ct);
+        return result;
+    }
+
+    /// <summary>A deck's lock state propagates to its sideboard — the sideboard is never locked on its own.</summary>
+    private async Task SetSideboardLockAsync(int nodeId, bool locked, CancellationToken ct)
+    {
+        var collection = await _getNodeByIdHandler.Handle(new GetNodeByIdQuery(nodeId), ct);
+        if (collection is null || collection.NodeType != NodeType.Deck)
+            return;  // only decks own a sideboard
+
+        var deckNode = await _getNodesBranchHandler.HandleAsync(new GetNodesBranchQuery(nodeId), ct);
+        if (deckNode is not NavigatorNodeDeck { Sideboard: not null } deck)
+            return;
+
+        if (locked)
+            await _lockNodeHandler.Handle(new LockNodeCommand(deck.Sideboard.Id), ct);
+        else
+            await _unlockNodeHandler.Handle(new UnlockNodeCommand(deck.Sideboard.Id), ct);
     }
 
     /// <inheritdoc />

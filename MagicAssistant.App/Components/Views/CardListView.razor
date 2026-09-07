@@ -27,7 +27,7 @@
                     <tr class="@(SelectedCardId == card.Id ? "selected" : "")"
                         @onclick="() => SelectCard(card)">
                         <td class="col-num">
-                            @if (physical != null)
+                            @if (physical != null && !Locked)
                             {
                                 <div class="count-control">
                                     <button class="count-btn" @onclick:stopPropagation="true"
@@ -37,7 +37,12 @@
                                             @onclick="() => ChangeCount(physical, 1)" title="Increase count">+</button>
                                 </div>
                             }
-                            else if (KbAddMode)
+                            else if (physical != null)
+                            {
+                                @* Locked location — count is shown read-only, no mutation buttons *@
+                                <span class="count-value">@physical.Count</span>
+                            }
+                            else if (KbAddMode && !PinnedLocked)
                             {
                                 <div class="count-control">
                                     <button class="count-btn" @onclick:stopPropagation="true"
@@ -51,7 +56,7 @@
                         </td>
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
-                            @if (physical != null)
+                            @if (physical != null && !Locked)
                             {
                                 <button class="edit-btn" @onclick:stopPropagation="true"
                                         @onclick="() => EditCard(physical)" title="Edit card">✎</button>
@@ -125,6 +130,12 @@
 
     /// <summary>KB mode with a fixed collection set: show a (+) button that adds the card to it.</summary>
     [Parameter] public bool KbAddMode { get; set; }
+
+    /// <summary>The displayed collection is locked — −/+ and ✎/⫯ are hidden, count shown read-only.</summary>
+    [Parameter] public bool Locked { get; set; }
+
+    /// <summary>The pinned collection is locked — KB (+) is hidden.</summary>
+    [Parameter] public bool PinnedLocked { get; set; }
 
     /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
     [Parameter] public EventCallback<MagicCard> OnKbAddRequested { get; set; }

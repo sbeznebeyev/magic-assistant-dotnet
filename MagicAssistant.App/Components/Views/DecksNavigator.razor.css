@@ -240,12 +240,6 @@
     white-space: nowrap;
 }
 
-.tree-locked {
-    font-size: 12px;
-    flex-shrink: 0;
-    margin-left: 2px;
-}
-
 .tree-count {
     font-size: 11px;
     color: #888;

@@ -47,6 +47,7 @@
                           OnToggleExpand="ToggleNodeExpanded"
                           OnSelectDeck="OnSelectDeck"
                           OnPinToggled="OnPinToggle"
+                          OnLockToggled="OnLockToggle"
                           OnContextMenuToggle="OnContextMenuToggle"
                           OnAskCreateNode="OnAskCreateNode"
                           OnAddMenuToggle="OnAddMenuToggle" />
@@ -86,7 +87,6 @@
                 <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Collection)">🗂 New Collection</button>
                 <hr class="context-sep" />
                 <button @onclick="() => OpenDeckProperties(_contextTarget)">⚙ Properties</button>
-                <button @onclick="() => ToggleLock(_contextTarget)">@GetLockText(_contextTarget)</button>
                 <hr class="context-sep" />
                 <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
             </div>
@@ -202,6 +202,10 @@
     /// <summary>Pin button click — the clicked node as a LockableCollection.
     /// These buttons are the only source that changes MainLayout._pinnedCollection.</summary>
     [Parameter] public EventCallback<LockableCollection> OnPinToggled { get; set; }
+
+    /// <summary>Lock state changed on a node (and, for decks, its sideboard) — MainLayout keeps the
+    /// _currentCollection/_pinnedCollection IsLocked snapshots fresh and unpins locked nodes.</summary>
+    [Parameter] public EventCallback<(int Id, bool Locked)> OnNodeLockToggled { get; set; }
     [Parameter] public EventCallback<NavigatorNodeBase> OnOpenProperties { get; set; }
     [Parameter] public EventCallback OnShowAllCards { get; set; }
 
@@ -465,25 +469,6 @@
         }
     }
 
-    // ── Lock/Unlock ────────────────────────────────────────
-    private async Task ToggleLock(NavigatorNodeBase node)
-    {
-        CloseContextMenu();
-        try
-        {
-            if (node.Locked)
-                await DeckManagement.UnlockAsync(node.Id);
-            else
-                await DeckManagement.LockAsync(node.Id);
-            // In-place mutation — shared reference in the tree
-            node.Locked = !node.Locked;
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-    }
-
     // ── Delete ─────────────────────────────────────────────
     private ValueTask AskDelete(NavigatorNodeBase node)
     {
@@ -643,8 +628,6 @@
         _showRootAddMenu = false;
     }
 
-    private string GetLockText(NavigatorNodeBase node) => node.Locked ? "🔓 Unlock" : "🔒 Lock";
-
     // ── Context Menu (click-outside to close) ──────────────
     private void OnContextMenuToggle((int nodeId, double clientX, double clientY) args)
     {
@@ -663,34 +646,7 @@
         }
     }
 
-    // ── In-tree mutations (called from TreeItem callbacks) ──
-    private async Task OnRenameNode((int id, string newName) args)
-    {
-        try
-        {
-            await DeckManagement.RenameAsync(args.id, args.newName);
-            var node = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), args.id);
-            if (node != null) node.Name = args.newName;
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-    }
-
-    private async Task OnDeleteNode(int id)
-    {
-        try
-        {
-            await DeckManagement.DeleteDeckAsync(id);
-            RemoveFromTree(id);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-    }
-
+    // ── Lock toggle (TreeItem lock button — works like the Pin buttons) ──
     private async Task OnLockToggle(int id)
     {
         try
@@ -703,7 +659,16 @@
             else
                 await DeckManagement.LockAsync(id);
 
+            // In-place mutation — shared reference in the tree
             node.Locked = !node.Locked;
+
+            // A deck's lock propagates to its sideboard (Core persists it — sync the tree, notify MainLayout for both ids)
+            if (node is NavigatorNodeDeck { Sideboard: not null } deck)
+            {
+                deck.Sideboard.Locked = node.Locked;
+                await OnNodeLockToggled.InvokeAsync((deck.Sideboard.Id, node.Locked));
+            }
+            await OnNodeLockToggled.InvokeAsync((node.Id, node.Locked));
         }
         catch (Exception ex)
         {

@@ -119,7 +119,9 @@
                     <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
                     @if (FilterViewModel.CurrentCollectionId.HasValue
                         && PinnedCollectionId.HasValue
-                        && FilterViewModel.CurrentCollectionId != PinnedCollectionId)
+                        && FilterViewModel.CurrentCollectionId != PinnedCollectionId
+                        && !CurrentCollectionLocked
+                        && !PinnedCollectionLocked)
                     {
                         <button class="move-btn" @onclick="OnMoveClick" disabled="@(_selectedCardId == null)"
                                 title="@(_selectedCardId == null ? "Select a card to move" : "Move selected card to the fixed collection")">📦 Move</button>
@@ -170,6 +172,8 @@
                                   TotalPages="@_totalPages"
                                   PageSize="@_pageSize"
                                   Physicals="_physicalByCardId"
+                                  Locked="@CurrentCollectionLocked"
+                                  PinnedLocked="@PinnedCollectionLocked"
                                   OnCountChanged="ChangeCardCount"
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
@@ -291,6 +295,12 @@
     /// <summary>Pinned operation target (MainLayout._pinnedCollection.CollectionId).
     /// KB-mode (+) and quick Move work against it.</summary>
     [Parameter] public int? PinnedCollectionId { get; set; }
+
+    /// <summary>The displayed collection is locked — its card-mutation controls (−/+, ✎, ⫯) are hidden.</summary>
+    [Parameter] public bool CurrentCollectionLocked { get; set; }
+
+    /// <summary>The pinned collection is locked — KB (+) and quick Move are hidden.</summary>
+    [Parameter] public bool PinnedCollectionLocked { get; set; }
 
     /// <summary>Quick move: send the selected card (with all copies) to the pinned collection.
     /// Available only when a different collection is viewed (current != pinned, both set).</summary>

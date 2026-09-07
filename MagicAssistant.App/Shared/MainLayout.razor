@@ -39,6 +39,7 @@
                     @ref="_navigator"
                     OnDeckSelected="OnDeckSelected"
                     OnPinToggled="OnPinToggled"
+                    OnNodeLockToggled="OnNodeLockToggled"
                     OnOpenProperties="OnOpenPropertiesFromNav"
                     OnShowAllCards="OnShowKB"
                     OnNodeDeleted="OnNodeDeleted"
@@ -165,6 +166,16 @@
             _pinnedCollection = c;
             _statusText = $"Pinned {c.Name}";  // side effect of setting PinnedCollection
         }
+    }
+
+    /// <summary>Lock state changed in the navigator — keeps the current/pinned IsLocked snapshots fresh
+    /// (ToLockable captures them at selection time only) and unpins a node that just became locked.</summary>
+    private void OnNodeLockToggled((int Id, bool Locked) e)
+    {
+        if (_currentCollection.CollectionId == e.Id)
+            _currentCollection.IsLocked = e.Locked;
+        if (e.Locked && _pinnedCollection.CollectionId == e.Id)
+            _pinnedCollection = new();  // a locked node cannot stay pinned
     }
 
     /// <summary>InstancesView jump — delegates the selection to the navigator: it highlights its own node
@@ -365,6 +376,8 @@
                                   RefreshTrigger="@_kbRefreshTrigger"
                                   OnCardOperation="RecordLastActionAsync"
                                   PinnedCollectionId="@_pinnedCollection.CollectionId"
+                                  CurrentCollectionLocked="@_currentCollection.IsLocked"
+                                  PinnedCollectionLocked="@_pinnedCollection.IsLocked"
                                   OnEditCard="OpenEditCard"
                                   OnSplitCard="OpenSplit"
                                   OnMoveToPinned="OnMoveToPinned" />
@@ -382,7 +395,9 @@
                                 OnOpenSync="OnOpenSyncDialog"
                                 RefreshTrigger="@_kbRefreshTrigger"
                                 OnCardOperation="RecordLastActionAsync"
-                                PinnedCollectionId="@_pinnedCollection.CollectionId" />
+                                PinnedCollectionId="@_pinnedCollection.CollectionId"
+                                CurrentCollectionLocked="@_currentCollection.IsLocked"
+                                PinnedCollectionLocked="@_pinnedCollection.IsLocked" />
         </div>;
     }
 }
