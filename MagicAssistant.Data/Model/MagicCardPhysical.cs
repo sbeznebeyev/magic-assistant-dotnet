@@ -7,7 +7,6 @@ namespace MagicAssistant.Data.Model;
 // TODO: rename to MyCard
 public class MagicCardPhysical : IMagicCardPhysical
 {
-    private float? _price;
     private string? _comment;
     private string? _specialTags;
     private string? _custom;
@@ -46,12 +45,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     public DateTimeOffset DateAdded { get; set; }
 
     // === User-defined properties (direct fields — no _properties dict) ===
-    public float? Price
-    {
-        get => _price;
-        set => _price = value;
-    }
-
     public string? Comment
     {
         get => _comment;
@@ -86,7 +79,10 @@ public class MagicCardPhysical : IMagicCardPhysical
     public int? CmcNumber => Card.CmcNumber;
     public string? CmcText => Card.CmcText;
     public string? ColorType => Card.ColorType;
-    public float DbPrice => Card.DbPrice;
+    /// <summary>
+    /// Per-instance price, persisted in Deck.MyPrice (one per collection row).
+    /// </summary>
+    public float MyPrice { get; set; }
     public float CommunityRating => Card.CommunityRating;
 
     // === Deep clone — mirrors Java MagicCardPhysical.clone() ===
@@ -210,19 +206,11 @@ public class MagicCardPhysical : IMagicCardPhysical
     {
         if (!Card.Equals(other.Card)) return false;
         if (IsOwn != other.IsOwn) return false;
+        if (MyPrice != other.MyPrice) return false;
         if (!EqualsNull(Custom, other.Custom)) return false;
         if (!EqualsNull(Comment, other.Comment)) return false;
         if (!EqualsNull(SpecialTags, other.SpecialTags)) return false;
-        // Float comparison with tolerance to avoid precision issues
-        if (!FloatEquals(Price, other.Price)) return false;
         return true;
-    }
-
-    private static bool FloatEquals(float? a, float? b)
-    {
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-        return Math.Abs(a.Value - b.Value) < 0.001f;
     }
 
     private static bool EqualsNull(string? a, string? b)

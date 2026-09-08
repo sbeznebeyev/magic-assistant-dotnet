@@ -156,8 +156,8 @@ public class DeckCardService : IDeckCardService
                 case MagicCardField.IsOwn when value is bool isOwn:
                     matching.IsOwn = isOwn;
                     fieldsToUpdate.Add(field); break;
-                case MagicCardField.Price when value is float price:
-                    matching.Price = price;
+                case MagicCardField.MyPrice when value is float price:
+                    matching.MyPrice = price;
                     fieldsToUpdate.Add(field); break;
                 case MagicCardField.Comment when value is string comment:
                     matching.Comment = comment;
@@ -204,7 +204,7 @@ public class DeckCardService : IDeckCardService
         var rightPart = new MagicCardPhysical(matching.Card, location, matching.IsOwn)
         {
             Count = rightCount,
-            Price = matching.Price,
+            MyPrice = matching.MyPrice,
             Comment = matching.Comment,
             SpecialTags = matching.SpecialTags,
             Custom = matching.Custom,

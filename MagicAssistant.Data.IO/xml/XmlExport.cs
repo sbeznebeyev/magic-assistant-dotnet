@@ -100,7 +100,7 @@ public static class XmlExport
 
         // Physical fields — only write non-default values (mirrors Java behavior)
         WriteElementIf(writer, "count", physical.Count.ToString(), physical.Count != 1);
-        WriteElementIf(writer, "price", physical.Price?.ToString(System.Globalization.CultureInfo.InvariantCulture), physical.Price.HasValue && physical.Price.Value != 0f);
+        WriteElementIf(writer, "price", physical.MyPrice.ToString(System.Globalization.CultureInfo.InvariantCulture), physical.MyPrice != 0f);
         WriteElementIf(writer, "comment", physical.Comment, !string.IsNullOrEmpty(physical.Comment));
         WriteElementIf(writer, "custom", physical.Custom, !string.IsNullOrEmpty(physical.Custom));
         WriteElementIf(writer, "ownership", physical.IsOwn.ToString().ToLowerInvariant(), !physical.IsOwn);

@@ -91,7 +91,6 @@ public class MagicCard : IMagicCard
     public int? IdentityBits { get; set; }
 
     // === Additional fields ===
-    public float DbPrice { get; set; }
     public float CommunityRating { get; set; }
     public int Side { get; set; }
     public int CollectorNumberId { get; set; }

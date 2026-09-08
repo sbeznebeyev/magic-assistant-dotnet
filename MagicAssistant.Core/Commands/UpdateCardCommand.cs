@@ -52,8 +52,8 @@ public class UpdateCardCommandHandler
                     matching.IsOwn = isOwn;
                     fieldsToUpdate.Add(field);
                     break;
-                case MagicCardField.Price when value is float price:
-                    matching.Price = price;
+                case MagicCardField.MyPrice when value is float price:
+                    matching.MyPrice = price;
                     fieldsToUpdate.Add(field);
                     break;
                 case MagicCardField.Comment when value is string comment:

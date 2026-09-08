@@ -158,7 +158,7 @@ public class MagicCardPhysicalTests
     [Test]
     public void TradeSplit_SplitsCardsCorrectly()
     {
-        var physical = new MagicCardPhysical(Card()) { Count = 4, Price = 5.0f, Comment = "test" };
+        var physical = new MagicCardPhysical(Card()) { Count = 4, MyPrice = 5.0f, Comment = "test" };
         // fcount(2) < count(4) → actual split occurs
         var tradeCopy = physical.TradeSplit(4, 2);
 
@@ -167,7 +167,7 @@ public class MagicCardPhysicalTests
         Assert.That(tradeCopy!.Count, Is.EqualTo(2));
         Assert.That(tradeCopy.HasSpecialTag("fortrade"), Is.True);
         Assert.That(physical.HasSpecialTag("fortrade"), Is.False); // original cleared
-        Assert.That(tradeCopy.Price, Is.EqualTo(5.0f));
+        Assert.That(tradeCopy.MyPrice, Is.EqualTo(5.0f));
         Assert.That(tradeCopy.Comment, Is.EqualTo("test"));
     }
 
@@ -196,8 +196,8 @@ public class MagicCardPhysicalTests
             new MagicCardPhysical(Card()) { Count = 4, IsOwn = false }), Is.False);
 
         // Different price
-        Assert.That(new MagicCardPhysical(Card()) { Price = 1f }.Matching(
-            new MagicCardPhysical(Card()) { Price = 2f }), Is.False);
+        Assert.That(new MagicCardPhysical(Card()) { MyPrice = 1f }.Matching(
+            new MagicCardPhysical(Card()) { MyPrice = 2f }), Is.False);
 
         // Different comment
         Assert.That(new MagicCardPhysical(Card()) { Comment = "a" }.Matching(

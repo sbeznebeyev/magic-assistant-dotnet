@@ -34,7 +34,6 @@ public static class MagicCardFieldExtensions
             MagicCardField.ColorType => card.ColorType,
             MagicCardField.Text => card.Text,
             MagicCardField.Side => card.Side,
-            MagicCardField.DbPrice => card.DbPrice,
             MagicCardField.CommunityRating => card.CommunityRating,
             MagicCardField.EnglishName => card.EnglishName,
             MagicCardField.Edition => card.CardSet?.SetCode,
@@ -55,10 +54,10 @@ public static class MagicCardFieldExtensions
             MagicCardField.EnglishType => card.Type,
 
             // Physical fields — delegate to physical methods
+            MagicCardField.MyPrice => GetMyPrice(card),
             MagicCardField.Count => GetPhysicalCount(card),
             MagicCardField.IsOwn => GetIsOwn(card),
             MagicCardField.Location => card.Location,
-            MagicCardField.Price => GetPrice(card),
             MagicCardField.Comment => GetComment(card),
             MagicCardField.Special => GetSpecial(card),
             MagicCardField.DateAdded => GetDateAdded(card),
@@ -129,9 +128,6 @@ public static class MagicCardFieldExtensions
             case MagicCardField.CollectorNumber:
                 card.CollectorNumber = value?.ToString();
                 break;
-            case MagicCardField.DbPrice:
-                card.DbPrice = CastToFloat(value);
-                break;
             case MagicCardField.CommunityRating:
                 card.CommunityRating = CastToFloat(value);
                 break;
@@ -152,7 +148,6 @@ public static class MagicCardFieldExtensions
             case MagicCardField.Count:
             case MagicCardField.IsOwn:
             case MagicCardField.Location:
-            case MagicCardField.Price:
             case MagicCardField.Comment:
             case MagicCardField.Special:
             case MagicCardField.DateAdded:
@@ -193,9 +188,6 @@ public static class MagicCardFieldExtensions
                 else
                     physical.Location = Location.FromPath(value?.ToString() ?? string.Empty);
                 break;
-            case MagicCardField.Price:
-                physical.Price = CastToFloat(value);
-                break;
             case MagicCardField.Comment:
                 physical.Comment = value?.ToString();
                 break;
@@ -215,6 +207,9 @@ public static class MagicCardFieldExtensions
                 break;
             case MagicCardField.ForTradeCount:
                 physical.SetForTradeCount(CastToInt(value));
+                break;
+            case MagicCardField.MyPrice:
+                physical.MyPrice = CastToFloat(value);
                 break;
         }
     }
@@ -287,14 +282,15 @@ public static class MagicCardFieldExtensions
         {
             "edition" => MagicCardField.Set,
             "qty" => MagicCardField.Count,
+            "price" => MagicCardField.MyPrice, // legacy alias for the per-instance price (Deck.MyPrice)
             _ => null,
         };
     }
 
     // === Helper methods for physical card fields ===
+    private static float GetMyPrice(IMagicCard card) => card is MagicCardPhysical p ? p.MyPrice : 0f;
     private static int GetPhysicalCount(IMagicCard card) => card.IsPhysical ? card.Count : 1;
     private static bool GetIsOwn(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.IsOwn : false;
-    private static float? GetPrice(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Price : null;
     private static string? GetComment(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Comment : null;
     private static string? GetSpecial(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.SpecialTags : null;
     private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.DateAdded : null;

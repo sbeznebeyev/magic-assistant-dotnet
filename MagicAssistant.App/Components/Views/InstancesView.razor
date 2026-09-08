@@ -48,9 +48,9 @@
 
                     @* Properties *@
                     <div class="instance-right">
-                        @if (instance.Price.HasValue)
+                        @if (instance.MyPrice > 0)
                         {
-                            <span class="prop-price" title="Price">@instance.Price.Value.ToString("F2")</span>
+                            <span class="prop-price" title="Price">@instance.MyPrice.ToString("F2")</span>
                         }
                         @if (!string.IsNullOrEmpty(instance.SpecialTags))
                         {

@@ -77,7 +77,6 @@ public static class InitializeDb
                 ColorType       TEXT,
                 Side            INTEGER DEFAULT 0,
                 CollectorNumberId INTEGER DEFAULT 0,
-                DbPrice         REAL DEFAULT 0,
                 CommunityRating REAL DEFAULT 0,
                 LegalityFormats TEXT,
                 Colors          TEXT,
@@ -142,6 +141,7 @@ public static class InitializeDb
                 Comment      TEXT,
                 DateAdded    DateTime,
                 ForTradeCount INTEGER,
+                MyPrice       REAL DEFAULT 0,
                 PRIMARY KEY (CollectionId, CardId),
                 FOREIGN KEY (CollectionId) REFERENCES Collection(Id) ON DELETE CASCADE,
                 FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE

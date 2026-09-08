@@ -258,14 +258,14 @@ public class CommandHandlerTests
         {
             [MagicCardField.Count] = 4,
             [MagicCardField.IsOwn] = false,
-            [MagicCardField.Price] = 5.5f,
+            [MagicCardField.MyPrice] = 5.5f,
             [MagicCardField.Comment] = "My comment",
         }));
 
         // Проверяем, что in-memory состояние обновлено
         Assert.That(physical.Count, Is.EqualTo(4));
         Assert.That(physical.IsOwn, Is.False);
-        Assert.That(physical.Price, Is.EqualTo(5.5f));
+        Assert.That(physical.MyPrice, Is.EqualTo(5.5f));
         Assert.That(physical.Comment, Is.EqualTo("My comment"));
 
         // КРИТИЧЕСКИ ВАЖНО: проверяем, что UpdateAsync был вызван с ВСЕМИ 4 полями
@@ -275,7 +275,7 @@ public class CommandHandlerTests
             "BUG: поле Count не передано в UpdateAsync — изменение количества не сохранится в БД");
         Assert.That(capturedFields!.Contains(MagicCardField.IsOwn), Is.True,
             "BUG: поле IsOwn не передано в UpdateAsync — изменение ownership не сохранится в БД");
-        Assert.That(capturedFields!.Contains(MagicCardField.Price), Is.True,
+        Assert.That(capturedFields!.Contains(MagicCardField.MyPrice), Is.True,
             "BUG: поле Price не передано в UpdateAsync — изменение цены не сохранится в БД");
         Assert.That(capturedFields!.Contains(MagicCardField.Comment), Is.True,
             "BUG: поле Comment не передано в UpdateAsync — комментарий не сохранится в БД");

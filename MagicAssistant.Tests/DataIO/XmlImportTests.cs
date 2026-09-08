@@ -122,7 +122,7 @@ public class XmlImportTests
         Assert.That(result.Cards, Has.Count.EqualTo(1));
         var physical = (MagicCardPhysical)result.Cards[0];
 
-        Assert.That(physical.Price, Is.EqualTo(5.0f).Within(0.001f),
+        Assert.That(physical.MyPrice, Is.EqualTo(5.0f).Within(0.001f),
             "Price should be parsed from direct <price> element inside <mcp>");
         Assert.That(physical.Comment, Is.EqualTo("My card comment"),
             "Comment should be parsed from direct <comment> element inside <mcp>");

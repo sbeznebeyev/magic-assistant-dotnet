@@ -116,7 +116,7 @@
 
         _count = card.Count;
         _isOwn = card.IsOwn;
-        _price = card.Price;
+        _price = card.MyPrice > 0 ? card.MyPrice : (float?)null;
         _comment = card.Comment ?? "";
         _tags = card.SpecialTags ?? "";
         _forTradeCount = card.GetForTradeCount();
@@ -138,8 +138,8 @@
             if (_isOwn != _card.IsOwn)
                 updates[MagicCardField.IsOwn] = _isOwn;
 
-            if (_price.HasValue && _price.Value != (_card.Price ?? 0))
-                updates[MagicCardField.Price] = _price.Value;
+            if (_price.HasValue && _price.Value != _card.MyPrice)
+                updates[MagicCardField.MyPrice] = _price.Value;
 
             if (_comment != (_card.Comment ?? ""))
                 updates[MagicCardField.Comment] = _comment.Trim();

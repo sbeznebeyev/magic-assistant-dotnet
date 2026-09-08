@@ -127,7 +127,7 @@ public class XmlExportTests
         var physical = new MagicCardPhysical(card)
         {
             Count = 1,
-            Price = 5.0f,
+            MyPrice = 5.0f,
             Comment = "test card comment",
             Custom = "custom data"
         };

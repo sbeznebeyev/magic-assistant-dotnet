@@ -10,7 +10,6 @@ public interface ICardModifiable : IMagicCard
 {
     bool IsOwn { get; set; }
     new Location Location { get; set; }
-    float? Price { get; set; }
     string? Comment { get; set; }
     string? SpecialTags { get; set; }
     string? Custom { get; set; }

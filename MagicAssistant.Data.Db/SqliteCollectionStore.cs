@@ -274,8 +274,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             throw new InvalidOperationException($"Cannot add cards to a locked node (Id={locationId})");
 
         await conn.ExecuteAsync(@"
-            INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount)
-            VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount)
+            INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
+            VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
             ON CONFLICT(CollectionId, CardId) DO UPDATE SET
                 Count = Count + excluded.Count,
                 IsOwn = excluded.IsOwn,
@@ -289,7 +289,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                 IsOwn = card.IsOwn,
                 Comment = card.Comment,
                 DateAdded = card.DateAdded,
-                ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null
+                ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
+                MyPrice = card.MyPrice
             });
 
         return true;
@@ -324,8 +325,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                     throw new ArgumentException($"Card '{card.Name}' has no valid location", nameof(card));
 
                 await conn.ExecuteAsync(@"
-                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount)
-                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount)
+                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
+                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
                     ON CONFLICT(CollectionId, CardId) DO UPDATE SET
                         Count = Count + excluded.Count,
                         IsOwn = excluded.IsOwn,
@@ -339,7 +340,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                         IsOwn = card.IsOwn,
                         Comment = card.Comment,
                         DateAdded = card.DateAdded,
-                        ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null
+                        ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
+                        MyPrice = card.MyPrice
                     }, tx);
             }
 
@@ -430,6 +432,10 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                     setClauses.Add("Comment = @Comment");
                     parameters.Add("@Comment", value?.ToString());
                     break;
+                case MagicCardField.MyPrice:
+                    setClauses.Add("MyPrice = @MyPrice");
+                    parameters.Add("@MyPrice", CastToFloat(value));
+                    break;
             }
         }
 
@@ -454,7 +460,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   c.DbPrice, c.CommunityRating, c.LegalityFormats
+                   d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
             WHERE d.CardId = @CardId LIMIT 1",
@@ -473,7 +479,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   c.DbPrice, c.CommunityRating, c.LegalityFormats
+                   d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
             WHERE d.CardId = @CardId",
@@ -500,7 +506,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   c.DbPrice, c.CommunityRating, c.LegalityFormats
+                   d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id");
 
@@ -521,7 +527,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   c.DbPrice, c.CommunityRating, c.LegalityFormats
+                   d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
             WHERE d.CollectionId = @DeckId",
@@ -587,7 +593,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   c.DbPrice, c.CommunityRating, c.LegalityFormats
+                   d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
             WHERE d.CollectionId IN (" + placeholders + ")",
@@ -744,7 +750,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             CmcText = row.CmcText,
             Side = row.Side,
             CollectorNumberId = row.CollectorNumberId,
-            DbPrice = row.DbPrice,
             CommunityRating = row.CommunityRating,
         };
 
@@ -770,6 +775,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         var physical = new MagicCardPhysical(baseCard, location, row.IsOwn)
         {
             Count = row.Count,
+            MyPrice = row.MyPrice,
         };
 
         if (!string.IsNullOrEmpty(row.Comment))
@@ -787,6 +793,14 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         if (value == null) return 0;
         if (value is int i) return i;
         if (value is string s) return int.Parse(s);
+        throw new InvalidCastException(value.GetType().ToString());
+    }
+
+    private static float CastToFloat(object? value)
+    {
+        if (value == null) return 0f;
+        if (value is float f) return f;
+        if (value is string s) return float.Parse(s);
         throw new InvalidCastException(value.GetType().ToString());
     }
 
@@ -844,7 +858,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public string? ColorType { get; set; }
         public int Side { get; set; }
         public int CollectorNumberId { get; set; }
-        public float DbPrice { get; set; }
+        public float MyPrice { get; set; }
         public float CommunityRating { get; set; }
         public string? LegalityFormats { get; set; }
     }

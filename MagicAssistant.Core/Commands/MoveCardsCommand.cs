@@ -67,7 +67,7 @@ public class MoveCardsCommandHandler
             var targetInstance = new MagicCardPhysical(instance.Card, targetLocation, instance.IsOwn)
             {
                 Count = moveCount,
-                Price = instance.Price,
+                MyPrice = instance.MyPrice,
                 Comment = instance.Comment,
                 SpecialTags = instance.SpecialTags,
                 Custom = instance.Custom,

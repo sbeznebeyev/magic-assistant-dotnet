@@ -37,8 +37,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         await conn.OpenAsync(ct);
 
         var sql = @"
-            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, DbPrice, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @DbPrice, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
+            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
         var result = await conn.ExecuteAsync(sql, new
         {
@@ -68,7 +68,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             card.ColorType,
             card.Side,
             card.CollectorNumberId,
-            card.DbPrice,
             card.CommunityRating,
             LegalityFormats = card.LegalityMap.IsEmpty ? null : string.Join(',', card.LegalityMap.LegalFormats.Select(f => f.ToString())),
             Colors = card.Colors is { Length: > 0 } ? string.Join(',', card.Colors) : (string?)null,
@@ -110,8 +109,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         try
         {
             var sql = @"
-                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, DbPrice, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @DbPrice, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
+                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
             await conn.ExecuteAsync(sql, list.Select(c => new
             {
@@ -141,7 +140,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 c.ColorType,
                 c.Side,
                 c.CollectorNumberId,
-                c.DbPrice,
                 c.CommunityRating,
                 LegalityFormats = c.LegalityMap.IsEmpty ? null : string.Join(',', c.LegalityMap.LegalFormats.Select(f => f.ToString())),
                 Colors = c.Colors is { Length: > 0 } ? string.Join(',', c.Colors) : (string?)null,
@@ -263,10 +261,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 case MagicCardField.Text:
                     setClauses.Add("Text = @Text");
                     parameters.Add("@Text", card.Text);
-                    break;
-                case MagicCardField.DbPrice:
-                    setClauses.Add("DbPrice = @DbPrice");
-                    parameters.Add("@DbPrice", card.DbPrice);
                     break;
                 case MagicCardField.CommunityRating:
                     setClauses.Add("CommunityRating = @CommunityRating");
@@ -1559,7 +1553,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             CmcText = row.CmcText,
             Side = row.Side,
             CollectorNumberId = row.CollectorNumberId,
-            DbPrice = row.DbPrice,
             CommunityRating = row.CommunityRating,
         };
 
@@ -1998,7 +1991,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         public string? ColorType { get; set; }
         public int Side { get; set; }
         public int CollectorNumberId { get; set; }
-        public float DbPrice { get; set; }
         public float CommunityRating { get; set; }
         public string? LegalityFormats { get; set; }
         public string? Colors { get; set; }

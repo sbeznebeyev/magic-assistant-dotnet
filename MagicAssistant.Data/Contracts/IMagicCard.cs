@@ -19,7 +19,6 @@ public interface IMagicCard : ICard
     int? CmcNumber { get; }
     string? CmcText { get; }
     string? ColorType { get; }
-    float DbPrice { get; }
     float CommunityRating { get; }
     IMagicCard Clone();
     MagicCard GetBase();

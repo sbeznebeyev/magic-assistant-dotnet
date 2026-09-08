@@ -20,7 +20,7 @@ public class XmlRoundTripTests
             Location.FromPath("deck-1"), true)
         {
             Count = 4,
-            Price = 2.5f,
+            MyPrice = 2.5f,
             Comment = "Test comment",
             SpecialTags = "foil,premium",
             Custom = "custom-data",
@@ -39,7 +39,7 @@ public class XmlRoundTripTests
         Assert.That(imported.Name, Is.EqualTo("Lightning Bolt"));
         Assert.That(imported.SetCode, Is.EqualTo("m19"));
         Assert.That(imported.Count, Is.EqualTo(4));
-        Assert.That(imported.Price, Is.EqualTo(2.5f).Within(0.01f));
+        Assert.That(imported.MyPrice, Is.EqualTo(2.5f).Within(0.01f));
         Assert.That(imported.Comment, Is.EqualTo("Test comment"));
         Assert.That(imported.SpecialTags, Is.EqualTo("foil,premium"));
         Assert.That(imported.Custom, Is.EqualTo("custom-data"));
@@ -74,7 +74,7 @@ public class XmlRoundTripTests
         {
             new MagicCardPhysical(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
-                Location.FromPath("deck-1"), true) { Count = 4, Price = 2.5f },
+                Location.FromPath("deck-1"), true) { Count = 4, MyPrice = 2.5f },
             new MagicCardPhysical(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
                 Location.FromPath("deck-1"), true) { Count = 24 },
@@ -156,7 +156,7 @@ public class XmlRoundTripTests
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             Location.FromPath("deck-1"), true)
         {
-            Price = 0f,
+            MyPrice = 0f,
         };
 
         var xml = XmlExport.ExportToXml("Deck", null, null, "deck", new[] { physical });
@@ -167,7 +167,7 @@ public class XmlRoundTripTests
         var result = XmlImport.ImportFromXml(xml);
         var imported = (MagicCardPhysical)result.Cards[0];
 
-        Assert.That(imported.Price, Is.Null.Or.EqualTo(0f));
+        Assert.That(imported.MyPrice, Is.EqualTo(0f));
     }
 
 }

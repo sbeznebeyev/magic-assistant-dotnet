@@ -22,7 +22,6 @@ public enum MagicCardField
     ColorType,
     Text,
     Side,
-    DbPrice,
     CommunityRating,
     EnglishName,
     Edition,
@@ -44,11 +43,11 @@ public enum MagicCardField
     Count,
     IsOwn,
     Location,
-    Price,
     Comment,
     Special,
     DateAdded,
     Custom,
+    MyPrice,
     ForTradeCount,
 
     // === Derived/computed fields ===
