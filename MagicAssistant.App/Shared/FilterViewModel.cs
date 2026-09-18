@@ -45,11 +45,21 @@ public class FilterViewModel
     /// <summary>Fired when Apply() is called — subscribers should re-query.</summary>
     public event Action? Changed;
 
+    /// <summary>Increments on every Clear() call — subscribers use it to detect an external reset
+    /// and sync their local input state (e.g. the debounced name-filter buffer in CardsListControl).</summary>
+    public int ClearGeneration { get; private set; }
+
     // ── Filter properties ──
 
     /// <summary>Set code filters — multiple values combined as OR expression (set1 OR set2 OR ...).
     /// External components should use <see cref="SetNewSetCodeFilter(string)" /> instead of mutating directly.</summary>
     public List<string> SetCodes { get; set; } = new();
+
+    /// <summary>Text from the "Filter sets..." sidebar input. CardsListControl resolves it into matching
+    /// set codes in <see cref="SetCodes" /> (the canonical OR filter); the property itself persists across
+    /// component remounts (e.g. deck → Knowledge Base), so an active set search survives navigation.
+    /// Reset by <see cref="Clear()" />.</summary>
+    public string SetSearchText { get; set; } = string.Empty;
 
     /// <summary>Rarity filters — multiple values combined as OR expression (common OR uncommon OR ...).
     /// External components should use <see cref="SetNewRarityFilter(string)" /> instead of mutating directly.</summary>
@@ -236,7 +246,9 @@ public class FilterViewModel
     /// <summary>Reset all filters and sort to defaults without notifying.</summary>
     public void Clear()
     {
+        ClearGeneration++;
         SetCodes = new List<string>();
+        SetSearchText = string.Empty;
         Rarity = new List<string>();
         NameFilter = string.Empty;
         SearchQuery = string.Empty;

@@ -225,6 +225,9 @@
     private System.Threading.Timer? _nameDebounceTimer;
     private int _debounceSequence;
 
+    /// <summary>Last seen FilterViewModel.ClearGeneration — detects external resets (Clear All).</summary>
+    private int _lastClearGeneration;
+
     // Static options
     private static readonly string[] _rarities = { "common", "uncommon", "rare", "mythic" };
     private static readonly (string Key, string DisplayName)[] _typeOptions =
@@ -242,6 +245,10 @@
     private List<CardSetDto> _sets = new();
     private List<CardSetDto> _filteredSets = new();
     private string _setsSearchQuery = "";
+
+    // Set search debounce (same pattern as the name filter)
+    private System.Threading.Timer? _setsDebounceTimer;
+    private int _setsDebounceSequence;
 
     // Splitter / Resizable sidebar
     private ElementReference _splitterRef;
@@ -309,10 +316,14 @@
     protected override async Task OnInitializedAsync()
     {
         FilterViewModel.Changed += OnFilterChanged;
+        _lastClearGeneration = FilterViewModel.ClearGeneration;
+        // Restore set search text across component remounts (@key change on navigation)
+        _setsSearchQuery = FilterViewModel.SetSearchText;
         await LoadSplitterSettingsAsync();
         await LoadViewModeAsync();
         await LoadPageSizeAsync();
         await LoadSetsFromKB();
+        ResolveSetSearchCodes();   // re-resolve SetCodes from the restored text against the fresh set list
         await LoadCounts();
         await ApplyFiltersAndPagination();
     }
@@ -324,6 +335,28 @@
         _currentPage = 1;
         InvokeAsync(async () =>
         {
+            // Sync local set-search state when the filter was cleared through the channel
+            // (toolbar ✕ / CardFilterDialog Clear All) — the input must not keep stale text.
+            if (string.IsNullOrEmpty(FilterViewModel.SetSearchText) && !string.IsNullOrEmpty(_setsSearchQuery))
+            {
+                _setsSearchQuery = string.Empty;
+                _filteredSets = _sets;
+            }
+
+            // Detect an external reset via ClearGeneration: after Clear All the debounced name buffer
+            // must not keep stale text — and a pending debounce timer must not resurrect the filter.
+            if (FilterViewModel.ClearGeneration != _lastClearGeneration)
+            {
+                _lastClearGeneration = FilterViewModel.ClearGeneration;
+                if (string.IsNullOrEmpty(FilterViewModel.NameFilter))
+                {
+                    _nameInputBuffer = string.Empty;
+                    _nameDebounceTimer?.Dispose();
+                    _nameDebounceTimer = null;
+                    _debounceSequence++;
+                }
+            }
+
             await ApplyFiltersAndPagination();
             StateHasChanged();
         });
@@ -367,16 +400,43 @@
 
     private void OnSetsFilterInput(ChangeEventArgs e)
     {
-        // Typing in the input = search mode; clear any active set filter
-        FilterViewModel.SetNewSetCodeFilter(null);
-        _setsSearchQuery = e.Value?.ToString() ?? string.Empty;
-        ApplySetsFilter();
+        var text = e.Value?.ToString() ?? string.Empty;
+        _setsSearchQuery = text;
+        FilterViewModel.SetSearchText = text;  // canonical state — survives component remounts
+        ApplySetsFilter();                      // instant sidebar narrowing
+        ResolveSetSearchCodes();                // sync SetCodes (no-op below the 2-char threshold)
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            // Empty input — drop the pending debounce and restore the unfiltered list immediately
+            _setsDebounceTimer?.Dispose();
+            _setsDebounceTimer = null;
+            _setsDebounceSequence++;
+            FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
+        }
+        else
+        {
+            // Debounce the DB re-query — same pattern as the name filter (300ms)
+            _setsDebounceTimer?.Dispose();
+            _setsDebounceTimer = null;
+            int sequence = ++_setsDebounceSequence;
+            _setsDebounceTimer = new System.Threading.Timer(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (sequence != _setsDebounceSequence) return;
+                    FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
+                });
+            }, null, 300, Timeout.Infinite);
+        }
+
         StateHasChanged();
     }
 
     private async Task ClearSetsFilter()
     {
         FilterViewModel.SetNewSetCodeFilter(null);
+        FilterViewModel.SetSearchText = string.Empty;
         _setsSearchQuery = "";
         ApplySetsFilter();
         await OnCardSelected.InvokeAsync((Guid?)null);
@@ -385,12 +445,15 @@
 
     private string GetSetsInputValue()
     {
-        // Show set codes when sets are selected as filter; otherwise show search text
+        // Active search text takes precedence — the input is a free-text field in search mode
+        if (!string.IsNullOrEmpty(_setsSearchQuery))
+            return _setsSearchQuery;
+        // Show set codes when sets are selected as filter
         if (FilterViewModel.SetCodes.Count == 1)
             return FilterViewModel.SetCodes[0];
         if (FilterViewModel.SetCodes.Count > 1)
             return $"{FilterViewModel.SetCodes.Count} sets";
-        return _setsSearchQuery;
+        return string.Empty;
     }
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
@@ -436,8 +499,25 @@
         }
     }
 
+    /// <summary>Resolves the active set search text into FilterViewModel.SetCodes — the canonical channel
+    /// that feeds CardListFilter.SetCodes and survives component remounts. No-op when no search text is
+    /// active (explicit set selections stay untouched).</summary>
+    private void ResolveSetSearchCodes()
+    {
+        if (string.IsNullOrWhiteSpace(_setsSearchQuery) || _setsSearchQuery.Length < 2)
+            return;
+        FilterViewModel.SetSetCodes(_filteredSets.Select(s => s.Code));
+    }
+
     private async Task SelectSetFilter(string setCode)
     {
+        // Committing an explicit selection ends text-search mode and discards the resolved codes
+        if (!string.IsNullOrEmpty(FilterViewModel.SetSearchText))
+        {
+            FilterViewModel.SetSearchText = string.Empty;
+            _setsSearchQuery = "";  // input shows the set code(s) from now on
+            FilterViewModel.SetNewSetCodeFilter(null);
+        }
         // Toggle: if already selected, remove it; otherwise add it
         if (FilterViewModel.SetCodes.Contains(setCode))
         {
@@ -447,7 +527,6 @@
         {
             FilterViewModel.SetCodes.Add(setCode);
         }
-        _setsSearchQuery = "";  // Clear search so input shows the set code(s)
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
     }
@@ -455,6 +534,7 @@
     private async Task SelectAllSets()
     {
         FilterViewModel.SetNewSetCodeFilter(null);
+        FilterViewModel.SetSearchText = string.Empty;
         _setsSearchQuery = "";  // Clear search text too
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
@@ -525,6 +605,7 @@
             _currentPage = 1;
             await LoadSetsFromKB();   // reload sets list after sync
             ApplySetsFilter();         // re-apply search filter on sets
+            ResolveSetSearchCodes();   // keep resolved codes in sync with the refreshed set list
             await LoadCounts();        // refresh total card count
             await ApplyFiltersAndPagination();
         }
@@ -945,6 +1026,7 @@
     /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
     private bool HasActiveFilters =>
         FilterViewModel.SetCodes.Count > 0
+        || (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
         || FilterViewModel.Rarity.Count > 0
         || FilterViewModel.TypeFilter.Count > 0
         || !string.IsNullOrWhiteSpace(FilterViewModel.NameFilter)
@@ -977,8 +1059,9 @@
         // Unsubscribe from FilterViewModel
         FilterViewModel.Changed -= OnFilterChanged;
 
-        // Dispose debounce timer
+        // Dispose debounce timers
         _nameDebounceTimer?.Dispose();
+        _setsDebounceTimer?.Dispose();
 
         // Microsoft Learn pattern: try-catch JSDisconnectedException
         var module = _jsModule;
