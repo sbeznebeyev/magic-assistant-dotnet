@@ -18,12 +18,19 @@
                     {
                         <th class="col-num">#</th>
                     }
-                    <th class="col-name">Name</th>
-                    <th class="col-cmc">CMC</th>
+                    @* Sortable headers: click = switch sort to this column (ascending if new),
+                       repeat click on the same header toggles the direction. *@
+                    <th class="col-name sortable @(IsSorted(CardListFilter.SortFields.Name) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.Name))">Name<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Name)</span></th>
+                    <th class="col-cmc sortable @(IsSorted(CardListFilter.SortFields.CmcNumber) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.CmcNumber))">CMC<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.CmcNumber)</span></th>
                     <th class="col-cost">Cost</th>
-                    <th class="col-rarity">Rarity</th>
-                    <th class="col-set">Set</th>
-                    <th class="col-type">Type</th>
+                    <th class="col-rarity sortable @(IsSorted(CardListFilter.SortFields.Rarity) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.Rarity))">Rarity<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Rarity)</span></th>
+                    <th class="col-set sortable @(IsSorted(CardListFilter.SortFields.SetCode) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.SetCode))">Set<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.SetCode)</span></th>
+                    <th class="col-type sortable @(IsSorted(CardListFilter.SortFields.Type) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.Type))">Type<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Type)</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -170,6 +177,15 @@
     /// <summary>The pinned collection is locked — KB (+) is hidden.</summary>
     [Parameter] public bool PinnedLocked { get; set; }
 
+    /// <summary>Active sort field (internal name from CardListFilter.SortFields) — the matching header shows the indicator.</summary>
+    [Parameter] public string SortField { get; set; } = "";
+
+    /// <summary>Sort direction for the active field (true = ascending).</summary>
+    [Parameter] public bool SortAsc { get; set; } = true;
+
+    /// <summary>Sortable column header clicked — parent switches/toggles sorting by the given internal field name.</summary>
+    [Parameter] public EventCallback<string> OnSortColumnClicked { get; set; }
+
     /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
     [Parameter] public EventCallback<MagicCard> OnKbAddRequested { get; set; }
 
@@ -186,6 +202,15 @@
     {
         await OnCardClicked.InvokeAsync(card);
     }
+
+    // ── Column-header sorting ───────────────────────────
+    private bool IsSorted(string field) => SortField == field;
+
+    /// <summary>Indicator for the active column: ▼ ascending / ▲ descending (same semantics as the old toolbar buttons).</summary>
+    private string SortIndicator(string field) =>
+        !IsSorted(field) ? "" : SortAsc ? "▼" : "▲";
+
+    private async Task SortHeader(string field) => await OnSortColumnClicked.InvokeAsync(field);
 
     private async Task PrevPage()
     {

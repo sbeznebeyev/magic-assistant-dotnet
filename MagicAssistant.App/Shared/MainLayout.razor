@@ -26,7 +26,7 @@
     @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_currentCollection.CollectionId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
     @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
-    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
+    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
     @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
     @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_currentCollection.CollectionId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
     
@@ -60,9 +60,10 @@
         </div>
 
         <div class="panel-center">
-            <SearchControl
-                FilterViewModel="@_filterViewModel"
-                OnSearchCompleted="OnGlobalSearchCompleted" />
+            <ContextStrip
+                PinnedCollection="@_pinnedCollection"
+                SelectedCollection="@_currentCollection"
+                RefreshTrigger="@_stripRefresh" />
 
             <div style="height:4px"></div>
 
@@ -132,6 +133,10 @@
     private bool _showSelectedSetSyncDialog;
     private string _selectedSetForSync = string.Empty;
     private int _kbRefreshTrigger;
+
+    /// <summary>Bumped whenever card counts in the pinned/selected contexts may have changed —
+    /// ContextStrip re-loads its unique/total stats on change.</summary>
+    private int _stripRefresh;
     private bool _showImportDialog;
     private bool _showLegacyImportDialog;
     private bool _showExportDialog;
@@ -288,12 +293,13 @@
         _selectedSetForSync = setCode;
         _showSelectedSetSyncDialog = true;
     }
-    private async Task OnImportCompleted() { _statusText = "Import completed"; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
-    private async Task OnLegacyImportCompleted() { _statusText = "Legacy import completed"; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
+    private async Task OnImportCompleted() { _statusText = "Import completed"; _stripRefresh++; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
+    private async Task OnLegacyImportCompleted() { _statusText = "Legacy import completed"; _stripRefresh++; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
     private void OnExportCompleted() { _statusText = "Export completed"; }
     private async Task OnEditCardSaved(MagicCardPhysical? card)
     {
         _statusText = "Card updated";
+        _stripRefresh++;  // count may have changed — refresh ContextStrip stats
         StateHasChanged();
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // count may have changed in the edit dialog
     }
@@ -302,6 +308,7 @@
     private async Task OnSplitDone()
     {
         _statusText = "Card split";
+        _stripRefresh++;  // cards moved main/sideboard — refresh ContextStrip stats
         StateHasChanged();
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // cards moved between main deck and sideboard
     }
@@ -339,6 +346,7 @@
     {
         var location = await GetNodeNameAsync(op.TargetCollectionId);
         _lastActionsQueue.Enqueue(new LastActionItem(op.TargetCollectionId, location ?? "?", op.Card, op.Count, op.Operation));
+        _stripRefresh++;  // card counts changed — refresh ContextStrip stats
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // keep navigator card counts live after +/−, KB add and Move
     }
 

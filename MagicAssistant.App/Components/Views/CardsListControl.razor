@@ -79,18 +79,6 @@
                     </div>
                 </div>
 
-                <div class="sort-area">
-                    <span class="sort-label">Sort:</span>
-                    @foreach (var field in _sortFields)
-                    {
-                        var isActive = FilterViewModel.SortField == field.Value;
-                        <button class="sort-btn @(isActive ? "active" : "")"
-                                @onclick="() => ToggleSort(field.Value)">
-                            @field.Key @(isActive && !FilterViewModel.SortAsc ? "▲" : (isActive ? "▼" : ""))
-                        </button>
-                    }
-                </div>
-
                 @* ── View Mode: list / gallery toggle ── *@
                 <div class="view-mode-area">
                     <button class="view-btn @(_viewMode == "list" ? "active" : "")"
@@ -183,7 +171,10 @@
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
                                   OnPrevPage="PrevPage"
-                                  OnNextPage="NextPage" />
+                                  OnNextPage="NextPage"
+                                  SortField="@FilterViewModel.SortField"
+                                  SortAsc="@FilterViewModel.SortAsc"
+                                  OnSortColumnClicked="ToggleSort" />
                 }
             }
 
@@ -273,16 +264,6 @@
 
     // Refresh trigger tracking
     private int _previousRefreshTrigger;
-    /// <summary>Display label → internal sort field name (matches CardListFilter.SortFields).</summary>
-    private static readonly Dictionary<string, string> _sortFields = new()
-    {
-        ["Name"] = "Name",
-        ["CMC"] = "CmcNumber",
-        ["Type"] = "Type",
-        ["Set"] = "SetCode",
-        ["Rarity"] = "Rarity",
-    };
-
     // ── Parameters ──────────────────────────────────────
     /// <summary>Central filter/sort state shared with CardFilterDialog.</summary>
     [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();

@@ -49,6 +49,11 @@
     color: #ccc;
 }
 
+/* ── Search (FTS5 input moved from MainLayout center panel) ── */
+.filter-search {
+    padding: 12px 16px 0;
+}
+
 /* ── Content ───────────────────────────────────── */
 .filter-tab-content {
     padding: 12px 16px;

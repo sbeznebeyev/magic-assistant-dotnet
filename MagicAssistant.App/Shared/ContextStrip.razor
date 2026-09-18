@@ -1,0 +1,104 @@
+@*
+    ContextStrip — status strip at the top of the center panel (where SearchControl used to live).
+    A single bar split exactly in half:
+      left   — pinned collection (deck/collection/sideboard only; empty when nothing is pinned)
+      right  — selected (displayed) collection, or the KB variant ("KnowledgeBase Cards") that
+               replaces the selected half entirely when no collection is displayed.
+    Per-half template: label, then the name in large gold bold letters, then "unique: x, total: y"
+    with x/y larger and bolder than the unique/total labels. Left-aligned within each half.
+*@
+@inject IDeckCardService DeckCardService
+
+<div class="context-strip">
+    <div class="context-half">
+        <span class="context-label">pinned:</span>
+        @if (PinnedCollection.CollectionId.HasValue)
+        {
+            @if (!string.IsNullOrEmpty(PinnedCollection.Name))
+            {
+                <span class="context-name" title="@PinnedCollection.Name">@PinnedCollection.Name</span>
+            }
+            <span class="context-stats">unique: <b>@_pinnedUnique</b>, total: <b>@_pinnedTotal</b></span>
+        }
+    </div>
+
+    <div class="context-half">
+        @if (SelectedCollection.CollectionId.HasValue)
+        {
+            <span class="context-label">selected:</span>
+            @if (!string.IsNullOrEmpty(SelectedCollection.Name))
+            {
+                <span class="context-name" title="@SelectedCollection.Name">@SelectedCollection.Name</span>
+            }
+            <span class="context-stats">unique: <b>@_selectedUnique</b>, total: <b>@_selectedTotal</b></span>
+        }
+        else
+        {
+            @* KB panel — replaces the selected half when no collection is displayed *@
+            <span class="context-label">selected:</span>
+            <span class="context-name">KnowledgeBase Cards</span>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Pinned operation target (deck/collection/sideboard; null id = nothing pinned).</summary>
+    [Parameter] public LockableCollection PinnedCollection { get; set; } = new();
+
+    /// <summary>Currently displayed collection (null id = Knowledge Base mode).</summary>
+    [Parameter] public LockableCollection SelectedCollection { get; set; } = new();
+
+    /// <summary>Bumped by MainLayout whenever card counts in either context may have changed.</summary>
+    [Parameter] public int RefreshTrigger { get; set; }
+
+    private int _pinnedUnique;
+    private int _pinnedTotal;
+    private int _selectedUnique;
+    private int _selectedTotal;
+
+    /// <summary>Last loaded context ids — null = "nothing loaded yet" (the first load is forced by the trigger mismatch).</summary>
+    private int? _loadedPinnedId;
+    private int? _loadedSelectedId;
+    private int _loadedTrigger = -1;
+    private int _loadGeneration;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var pinnedChanged = PinnedCollection.CollectionId != _loadedPinnedId;
+        var selectedChanged = SelectedCollection.CollectionId != _loadedSelectedId;
+
+        if (RefreshTrigger != _loadedTrigger || pinnedChanged || selectedChanged)
+            await LoadStatsAsync();
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _loadedPinnedId = PinnedCollection.CollectionId;
+        _loadedSelectedId = SelectedCollection.CollectionId;
+        _loadedTrigger = RefreshTrigger;
+        var generation = ++_loadGeneration;
+
+        var pinned = await LoadContextStatsAsync(PinnedCollection.CollectionId);
+        if (generation != _loadGeneration) return;  // superseded by a newer load
+        (_pinnedUnique, _pinnedTotal) = pinned;
+
+        var selected = await LoadContextStatsAsync(SelectedCollection.CollectionId);
+        if (generation != _loadGeneration) return;
+        (_selectedUnique, _selectedTotal) = selected;
+    }
+
+    /// <summary>unique = distinct cards in the node, total = sum of their counts (one row per card in Deck).</summary>
+    private async Task<(int Unique, int Total)> LoadContextStatsAsync(int? collectionId)
+    {
+        if (collectionId is not int id) return (0, 0);
+        try
+        {
+            var cards = await DeckCardService.GetDeckCardsAsync(id);
+            return (cards.Count, cards.Sum(c => c.Count));
+        }
+        catch
+        {
+            return (0, 0);  // unreachable/deleted node — zeros instead of an error UI
+        }
+    }
+}

@@ -258,7 +258,7 @@
     color: #ccc;
 }
 
-/* ── Toolbar Row (3 sections: name filter | sort | filters) ── */
+/* ── Toolbar Row (name filter | view mode | filters) ── */
 .toolbar-row {
     display: flex;
     align-items: center;
@@ -267,42 +267,7 @@
     flex-shrink: 0;
 }
 
-/* ── Sort Area ──────────────────────────────────────── */
-.sort-area {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.sort-label {
-    font-size: 11px;
-    color: #666;
-    margin-right: 4px;
-}
-
-.sort-btn {
-    background: #2d2d2d;
-    border: 1px solid #444;
-    color: #999;
-    padding: 2px 8px;
-    border-radius: 3px;
-    font-size: 11px;
-    cursor: pointer;
-}
-
-.sort-btn:hover {
-    background: #3c3c3c;
-    color: #ccc;
-}
-
-.sort-btn.active {
-    background: rgba(0, 120, 212, 0.2);
-    border-color: #0078d4;
-    color: #0078d4;
-}
-
-/* ── View Mode Area (list / gallery toggle) — same style as sort buttons ── */
+/* ── View Mode Area (list / gallery toggle) ── */
 .view-mode-area {
     display: flex;
     align-items: center;

@@ -14,6 +14,11 @@
             <button class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
         </div>
 
+        @* ── Search (FTS5) — moved here from MainLayout's center panel, top of the window ── *@
+        <div class="filter-search">
+            <SearchControl FilterViewModel="@FilterViewModel" OnSearchCompleted="OnSearchCompleted" />
+        </div>
+
         @* ── Fields — all bound directly to shared FilterViewModel ── *@
         <div class="filter-tab-content">
                 <div class="filter-field-row">
@@ -277,6 +282,9 @@
     // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Forwarded to MainLayout so the status bar keeps reporting search commits.</summary>
+    [Parameter] public EventCallback<string> OnSearchCompleted { get; set; }
 
     /// <summary>Apply: fire Changed event so CardsListControl re-queries via InvokeAsync.</summary>
     private async Task OnApply()
