@@ -61,10 +61,16 @@
                             </div>
                         </div>
 
-                        @* Delta + total in the entry's own location *@
+                        @* Formula in the entry's own location: before + delta → total (e.g. 3+1 4).
+                           Counts are clamped at 0; an unknown total renders as 0 — never a dash. *@
+                        @{
+                            var total = GetTotal(item) ?? 0;
+                            var before = Math.Max(0, isAdd ? total - item.Count : total + item.Count);
+                        }
                         <div class="action-count">
+                            <span class="action-before">@before</span>
                             <span class="action-delta @(isAdd ? "add" : "sub")">@(isAdd ? $"+{item.Count}" : $"-{item.Count}")</span>
-                            <span class="action-total">@GetTotal(item)</span>
+                            <span class="action-total">@total</span>
                         </div>
                     </div>
                 </div>
@@ -105,7 +111,7 @@
     }
 
     /// <summary>Totals per (location, card) for the queued entries — one grouped query over the
-    /// distinct locations and cards in the queue. Best-effort: on failure totals show "—".</summary>
+    /// distinct locations and cards in the queue. Best-effort: on failure totals render as 0.</summary>
     private async Task ReloadCountsAsync()
     {
         if (Queue.Items.Count == 0)
@@ -127,9 +133,10 @@
         }
     }
 
-    /// <summary>Total copies of the entry's card in its own location after the operation; "—" if unknown.</summary>
-    private string GetTotal(LastActionItem item) =>
-        _counts.TryGetValue((item.LocationId, item.Card.Id), out var count) ? $"({count})" : "—";
+    /// <summary>Total copies of the entry's card in its own location after the operation; null if unknown.
+    /// Clamped at 0 — a negative total is never rendered.</summary>
+    private int? GetTotal(LastActionItem item) =>
+        _counts.TryGetValue((item.LocationId, item.Card.Id), out var count) ? Math.Max(0, count) : null;
 
     private static string GetRarityClass(string? rarity)
     {

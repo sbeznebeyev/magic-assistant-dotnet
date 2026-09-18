@@ -64,8 +64,13 @@ public class DeckCardService : IDeckCardService
         if (cardIds == null || !cardIds.Any())
             return Array.Empty<MagicCardPhysical>();
 
-        // Delegate to CardResolveService for batch resolution
-        return await _resolveService.MaterializeFromIdsAsync(deckId, cardIds, ct);
+        // Batch resolve all card IDs in one query, then persist the physical instances
+        // into the deck (merge semantics: ON CONFLICT increments Count).
+        var physicals = await _resolveService.MaterializeFromIdsAsync(deckId, cardIds, ct);
+        if (physicals.Count > 0)
+            await _cardStore.AddAllAsync(physicals, ct);
+
+        return physicals;
     }
 
     /// <inheritdoc />
