@@ -33,7 +33,13 @@
 
     @* ── Main Grid ── *@
     <div class="main-grid">
-        <div class="panel-left">
+        <div class="panel-left @(_leftCollapsed ? "collapsed" : "")">
+            <button class="panel-toggle left"
+                    @onclick="() => _leftCollapsed = !_leftCollapsed"
+                    title="@(_leftCollapsed ? "Expand navigation" : "Collapse navigation")">
+                @(_leftCollapsed ? ">" : "<")
+            </button>
+            <div class="panel-content">
             <div class="navigator-scroll">
                 <
                     @ref="_navigator"
@@ -50,6 +56,7 @@
 
             <hr class="divider" />
             <LastActions Queue="@_lastActionsQueue" />
+            </div>
         </div>
 
         <div class="panel-center">
@@ -80,12 +87,19 @@
             </div>
         </div>
 
-        <div class="panel-right">
+        <div class="panel-right @(_rightCollapsed ? "collapsed" : "")">
+            <button class="panel-toggle right"
+                    @onclick="() => _rightCollapsed = !_rightCollapsed"
+                    title="@(_rightCollapsed ? "Expand card details" : "Collapse card details")">
+                @(_rightCollapsed ? "<" : ">")
+            </button>
+            <div class="panel-content">
             <CardDescriptionView CardId="@_selectedCardId" ShowBack="@_selectedCardShowBack" />
             <hr class="divider" />
             <PrintingsView CardId="@_selectedCardId" OnPrintingSelected="@(c => OnCardSelected(c.Id))" OnPrintingSideChanged="OnCardSideChanged" />
             <hr class="divider" />
             <InstancesView CardId="@_selectedCardId" OnDeckSelected="OnDeckSelectedFromInstance" />
+            </div>
         </div>
     </div>
 </div>
@@ -94,6 +108,10 @@
     // ── Navigation State ──
     /// <summary>Collection node currently displayed in the center panel (CollectionId == null = Knowledge Base).</summary>
     private LockableCollection _currentCollection = new();
+
+    // ── Panel collapse state (toggle buttons in the top corners of the side panels) ──
+    private bool _leftCollapsed;
+    private bool _rightCollapsed;
 
     /// <summary>Pinned operation target: LastActions and KB-mode card adds work against it.
     /// Changed exclusively by the navigator's Pin buttons (plus a defensive clear

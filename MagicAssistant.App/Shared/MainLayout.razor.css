@@ -78,6 +78,8 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
+    position: relative;
+    transition: width 0.2s ease;
 }
 
 /* Scrollable area for the navigator — LastActions stays pinned below it */
@@ -106,7 +108,51 @@
     background-color: #252526;
     overflow-y: auto;
     flex-shrink: 0;
+    position: relative;
+    transition: width 0.2s ease;
 }
+
+/* === Collapsible side panels (toggle buttons in the top corners) === */
+.panel-left.collapsed { width: 20px; min-width: 20px; max-width: 20px; }
+.panel-right.collapsed { width: 20px; min-width: 20px; max-width: 20px; overflow: hidden; }
+
+/* Content wrapper — keeps its natural width while the panel shrinks, so content
+   slides under the clip instead of reflowing */
+.panel-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.panel-left .panel-content { min-width: 280px; }
+.panel-right .panel-content { min-width: 360px; }
+
+/* Toggle buttons — stay visible in the collapsed 20px strip */
+.panel-toggle {
+    position: absolute;
+    top: 4px;
+    z-index: 20;
+    width: 16px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.panel-toggle:hover {
+    background-color: #0078d4;
+    border-color: #0078d4;
+    color: #fff;
+}
+.panel-toggle.left { right: 2px; border-radius: 3px 0 0 3px; }
+.panel-toggle.right { left: 2px; border-radius: 0 3px 3px 0; }
 
 /* === Tab bar (child component — use ::deep) === */
 ::deep .tab-bar {
