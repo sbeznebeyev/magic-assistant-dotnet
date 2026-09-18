@@ -128,6 +128,7 @@ tr:hover .split-btn,
     color: #0078d4;
 }
 
+.col-total  { width: 1%; min-width: 44px; white-space: nowrap; text-align: center; color: #666; }
 .col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
 .col-name   { width: 50%; }
 .col-cost   { width: 1%; white-space: nowrap; }

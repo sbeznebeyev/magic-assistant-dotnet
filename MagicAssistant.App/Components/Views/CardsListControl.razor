@@ -178,6 +178,7 @@
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
                                   KbAddMode="@(FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue)"
+                                  PinnedCounts="_pinnedCountByCardId"
                                   OnKbAddRequested="AddCardToPinned"
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
@@ -215,6 +216,11 @@
 
     /// <summary>Physical instances of cards in the current location (deck mode). Null = KB mode.</summary>
     private Dictionary<Guid, MagicCardPhysical>? _physicalByCardId;
+
+    /// <summary>Total copies of each displayed card in the pinned collection (KB and deck modes with a pinned
+    /// target). Null otherwise — the Total column is hidden.</summary>
+    private Dictionary<Guid, int>? _pinnedCountByCardId;
+    private int? _previousPinnedCollectionId;
     private int _totalCount;
     private int _currentPage = 1;
     private int _totalPages = 0;
@@ -317,6 +323,7 @@
     {
         FilterViewModel.Changed += OnFilterChanged;
         _lastClearGeneration = FilterViewModel.ClearGeneration;
+        _previousPinnedCollectionId = PinnedCollectionId;
         // Restore set search text across component remounts (@key change on navigation)
         _setsSearchQuery = FilterViewModel.SetSearchText;
         await LoadSplitterSettingsAsync();
@@ -609,6 +616,14 @@
             await LoadCounts();        // refresh total card count
             await ApplyFiltersAndPagination();
         }
+
+        // Pinned target changed while a card list is displayed — refresh pinned totals without re-querying cards
+        if (PinnedCollectionId != _previousPinnedCollectionId)
+        {
+            _previousPinnedCollectionId = PinnedCollectionId;
+            _pinnedCountByCardId = PinnedCollectionId.HasValue ? await LoadPinnedCountsAsync(_displayCards) : null;
+            StateHasChanged();
+        }
     }
 
     private async Task OnFilterClick()
@@ -814,6 +829,11 @@
             _physicalByCardId = FilterViewModel.CurrentCollectionId.HasValue
                 ? (await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value)).ToDictionary(p => p.Card.Id, p => p)
                 : null;
+
+            // With a pinned target (KB or deck mode): totals of the displayed cards in the pinned collection
+            _pinnedCountByCardId = PinnedCollectionId.HasValue
+                ? await LoadPinnedCountsAsync(_displayCards)
+                : null;
         }
         catch
         {
@@ -889,6 +909,19 @@
         await OnMoveToPinned.InvokeAsync(physical);
     }
 
+    /// <summary>One grouped query over Deck: total copies of each displayed card in the pinned collection.</summary>
+    private async Task<Dictionary<Guid, int>> LoadPinnedCountsAsync(List<MagicCard> cards)
+    {
+        if (cards.Count == 0 || PinnedCollectionId is null)
+            return new Dictionary<Guid, int>();
+
+        var counts = await DeckCardService.GetDeckCardCountsAsync(
+            new[] { PinnedCollectionId.Value },
+            cards.Select(c => c.Id).ToList());
+
+        return counts.ToDictionary(kv => kv.Key.CardId, kv => kv.Value);
+    }
+
     /// <summary>KB mode: add one copy of the card to the pinned collection (merge semantics if already present).</summary>
     private async Task AddCardToPinned(MagicCard card)
     {
@@ -896,6 +929,12 @@
 
         await DeckCardService.MaterializeFromIdsAsync(PinnedCollectionId.Value, new[] { card.Id });
         await OnCardOperation.InvokeAsync(new CardOperationRecord(PinnedCollectionId.Value, card, 1, LastActionOperationEnum.Add));
+
+        // Keep the pinned-total column in sync (same total LastActions shows) — immutable update so
+        // Blazor detects the parameter change on CardListView.
+        var current = _pinnedCountByCardId ?? new Dictionary<Guid, int>();
+        _pinnedCountByCardId = new Dictionary<Guid, int>(current) { [card.Id] = current.GetValueOrDefault(card.Id) + 1 };
+        StateHasChanged();
     }
 
     // ── Sort — through single channel ────────────────────

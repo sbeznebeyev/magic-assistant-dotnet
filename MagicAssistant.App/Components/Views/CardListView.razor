@@ -10,6 +10,10 @@
         <table class="card-table">
             <thead>
                 <tr>
+                    @if (PinnedCounts != null)
+                    {
+                        <th class="col-total">Total</th>
+                    }
                     <th class="col-num">#</th>
                     <th class="col-name">Name</th>
                     <th class="col-cmc">CMC</th>
@@ -26,6 +30,12 @@
                     var physical = Physicals?.GetValueOrDefault(card.Id);
                     <tr class="@(SelectedCardId == card.Id ? "selected" : "")"
                         @onclick="() => SelectCard(card)">
+                        @if (PinnedCounts != null)
+                        {
+                            @* Total copies of this card in the pinned collection (KB and deck modes) — empty when 0, column keeps its width *@
+                            var pinnedTotal = PinnedCounts.GetValueOrDefault(card.Id);
+                            <td class="col-total">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</td>
+                        }
                         <td class="col-num">
                             @if (physical != null && !Locked)
                             {
@@ -130,6 +140,10 @@
 
     /// <summary>KB mode with a fixed collection set: show a (+) button that adds the card to it.</summary>
     [Parameter] public bool KbAddMode { get; set; }
+
+    /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, shown whenever a
+    /// pinned target is set — KB and deck modes). Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
+    [Parameter] public Dictionary<Guid, int>? PinnedCounts { get; set; }
 
     /// <summary>The displayed collection is locked — −/+ and ✎/⫯ are hidden, count shown read-only.</summary>
     [Parameter] public bool Locked { get; set; }
