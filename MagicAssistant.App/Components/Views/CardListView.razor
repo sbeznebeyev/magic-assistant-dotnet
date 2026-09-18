@@ -10,11 +10,14 @@
         <table class="card-table">
             <thead>
                 <tr>
-                    @if (PinnedCounts != null)
+                    @if (IsDeckMode || PinnedCounts != null)
                     {
                         <th class="col-total">Total</th>
                     }
-                    <th class="col-num">#</th>
+                    @if (!IsDeckMode)
+                    {
+                        <th class="col-num">#</th>
+                    }
                     <th class="col-name">Name</th>
                     <th class="col-cmc">CMC</th>
                     <th class="col-cost">Cost</th>
@@ -30,40 +33,51 @@
                     var physical = Physicals?.GetValueOrDefault(card.Id);
                     <tr class="@(SelectedCardId == card.Id ? "selected" : "")"
                         @onclick="() => SelectCard(card)">
-                        @if (PinnedCounts != null)
+                        @if (IsDeckMode)
                         {
-                            @* Total copies of this card in the pinned collection (KB and deck modes) — empty when 0, column keeps its width *@
+                            @* Deck mode: the Total column replaces the old count column — always > 0, because a
+                               card whose count drops to 0 disappears from the deck *@
+                            <td class="col-total">
+                                @if (physical != null && !Locked)
+                                {
+                                    <div class="count-control">
+                                        <button class="count-btn" @onclick:stopPropagation="true"
+                                                @onclick="() => ChangeCount(physical, -1)" title="Decrease count">−</button>
+                                        <span class="count-value">@physical.Count</span>
+                                        <button class="count-btn" @onclick:stopPropagation="true"
+                                                @onclick="() => ChangeCount(physical, 1)" title="Increase count">+</button>
+                                    </div>
+                                }
+                                else if (physical != null)
+                                {
+                                    @* Locked location — count is shown read-only, no mutation buttons *@
+                                    <span class="count-value">@physical.Count</span>
+                                }
+                            </td>
+                        }
+                        else if (PinnedCounts != null)
+                        {
+                            @* KB mode with a pinned target: Total copies of this card in the pinned collection —
+                               empty when 0, column keeps its width *@
                             var pinnedTotal = PinnedCounts.GetValueOrDefault(card.Id);
                             <td class="col-total">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</td>
                         }
-                        <td class="col-num">
-                            @if (physical != null && !Locked)
-                            {
-                                <div class="count-control">
-                                    <button class="count-btn" @onclick:stopPropagation="true"
-                                            @onclick="() => ChangeCount(physical, -1)" title="Decrease count">−</button>
-                                    <span class="count-value">@physical.Count</span>
-                                    <button class="count-btn" @onclick:stopPropagation="true"
-                                            @onclick="() => ChangeCount(physical, 1)" title="Increase count">+</button>
-                                </div>
-                            }
-                            else if (physical != null)
-                            {
-                                @* Locked location — count is shown read-only, no mutation buttons *@
-                                <span class="count-value">@physical.Count</span>
-                            }
-                            else if (KbAddMode && !PinnedLocked)
-                            {
-                                <div class="count-control">
-                                    <button class="count-btn" @onclick:stopPropagation="true"
-                                            @onclick="() => AddToFixed(card)" title="Add to fixed collection">+</button>
-                                </div>
-                            }
-                            else
-                            {
-                                @((CurrentPage - 1) * PageSize + i + 1)
-                            }
-                        </td>
+                        @if (!IsDeckMode)
+                        {
+                            <td class="col-num">
+                                @if (KbAddMode && !PinnedLocked)
+                                {
+                                    <div class="count-control">
+                                        <button class="count-btn" @onclick:stopPropagation="true"
+                                                @onclick="() => AddToFixed(card)" title="Add to fixed collection">+</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @((CurrentPage - 1) * PageSize + i + 1)
+                                }
+                            </td>
+                        }
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
                             @if (physical != null && !Locked)
@@ -141,8 +155,9 @@
     /// <summary>KB mode with a fixed collection set: show a (+) button that adds the card to it.</summary>
     [Parameter] public bool KbAddMode { get; set; }
 
-    /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, shown whenever a
-    /// pinned target is set — KB and deck modes). Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
+    /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, KB mode with a
+    /// pinned target only — in deck mode the Total column shows the current deck's count instead).
+    /// Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
     [Parameter] public Dictionary<Guid, int>? PinnedCounts { get; set; }
 
     /// <summary>The displayed collection is locked — −/+ and ✎/⫯ are hidden, count shown read-only.</summary>
@@ -153,6 +168,9 @@
 
     /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
     [Parameter] public EventCallback<MagicCard> OnKbAddRequested { get; set; }
+
+    /// <summary>Deck/location mode — physical instances are provided for every displayed card.</summary>
+    private bool IsDeckMode => Physicals is not null;
 
     private bool HasPrev => CurrentPage > 1;
     private bool HasNext => CurrentPage < TotalPages;

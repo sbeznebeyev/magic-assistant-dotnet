@@ -217,8 +217,8 @@
     /// <summary>Physical instances of cards in the current location (deck mode). Null = KB mode.</summary>
     private Dictionary<Guid, MagicCardPhysical>? _physicalByCardId;
 
-    /// <summary>Total copies of each displayed card in the pinned collection (KB and deck modes with a pinned
-    /// target). Null otherwise — the Total column is hidden.</summary>
+    /// <summary>Total copies of each displayed card in the pinned collection (KB mode with a pinned target only —
+    /// deck mode shows the current deck's count in the Total column instead). Null otherwise.</summary>
     private Dictionary<Guid, int>? _pinnedCountByCardId;
     private int? _previousPinnedCollectionId;
     private int _totalCount;
@@ -617,12 +617,15 @@
             await ApplyFiltersAndPagination();
         }
 
-        // Pinned target changed while a card list is displayed — refresh pinned totals without re-querying cards
+        // Pinned target changed while KB is displayed — refresh pinned totals without re-querying cards
         if (PinnedCollectionId != _previousPinnedCollectionId)
         {
             _previousPinnedCollectionId = PinnedCollectionId;
-            _pinnedCountByCardId = PinnedCollectionId.HasValue ? await LoadPinnedCountsAsync(_displayCards) : null;
-            StateHasChanged();
+            if (FilterViewModel.CurrentCollectionId is null)
+            {
+                _pinnedCountByCardId = PinnedCollectionId.HasValue ? await LoadPinnedCountsAsync(_displayCards) : null;
+                StateHasChanged();
+            }
         }
     }
 
@@ -830,8 +833,9 @@
                 ? (await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value)).ToDictionary(p => p.Card.Id, p => p)
                 : null;
 
-            // With a pinned target (KB or deck mode): totals of the displayed cards in the pinned collection
-            _pinnedCountByCardId = PinnedCollectionId.HasValue
+            // KB mode with a pinned target: totals of the displayed cards in the pinned collection
+            // (deck mode shows the current deck's count in the Total column — no pinned query needed)
+            _pinnedCountByCardId = FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue
                 ? await LoadPinnedCountsAsync(_displayCards)
                 : null;
         }
