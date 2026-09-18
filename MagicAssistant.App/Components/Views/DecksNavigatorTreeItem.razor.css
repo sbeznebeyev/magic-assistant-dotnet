@@ -38,6 +38,14 @@
     min-width: 0;
 }
 
+/* Card count badge — total copies under the node, offset from the name */
+.tree-count {
+    font-size: 11px;
+    color: #888;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
 /* Selected label — pill highlight */
 .tree-node.selected .tree-label {
     background: #ffa500;

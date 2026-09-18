@@ -288,13 +288,23 @@
         _selectedSetForSync = setCode;
         _showSelectedSetSyncDialog = true;
     }
-    private void OnImportCompleted() { _statusText = "Import completed"; }
-    private void OnLegacyImportCompleted() { _statusText = "Legacy import completed"; }
+    private async Task OnImportCompleted() { _statusText = "Import completed"; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
+    private async Task OnLegacyImportCompleted() { _statusText = "Legacy import completed"; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
     private void OnExportCompleted() { _statusText = "Export completed"; }
-    private void OnEditCardSaved(MagicCardPhysical? card) { _statusText = "Card updated"; StateHasChanged(); }
+    private async Task OnEditCardSaved(MagicCardPhysical? card)
+    {
+        _statusText = "Card updated";
+        StateHasChanged();
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // count may have changed in the edit dialog
+    }
 
 
-    private void OnSplitDone() { _statusText = "Card split"; StateHasChanged(); }
+    private async Task OnSplitDone()
+    {
+        _statusText = "Card split";
+        StateHasChanged();
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // cards moved between main deck and sideboard
+    }
     /// <summary>Quick move: the selected card (with all its copies) moves from the viewed collection to the pinned one.</summary>
     private async Task OnMoveToPinned(MagicCardPhysical card)
     {
@@ -329,6 +339,7 @@
     {
         var location = await GetNodeNameAsync(op.TargetCollectionId);
         _lastActionsQueue.Enqueue(new LastActionItem(op.TargetCollectionId, location ?? "?", op.Card, op.Count, op.Operation));
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // keep navigator card counts live after +/−, KB add and Move
     }
 
     /// <summary>A node was deleted in the navigator — drop any context that references it (direct hit or folder cascade).</summary>

@@ -9,6 +9,6 @@ public class LockableCollection
 {
     public int? CollectionId { get; set; }
     public bool IsLocked { get; set; }
-    /// <summary>Display name of the node (e.g. "My Deck", "MyDeck (Sideboard)"). Null when no collection is set.</summary>
+    /// <summary>Display name of the node (e.g. "My Deck", "MyDeck (sb)"). Null when no collection is set.</summary>
     public string? Name { get; set; }
 }

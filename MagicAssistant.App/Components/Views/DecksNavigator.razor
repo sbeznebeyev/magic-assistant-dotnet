@@ -278,6 +278,27 @@
         }
     }
 
+    /// <summary>
+    /// Re-fetches the tree (single query) and swaps in fresh node objects so card counts
+    /// reflect the latest Deck-table state. Called by MainLayout after any card-mutating operation
+    /// (+/−, KB add, Move, Split, Edit, Import). Expansion and selection survive — they are keyed
+    /// by id, not by node references.
+    /// </summary>
+    public async Task RefreshCardCountsAsync()
+    {
+        if (_rootNodes == null) return;  // initial load failed — nothing to refresh
+        try
+        {
+            var tree = await DeckManagement.GetAllNodesAsync();
+            _rootNodes = new List<NavigatorNodeBase>(tree.Values);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Keep the current tree — a failed refresh must not blank out the navigator.
+        }
+    }
+
     private static void CollectAllFolders(IEnumerable<NavigatorNodeBase> nodes, HashSet<int> expandedSet)
     {
         foreach (var node in nodes)

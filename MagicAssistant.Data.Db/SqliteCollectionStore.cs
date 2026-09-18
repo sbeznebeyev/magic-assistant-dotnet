@@ -125,7 +125,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             // Insert sideboard child (NodeType = 3, ParentId = deckId)
             await conn.ExecuteAsync(
                 $"INSERT INTO Collection (Name, ParentId, NodeType) VALUES (@Name, @ParentId, {(int)NodeType.Sideboard})",
-                new { Name = $"{name} (Sideboard)", ParentId = deckId }, tx);
+                new { Name = $"{name} (sb)", ParentId = deckId }, tx);
 
             tx.Commit();
             return new Collection(deckId, name, parentId, NodeType.Deck, 0);
@@ -207,7 +207,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             {
                 await conn.ExecuteAsync(
                     "UPDATE Collection SET Name = @Name WHERE Id = @Id",
-                    new { Name = $"{newName} (Sideboard)", Id = sbId }, tx);
+                    new { Name = $"{newName} (sb)", Id = sbId }, tx);
             }
 
             tx.Commit();
@@ -711,7 +711,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         var allIds = ids.Concat(sbRows.Select(s => s.Id)).ToList();
 
         var counts = (await conn.QueryAsync<(int CollectionId, int Count)>(
-            "SELECT CollectionId, COUNT(*) AS Count FROM Deck WHERE CollectionId IN @Ids GROUP BY CollectionId",
+            "SELECT CollectionId, SUM(Count) AS Count FROM Deck WHERE CollectionId IN @Ids GROUP BY CollectionId",
             new { Ids = allIds })).ToDictionary(r => r.CollectionId, r => r.Count);
 
         var nodes = new List<Collection>();

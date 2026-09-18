@@ -20,11 +20,8 @@
                 var isAdd = item.Operation == LastActionOperationEnum.Add;
                 <div class="action-row">
 
-                    @* Location label — the queue is never reset, so each entry carries its own collection *@
-                    <div class="action-location" title="@item.Location">@item.Location</div>
-
                     <div class="action-body">
-                        @* Card image (same as PrintingsView) *@
+                        @* Card image *@
                         <div class="action-img">
                             @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(item.Card, true)))
                             {
@@ -36,7 +33,7 @@
                             }
                         </div>
 
-                        @* Info (same as PrintingsView) *@
+                        @* Info *@
                         <div class="action-info">
                             <div class="action-name">@item.Card.Name</div>
                             <div class="action-meta">
@@ -60,6 +57,13 @@
                                 }
                             </div>
                         </div>
+
+                    </div>
+
+                    @* Right column: location label on top, formula directly below it (right-aligned).
+                       The queue is never reset, so each entry carries its own collection. *@
+                    <div class="action-side">
+                        <div class="action-location" title="@item.Location">@item.Location</div>
 
                         @* Formula in the entry's own location: before + delta → total (e.g. 3+1 4).
                            Counts are clamped at 0; an unknown total renders as 0 — never a dash. *@

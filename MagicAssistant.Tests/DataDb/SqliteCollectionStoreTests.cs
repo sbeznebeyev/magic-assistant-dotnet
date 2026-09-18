@@ -150,7 +150,7 @@ public class SqliteCollectionStoreTests
             "SELECT Id, Name, ParentId, NodeType, Locked FROM Collection WHERE ParentId = @DeckId AND NodeType = 3",
             new { DeckId = deck.Id })).ToList();
         Assert.That(sbRows, Has.Count.EqualTo(1), "Sideboard child should exist");
-        Assert.That(sbRows[0].Name, Is.EqualTo("New Name (Sideboard)"));
+        Assert.That(sbRows[0].Name, Is.EqualTo("New Name (sb)"));
     }
 
     [Test]

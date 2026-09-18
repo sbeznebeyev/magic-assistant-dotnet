@@ -57,26 +57,33 @@
                         }
                         else if (PinnedCounts != null)
                         {
-                            @* KB mode with a pinned target: Total copies of this card in the pinned collection —
-                               empty when 0, column keeps its width *@
+                            @* KB mode with a pinned target — unified with deck mode: [−] total [+] in the
+                               leftmost column; − is hidden when the total is 0 (only possible here, never in
+                               deck mode); locked pinned → read-only value *@
                             var pinnedTotal = PinnedCounts.GetValueOrDefault(card.Id);
-                            <td class="col-total">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</td>
-                        }
-                        @if (!IsDeckMode)
-                        {
-                            <td class="col-num">
-                                @if (KbAddMode && !PinnedLocked)
+                            <td class="col-total">
+                                @if (!PinnedLocked)
                                 {
                                     <div class="count-control">
+                                        @if (pinnedTotal > 0)
+                                        {
+                                            <button class="count-btn" @onclick:stopPropagation="true"
+                                                    @onclick="() => RemoveFromFixed(card)" title="Remove from fixed collection">−</button>
+                                        }
+                                        <span class="count-value">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</span>
                                         <button class="count-btn" @onclick:stopPropagation="true"
                                                 @onclick="() => AddToFixed(card)" title="Add to fixed collection">+</button>
                                     </div>
                                 }
                                 else
                                 {
-                                    @((CurrentPage - 1) * PageSize + i + 1)
+                                    <span class="count-value">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</span>
                                 }
                             </td>
+                        }
+                        @if (!IsDeckMode)
+                        {
+                            <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
                         }
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
@@ -152,9 +159,6 @@
     /// <summary>Split requested for a location card (only when Count &gt; 1).</summary>
     [Parameter] public EventCallback<MagicCardPhysical> OnSplitRequested { get; set; }
 
-    /// <summary>KB mode with a fixed collection set: show a (+) button that adds the card to it.</summary>
-    [Parameter] public bool KbAddMode { get; set; }
-
     /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, KB mode with a
     /// pinned target only — in deck mode the Total column shows the current deck's count instead).
     /// Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
@@ -168,6 +172,9 @@
 
     /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
     [Parameter] public EventCallback<MagicCard> OnKbAddRequested { get; set; }
+
+    /// <summary>(−) pressed in KB mode — remove one copy of the card from the fixed collection.</summary>
+    [Parameter] public EventCallback<MagicCard> OnKbRemoveRequested { get; set; }
 
     /// <summary>Deck/location mode — physical instances are provided for every displayed card.</summary>
     private bool IsDeckMode => Physicals is not null;
@@ -200,6 +207,8 @@
     private async Task SplitCard(MagicCardPhysical card) => await OnSplitRequested.InvokeAsync(card);
 
     private async Task AddToFixed(MagicCard card) => await OnKbAddRequested.InvokeAsync(card);
+
+    private async Task RemoveFromFixed(MagicCard card) => await OnKbRemoveRequested.InvokeAsync(card);
 
     /// <summary>Mana cost for the Cost column; double-sided cards show "front // back".</summary>
     private static string ManaCost(MagicCard magicCard)

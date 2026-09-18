@@ -177,9 +177,9 @@
                                   OnCountChanged="ChangeCardCount"
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
-                                  KbAddMode="@(FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue)"
                                   PinnedCounts="_pinnedCountByCardId"
                                   OnKbAddRequested="AddCardToPinned"
+                                  OnKbRemoveRequested="RemoveCardFromPinned"
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
                                   OnPrevPage="PrevPage"
@@ -938,6 +938,31 @@
         // Blazor detects the parameter change on CardListView.
         var current = _pinnedCountByCardId ?? new Dictionary<Guid, int>();
         _pinnedCountByCardId = new Dictionary<Guid, int>(current) { [card.Id] = current.GetValueOrDefault(card.Id) + 1 };
+        StateHasChanged();
+    }
+
+    /// <summary>KB mode: remove one copy of the card from the pinned collection (full removal when the count hits 0).</summary>
+    private async Task RemoveCardFromPinned(MagicCard card)
+    {
+        if (!PinnedCollectionId.HasValue) return;
+
+        var current = _pinnedCountByCardId?.GetValueOrDefault(card.Id) ?? 0;
+        if (current <= 0) return;
+
+        if (current == 1)
+            await DeckCardService.RemoveCardsAsync(PinnedCollectionId.Value, new[] { card.Id });
+        else
+            await DeckCardService.UpdateCardAsync(PinnedCollectionId.Value, card.Id,
+                new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = current - 1 });
+
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(PinnedCollectionId.Value, card, 1, LastActionOperationEnum.Sub));
+
+        // Keep the pinned-total column in sync — immutable update so Blazor detects the parameter change.
+        var counts = _pinnedCountByCardId ?? new Dictionary<Guid, int>();
+        var updated = new Dictionary<Guid, int>(counts);
+        if (current - 1 <= 0) updated.Remove(card.Id);
+        else updated[card.Id] = current - 1;
+        _pinnedCountByCardId = updated;
         StateHasChanged();
     }
 
