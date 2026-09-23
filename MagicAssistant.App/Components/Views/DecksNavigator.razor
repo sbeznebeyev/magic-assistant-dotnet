@@ -42,6 +42,7 @@
                 <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
                           Depth="0"
                           SelectedId="@SelectedNodeId"
+                          PinnedId="@PinnedNodeId"
                           ActiveAddMenuNodeId="@_activeAddMenuNodeId"
                           ExpandedSet="@_expandedNodes"
                           OnToggleExpand="ToggleNodeExpanded"
@@ -225,7 +226,7 @@
     [Parameter] public int? SelectedNodeId { get; set; }
 
     /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId)
-    /// — drives the Pin/Unpin labels in the ⋯ context menu.</summary>
+    /// — drives the Pin/Unpin labels in the ⋯ context menu and the green marker dot on node rows.</summary>
     [Parameter] public int? PinnedNodeId { get; set; }
 
     // ── Lifecycle ──────────────────────────────────────────

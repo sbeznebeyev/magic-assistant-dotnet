@@ -14,7 +14,7 @@
                     @(IsExpanded ? "▾" : "▸")
                 </span>
 
-                <span class="deck-nav-ico deck-nav-folder-ico"></span>
+                <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-folder-ico")"></span>
 
                 <span class="tree-label">@Node.Name</span>
                 @if (Node.CardCount > 0)
@@ -35,6 +35,7 @@
                 <DecksNavigatorTreeItem @key="child.Id + child.Name" Node="@child"
                           Depth="@(Depth + 1)"
                           SelectedId="@SelectedId"
+                          PinnedId="@PinnedId"
                           ActiveAddMenuNodeId="@ActiveAddMenuNodeId"
                           ExpandedSet="@ExpandedSet"
                           OnToggleExpand="@OnToggleExpand"
@@ -70,7 +71,7 @@
                  @onclick="OnSelectClick"
                  @oncontextmenu:preventDefault="true">
 
-                <span class="deck-nav-ico deck-nav-deck-ico"></span>
+                <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-deck-ico")"></span>
 
                 <span class="tree-label">@Node.Name</span>
                 @if (Node.CardCount > 0)
@@ -82,9 +83,13 @@
                     @if (deck.Sideboard != null)
                     {
                         var sideboard = deck.Sideboard;
-                        <button class="tree-sb-btn @(SelectedId == sideboard.Id ? "selected" : "")" @onclick:stopPropagation="true"
+                        <button class="tree-sb-btn @(SelectedId == sideboard.Id ? "selected" : "") @(SbShowMarker(sideboard) ? "has-marker" : "")" @onclick:stopPropagation="true"
                                 @onclick="() => OnSideboardClick(sideboard)"
                                 title="Sideboard @(sideboard.CardCount) cards">
+                            @if (SbShowMarker(sideboard))
+                            {
+                                <span class="node-marker @SbMarkerClass(sideboard)"></span>
+                            }
                             SB@(sideboard.CardCount > 0 ? " " + sideboard.CardCount : "")
                         </button>
                     }
@@ -100,7 +105,7 @@
              @onclick="OnSelectClick"
              @oncontextmenu:preventDefault="true">
 
-            <span class="deck-nav-ico deck-nav-col-ico"></span>
+            <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-col-ico")"></span>
 
             <span class="tree-label">@Node.Name</span>
             @if (Node.CardCount > 0)
@@ -120,6 +125,8 @@
     [Parameter] public required NavigatorNodeBase Node { get; set; }
     [Parameter] public int Depth { get; set; }
     [Parameter] public int? SelectedId { get; set; }
+    /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId) — drives the green marker dot.</summary>
+    [Parameter] public int? PinnedId { get; set; }
     /// <summary>ID of the folder whose add-menu is currently open. Each instance computes its own visibility.</summary>
     [Parameter] public int? ActiveAddMenuNodeId { get; set; }
 
@@ -136,6 +143,14 @@
     [Parameter] public EventCallback<int> OnAddMenuToggle { get; set; } = default!;
 
     private bool IsExpanded => ExpandedSet != null && ExpandedSet.Contains(Node.Id);
+
+    // ── State marker: 8px gutter over the label — red dot = locked, green dot = pinned ──
+    private bool ShowMarker => Node.Locked || PinnedId == Node.Id;
+    private string NodeMarkerClass => Node.Locked ? "marker-locked" : "marker-pinned";
+
+    // Same marker language on the deck row's SB button (sideboards have no row of their own)
+    private bool SbShowMarker(NavigatorNodeBase sb) => sb.Locked || PinnedId == sb.Id;
+    private string SbMarkerClass(NavigatorNodeBase sb) => sb.Locked ? "marker-locked" : "marker-pinned";
 
     private async Task OnSelectClick()
     {
