@@ -3,13 +3,6 @@
 @inject IDeckManagementService DeckManagement
 
 <div class="navigator" @onkeydown="OnKeyDown">
-    <div class="navigator-kb-header">
-        <span>Knowledge Base Cards</span>
-    </div>
-
-    <div class="navigator-show-all">
-        <button class="btn-show-all" @onclick="HandleShowAllCards">Show All Cards</button>
-    </div>
 
     @* ── Add Menu Overlay (click-outside to close, like context menu) ── *@
     @if (_activeAddMenuNodeId != null || _showRootAddMenu)
@@ -21,6 +14,14 @@
     <div class="navigator-header">
         <span>Collections &amp; Decks</span>
     </div>
+
+    @* ── KnowledgeBase pseudo-node: sits above the tree, looks like a node but is not part of it ── *@
+    <button class="btn-kb-node @(SelectedNodeId == null ? "active" : "")"
+            @onclick="HandleShowAllCards"
+            title="Browse all knowledge base cards">
+        <span class="kb-icon">📚</span>
+        <span class="kb-label">KnowledgeBase Cards</span>
+    </button>
 
     @if (_loading)
     {
@@ -40,7 +41,7 @@
             {
                 <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
                           Depth="0"
-                          SelectedId="@_lastSelectedNodeId"
+                          SelectedId="@SelectedNodeId"
                           PinnedId="@PinnedNodeId"
                           ActiveAddMenuNodeId="@_activeAddMenuNodeId"
                           ExpandedSet="@_expandedNodes"
@@ -150,12 +151,6 @@
     /// <summary>Folder IDs that are visually expanded. Decoupled from data — collapse only hides.</summary>
     private HashSet<int> _expandedNodes = new();
 
-    /// <summary>Highlighted node: the last non-null SelectedNodeId seen. In KB mode
-    /// (SelectedNodeId == null) the previous highlight is kept, so "Show All Cards"
-    /// does not deselect a deck/collection/sideboard. A stale id after node deletion
-    /// is harmless — the node is gone from the tree and ids are never reused.</summary>
-    private int? _lastSelectedNodeId;
-
     private bool _loading;
     private string? _error;
 
@@ -213,8 +208,8 @@
     [Parameter] public EventCallback<int> OnNodeDeleted { get; set; }
 
     /// <summary>Currently displayed collection node (MainLayout._currentCollection.CollectionId).
-    /// While non-null the highlight follows it; in KB mode (null) the navigator keeps
-    /// its last selection, so "Show All Cards" does not clear the highlighted node.</summary>
+    /// Pure projection: non-null highlights that node, null (KB mode) highlights nothing —
+    /// clicking the KnowledgeBase button clears the tree selection.</summary>
     [Parameter] public int? SelectedNodeId { get; set; }
 
     /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId)
@@ -222,12 +217,6 @@
     [Parameter] public int? PinnedNodeId { get; set; }
 
     // ── Lifecycle ──────────────────────────────────────────
-    protected override void OnParametersSet()
-    {
-        if (SelectedNodeId.HasValue)
-            _lastSelectedNodeId = SelectedNodeId;
-    }
-
     protected override async Task OnInitializedAsync()
     {
         await LoadRoot();
@@ -321,8 +310,8 @@
             _expandedNodes.Add(folderId);
     }
 
-    /// <summary>Selection request from the tree (deck/collection/SB). The highlight follows
-    /// the last non-null SelectedNodeId (see _lastSelectedNodeId).
+    /// <summary>Selection request from the tree (deck/collection/SB). The highlight is a pure
+    /// projection of SelectedNodeId — KB mode (null) leaves nothing highlighted.
     /// Folders are not locations and never select; re-clicking the displayed node is a no-op.</summary>
     private async Task OnSelectDeck(NavigatorNodeBase node)
     {
