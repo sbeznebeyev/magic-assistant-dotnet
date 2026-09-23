@@ -18,18 +18,20 @@
     flex-wrap: nowrap;
 }
 
+/* Hover feedback for deck/collection/folder rows — same language as add-node & KB button.
+   Selected rows keep their blue: ::deep .tree-node.selected wins via !important. */
+.tree-node:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
 .tree-toggle {
     width: 24px;
     min-width: 24px;
     flex-shrink: 0;
+    /* uniform 1px left margin — matches the .deck-nav-ico margin on deck/collection rows */
+    margin-left: 1px;
     /* center the ▸/▾ glyph in its 24px square (was flush left) */
     text-align: center;
-}
-
-.tree-spacer {
-    width: 24px;
-    min-width: 24px;
-    flex-shrink: 0;
 }
 
 /* Label can shrink to make room for right-aligned buttons */
@@ -182,44 +184,6 @@
     border-color: #ffa500;
 }
 
-/* ── Add Menu (child level — scoped to TreeItem) ─────── */
-.add-menu-wrapper {
-    position: relative;
-    width: 100%;
-}
-
-.add-menu {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #2d2d2d;
-    border: 1px solid #555;
-    border-radius: 8px;
-    padding: 4px 0;
-    min-width: 160px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    z-index: 1001;
-}
-
-.add-menu button {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    color: #ccc;
-    padding: 8px 16px;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.add-menu button:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
-}
 
 
 

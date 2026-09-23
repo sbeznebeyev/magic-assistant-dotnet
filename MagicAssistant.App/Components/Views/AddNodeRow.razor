@@ -1,0 +1,45 @@
+@using MagicAssistant.Data.Model.NavigatorNodes
+
+@* Unified "add node" row + create menu.
+   Root level: ShowSpacer=false — keeps its current depth-0 offset (no 24px toggle-column spacer).
+   Folder rows: ShowSpacer=true — the "+" aligns under the children's toggle column.
+   The parent decides visibility: a folder renders this row only while expanded. *@
+<div class="add-menu-wrapper">
+    <div class="tree-node tree-add-node @(ShowSpacer ? "" : "tree-add-node-root")" style="--depth: @Depth;" @onclick="OnToggleClick">
+        @if (ShowSpacer)
+        {
+            <span class="tree-spacer"></span>
+        }
+
+        <button class="tree-add-btn" @onclick:stopPropagation="true" title="Add node"><span class="tree-add-plus">+</span></button>
+        <span class="tree-label tree-add-label" style="margin-left: 6px;">add node</span>
+    </div>
+
+    @if (IsMenuOpen)
+    {
+        <div class="add-menu">
+            <button @onclick="() => CreateNode(NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
+            <button @onclick="() => CreateNode(NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
+            <button @onclick="() => CreateNode(NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Depth { get; set; }
+    /// <summary>Reserve the 24px toggle column so the "+" aligns under children's toggles. Root level passes false to keep its current offset.</summary>
+    [Parameter] public bool ShowSpacer { get; set; }
+    [Parameter] public bool IsMenuOpen { get; set; }
+    [Parameter] public EventCallback OnToggle { get; set; } = default!;
+    [Parameter] public EventCallback<NodeType> OnCreateNode { get; set; } = default!;
+
+    private async Task OnToggleClick()
+    {
+        await OnToggle.InvokeAsync();
+    }
+
+    private async Task CreateNode(NodeType type)
+    {
+        await OnCreateNode.InvokeAsync(type);
+    }
+}

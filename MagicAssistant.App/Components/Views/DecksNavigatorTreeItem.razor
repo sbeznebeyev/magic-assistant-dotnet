@@ -14,7 +14,10 @@
                     @(IsExpanded ? "▾" : "▸")
                 </span>
 
-                <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-folder-ico")"></span>
+                @if (ShowMarker)
+                {
+                    <span class="deck-nav-ico node-dot @NodeMarkerClass"></span>
+                }
 
                 <span class="tree-label">@Node.Name</span>
                 @if (Node.CardCount > 0)
@@ -46,22 +49,12 @@
             }
         }
 
-        @* ── Add Node Button (only for folders) ── *@
-        <div class="add-menu-wrapper">
-            <div class="tree-node tree-add-node" style="--depth: @Depth;" @onclick="OnAddClick">
-                <span class="tree-spacer"></span>
-                <button class="tree-add-btn" @onclick:stopPropagation="true" title="Add node">+</button>
-                <span class="tree-label tree-add-label" style="margin-left: 6px;">add node</span>
-            </div>
-            @if (IsAddMenuOpen)
-            {
-                <div class="add-menu">
-                    <button @onclick="() => AskCreateNode(NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
-                    <button @onclick="() => AskCreateNode(NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
-                    <button @onclick="() => AskCreateNode(NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
-                </div>
-            }
-        </div>
+        @* ── Add Node Button (child of the folder — rendered only while expanded) — unified AddNodeRow *@
+        @if (IsExpanded)
+        {
+            <AddNodeRow Depth="@Depth" ShowSpacer="true" IsMenuOpen="IsAddMenuOpen"
+                        OnToggle="OnAddClick" OnCreateNode="AskCreateNode" />
+        }
     }
     else if (Node.NodeType == NodeType.Deck)
     {

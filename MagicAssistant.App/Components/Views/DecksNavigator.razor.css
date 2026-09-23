@@ -45,12 +45,17 @@
     background-color: #37373d;
 }
 
-/* Icon column matches the tree toggle/spacer width so the label aligns with node labels */
+/* Icon column matches the tree toggle/spacer width so the label aligns with node labels.
+   Skeleton globe: outline circle + meridian arcs (no fill), stroke-only SVG. */
 .kb-icon {
     width: 24px;
     min-width: 24px;
+    height: 24px;
     flex-shrink: 0;
-    text-align: center;
+    background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNmNiNmZmIiBzdHJva2Utd2lkdGg9IjMuNSI+PGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMjgiLz48bGluZSB4MT0iMzIiIHkxPSI0IiB4Mj0iMzIiIHkyPSI2MCIvPjxsaW5lIHgxPSI0IiB5MT0iMzIiIHgyPSI2MCIgeTI9IjMyIi8+PGVsbGlwc2UgY3g9IjMyIiBjeT0iMzIiIHJ4PSIxMiIgcnk9IjI4Ii8+PC9zdmc+");
+    background-size: 20px 20px;
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
 .kb-label {
@@ -144,60 +149,9 @@
     padding-left: calc(var(--depth, 0) * 24px) !important;
 }
 
-::deep .tree-add-label {
-    font-style: italic !important;
-    color: #888 !important;
-}
-
-::deep .tree-add-node:hover .tree-add-label {
-    color: #0078d4 !important;
-}
-
 ::deep .tree-toggle {
     width: 24px !important;
     font-size: 18px !important;
-}
-
-::deep .tree-spacer {
-    width: 24px !important;
-    min-width: 24px !important;
-    flex-shrink: 0 !important;
-}
-
-::deep .tree-add-btn {
-    width: 16px !important;
-    height: 16px !important;
-    border-radius: 50% !important;
-    border: 2px solid #666 !important;
-    background: transparent !important;
-    color: #888 !important;
-    font-size: 14px !important;
-    line-height: 1 !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 !important;
-    margin-top: -1px !important;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
-}
-
-::deep .tree-add-btn:hover,
-::deep .tree-add-node:hover .tree-add-btn {
-    background: #0078d4 !important;
-    color: #fff !important;
-    border-color: #0078d4 !important;
-    box-shadow: 0 0 12px rgba(0, 120, 212, 0.5) !important;
-}
-
-::deep .tree-add-node {
-    display: flex !important;
-    align-items: center !important;
-    cursor: pointer !important;
-}
-
-.tree-node:hover {
-    background: rgba(255, 255, 255, 0.06);
 }
 
 .tree-node.selected {
@@ -240,11 +194,6 @@
 
 .tree-toggle:hover {
     color: #fff;
-}
-
-.tree-spacer {
-    width: 24px;
-    flex-shrink: 0;
 }
 
 /* ── NodeType icon (deck-nav-ico classes from site.css) ── */
@@ -294,80 +243,6 @@
     color: #666;
     font-size: 12px;
     font-style: italic;
-}
-
-/* ── Add Node Button ─────────────────────────────────── */
-.tree-add-btn {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2px solid #666;
-    background: transparent;
-    color: #888;
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    margin-top: -1px;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.tree-add-btn:hover {
-    background: #0078d4;
-    color: #fff;
-    border-color: #0078d4;
-    box-shadow: 0 0 12px rgba(0, 120, 212, 0.5);
-}
-
-.tree-add-label {
-    font-style: italic;
-    color: #888;
-}
-
-.tree-add-node:hover .tree-add-label {
-    color: #0078d4;
-}
-
-/* ── Add Menu (root level) ───────────────────────────── */
-.add-menu-wrapper {
-    position: relative;
-    width: 100%;
-}
-
-.add-menu {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #2d2d2d;
-    border: 1px solid #555;
-    border-radius: 8px;
-    padding: 4px 0;
-    min-width: 160px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    z-index: 1001;
-}
-
-.add-menu button {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    color: #ccc;
-    padding: 8px 16px;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.add-menu button:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
 }
 
 /* ── Add Menu Overlay (click-outside to close) ───────── */

@@ -19,7 +19,7 @@
     <button class="btn-kb-node @(SelectedNodeId == null ? "active" : "")"
             @onclick="HandleShowAllCards"
             title="Browse all knowledge base cards">
-        <span class="kb-icon">📚</span>
+        <span class="kb-icon"></span>
         <span class="kb-label">KnowledgeBase Cards</span>
     </button>
 
@@ -52,22 +52,9 @@
                           OnAddMenuToggle="OnAddMenuToggle" />
             }
 
-            @* ── Add Node Button (root level) ── *@
-            <div class="add-menu-wrapper">
-                <div class="tree-node tree-add-node" style="--depth: 0;" @onclick="ToggleRootAddMenu">
-                    <span></span>
-                    <button class="tree-add-btn" @onclick:stopPropagation="true" title="Add node">+</button>
-                    <span class="tree-label tree-add-label" style="margin-left: 6px;">add node</span>
-                </div>
-                @if (_showRootAddMenu)
-                {
-                    <div class="add-menu">
-                        <button @onclick="() => SelectAndShow(null, NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
-                        <button @onclick="() => SelectAndShow(null, NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
-                        <button @onclick="() => SelectAndShow(null, NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
-                    </div>
-                }
-            </div>
+            @* ── Add Node Button (root level) — unified AddNodeRow; ShowSpacer=false keeps the current depth-0 offset *@
+            <AddNodeRow Depth="0" ShowSpacer="false" IsMenuOpen="_showRootAddMenu"
+                        OnToggle="ToggleRootAddMenu" OnCreateNode="(t) => SelectAndShow(null, t)" />
         </div>
     }
 
@@ -318,7 +305,13 @@
     private void ToggleNodeExpanded(int folderId)
     {
         if (_expandedNodes.Contains(folderId))
+        {
             _expandedNodes.Remove(folderId);
+            // The add-node row is a child of the folder — collapsing removes it,
+            // so drop the open add-menu state to avoid a dangling overlay.
+            if (_activeAddMenuNodeId == folderId)
+                _activeAddMenuNodeId = null;
+        }
         else
             _expandedNodes.Add(folderId);
     }
