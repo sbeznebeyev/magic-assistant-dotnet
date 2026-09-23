@@ -42,13 +42,10 @@
                 <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
                           Depth="0"
                           SelectedId="@SelectedNodeId"
-                          PinnedId="@PinnedNodeId"
                           ActiveAddMenuNodeId="@_activeAddMenuNodeId"
                           ExpandedSet="@_expandedNodes"
                           OnToggleExpand="ToggleNodeExpanded"
                           OnSelectDeck="OnSelectDeck"
-                          OnPinToggled="OnPinToggle"
-                          OnLockToggled="OnLockToggle"
                           OnContextMenuToggle="OnContextMenuToggle"
                           OnAskCreateNode="OnAskCreateNode"
                           OnAddMenuToggle="OnAddMenuToggle" />
@@ -88,6 +85,21 @@
                 <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Collection)">🗂 New Collection</button>
                 <hr class="context-sep" />
                 <button @onclick="() => OpenDeckProperties(_contextTarget)">⚙ Properties</button>
+                @if (_contextTarget.NodeType != NodeType.Folder)
+                {
+                    @* Pin/Unpin — locked nodes get a gray read-only item; sideboard inherits the deck's lock *@
+                    <button disabled="@_contextTarget.Locked"
+                            title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                            @onclick="() => TogglePinFromMenu(_contextTarget)">@(_contextTarget.Id == PinnedNodeId ? "📌 Unpin" : _contextTarget.Locked ? "📌 Pin (unlock to pin)" : "📌 Pin")</button>
+                    @if (_contextTarget is NavigatorNodeDeck menuDeck && menuDeck.Sideboard != null)
+                    {
+                        var menuSideboard = menuDeck.Sideboard;
+                        <button disabled="@_contextTarget.Locked"
+                                title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                                @onclick="() => TogglePinFromMenu(menuSideboard)">@(menuSideboard.Id == PinnedNodeId ? "📌 Unpin sideboard" : _contextTarget.Locked ? "📌 Pin sideboard (unlock to pin)" : "📌 Pin sideboard")</button>
+                    }
+                    <button @onclick="() => ToggleLockFromMenu(_contextTarget)">@(_contextTarget.Locked ? "🔓 Unlock" : "🔒 Lock")</button>
+                }
                 <hr class="context-sep" />
                 <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
             </div>
@@ -213,7 +225,7 @@
     [Parameter] public int? SelectedNodeId { get; set; }
 
     /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId)
-    /// — drives the .pinned state of the Pin buttons in the tree.</summary>
+    /// — drives the Pin/Unpin labels in the ⋯ context menu.</summary>
     [Parameter] public int? PinnedNodeId { get; set; }
 
     // ── Lifecycle ──────────────────────────────────────────
@@ -340,8 +352,16 @@
         await OnSelectDeck(node);
     }
 
-    /// <summary>Pin button click — passes the clicked node up as a LockableCollection; MainLayout toggles the pin.
-    /// Folders have no Pin buttons, so only deck/collection/sideboard nodes arrive here.</summary>
+    /// <summary>Pin/Unpin from the ⋯ context menu — closes the menu, then reuses the shared toggle.
+    /// The menu renders this item disabled for locked nodes, so it never fires there.</summary>
+    private async Task TogglePinFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnPinToggle(node);
+    }
+
+    /// <summary>Pin request — passes the clicked node up as a LockableCollection; MainLayout toggles the pin.
+    /// Only deck/collection/sideboard nodes arrive here (folders have no pin).</summary>
     private async Task OnPinToggle(NavigatorNodeBase node)
     {
         await OnPinToggled.InvokeAsync(ToLockable(node));
@@ -656,7 +676,14 @@
         }
     }
 
-    // ── Lock toggle (TreeItem lock button — works like the Pin buttons) ──
+    /// <summary>Lock/Unlock from the ⋯ context menu — closes the menu, then reuses the shared toggle.</summary>
+    private async Task ToggleLockFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnLockToggle(node.Id);
+    }
+
+    // ── Lock toggle (⋯ context menu — deck/collection nodes only) ──
     private async Task OnLockToggle(int id)
     {
         try
