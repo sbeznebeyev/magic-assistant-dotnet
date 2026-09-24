@@ -28,7 +28,6 @@
 
     @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
     @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
-    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_currentCollection.CollectionId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
     
 
     @* ── Main Grid ── *@
@@ -46,7 +45,6 @@
                     OnDeckSelected="OnDeckSelected"
                     OnPinToggled="OnPinToggled"
                     OnNodeLockToggled="OnNodeLockToggled"
-                    OnOpenProperties="OnOpenPropertiesFromNav"
                     OnShowAllCards="OnShowKB"
                     OnNodeDeleted="OnNodeDeleted"
                     SelectedNodeId="@_currentCollection.CollectionId"
@@ -144,7 +142,6 @@
 
     private bool _showFilterDialog;
     private bool _showSplitDialog;
-    private bool _showEditDeckPropertiesDialog;
 
     // ── Dialog Data ──
     private MagicCardPhysical? _editCardTarget;
@@ -231,13 +228,6 @@
         _selectedCardId = null;
         _filterViewModel.CurrentCollectionId = null;
         _filterViewModel.Apply();
-    }
-
-    /// <summary>Properties is a dialog, not navigation: only the display context changes.</summary>
-    private void OnOpenPropertiesFromNav(NavigatorNodeBase node)
-    {
-        _currentCollection = new LockableCollection { CollectionId = node.Id, IsLocked = node.Locked, Name = node.Name };
-        _showEditDeckPropertiesDialog = true;
     }
 
     // ── Header Actions (clickable words in the app header) ──
@@ -388,7 +378,6 @@
             return true;  // unreachable node — treat as gone
         }
     }
-    private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
     // ── Global Search ──
     private void OnGlobalSearchCompleted(string query) => _statusText = string.IsNullOrEmpty(query) ? "Ready" : $"Search: \"{query}\"";
 

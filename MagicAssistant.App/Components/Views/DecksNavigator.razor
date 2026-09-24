@@ -68,11 +68,6 @@
             <div class="context-menu-fixed" style="top: @(_contextMenuTop.ToString("F0") + "px"); left: @(_contextMenuLeft.ToString("F0") + "px");">
                 <span class="context-label">@_contextTarget.Name</span>
                 <button @onclick="() => BeginRename(_contextTarget)">✏ Rename</button>
-                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Deck)">🃏 New Deck</button>
-                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Folder)">📁 New Folder</button>
-                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Collection)">🗂 New Collection</button>
-                <hr class="context-sep" />
-                <button @onclick="() => OpenDeckProperties(_contextTarget)">⚙ Properties</button>
                 @if (_contextTarget.NodeType != NodeType.Folder)
                 {
                     @* Pin/Unpin — locked nodes get a gray read-only item; sideboard inherits the deck's lock *@
@@ -201,7 +196,6 @@
     /// <summary>Lock state changed on a node (and, for decks, its sideboard) — MainLayout keeps the
     /// _currentCollection/_pinnedCollection IsLocked snapshots fresh and unpins locked nodes.</summary>
     [Parameter] public EventCallback<(int Id, bool Locked)> OnNodeLockToggled { get; set; }
-    [Parameter] public EventCallback<NavigatorNodeBase> OnOpenProperties { get; set; }
     [Parameter] public EventCallback OnShowAllCards { get; set; }
 
     /// <summary>A node (and its subtree) was deleted — MainLayout drops any context referencing it.</summary>
@@ -380,12 +374,6 @@
     {
         _contextTarget = null;
         _activeContextMenuNodeId = null;
-    }
-
-    private async Task OpenDeckProperties(NavigatorNodeBase node)
-    {
-        CloseContextMenu();
-        await OnOpenProperties.InvokeAsync(node);
     }
 
     // ── Create Node (unified dialog → CreateNodeAsync → GetNodesBranchAsync) ──
