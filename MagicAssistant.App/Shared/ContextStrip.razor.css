@@ -1,4 +1,4 @@
-/* Context strip — one bar split exactly in half (pinned | selected) */
+/* Context strip — three sections: selected (left) | gold arrow (middle) | pinned (right) */
 .context-strip {
     display: flex;
     height: 38px;
@@ -10,7 +10,7 @@
 }
 
 .context-half {
-    flex: 1 1 50%;
+    flex: 1 1 0;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -20,16 +20,13 @@
     overflow: hidden;
 }
 
-/* The middle divider — the bar is split exactly in half */
-.context-half + .context-half {
-    border-left: 1px solid #45475a;
-}
-
-/* Labels ("pinned:" / "selected:") — normal text, always shown */
-.context-label {
-    flex-shrink: 0;
-    font-size: 12px;
-    color: #9aa0b5;
+/* Middle section — gold arrow pointing right */
+.context-arrow {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
 }
 
 /* Collection name — large, gold, bold */
@@ -39,18 +36,27 @@
     text-overflow: ellipsis;
     color: #ffd700;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 24px;
 }
 
-/* "unique:" / "total:" labels — normal text */
+/* "(x/y)" stats — normal text; tooltip carries "unique: x, total: y" */
 .context-stats {
     flex-shrink: 0;
     font-size: 12px;
     color: #9aa0b5;
 }
 
-/* x/y values — larger and bolder than the unique/total labels */
-.context-stats b {
-    font-weight: bold;
-    font-size: 15px;
+/* Left half: name hugs the arrow (stats stay on the outer left edge) */
+.context-selected .context-name {
+    margin-left: auto;
+}
+
+/* Right half: stats pushed to the outer right edge (name stays by the arrow) */
+.context-pinned .context-stats {
+    margin-left: auto;
+}
+
+/* Placeholder when nothing is pinned — bold gray instead of gold */
+.context-placeholder {
+    color: #9aa0b5;
 }

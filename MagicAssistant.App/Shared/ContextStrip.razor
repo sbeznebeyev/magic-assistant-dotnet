@@ -1,42 +1,50 @@
 @*
     ContextStrip — status strip at the top of the center panel (where SearchControl used to live).
-    A single bar split exactly in half:
-      left   — pinned collection (deck/collection/sideboard only; empty when nothing is pinned)
-      right  — selected (displayed) collection, or the KB variant ("KnowledgeBase Cards") that
-               replaces the selected half entirely when no collection is displayed.
-    Per-half template: label, then the name in large gold bold letters, then "unique: x, total: y"
-    with x/y larger and bolder than the unique/total labels. Left-aligned within each half.
+    A single bar in three sections:
+      left   — selected (displayed) collection, or the KB variant ("KnowledgeBase Cards") when no
+               collection is displayed; stats "(x/y)" pushed to the outer left edge, name pushed
+               right toward the arrow.
+      middle — gold arrow pointing right (inline SVG, 24×24).
+      right  — pinned collection (deck/collection/sideboard only); name pushed left toward the
+               arrow, stats "(x/y)" pushed to the outer right edge. Nothing pinned →
+               "? (pin to set)" in bold gray.
+    Names are large gold bold; stats show "(x/y)" with a "unique: x, total: y" tooltip.
 *@
 @inject IDeckCardService DeckCardService
 
 <div class="context-strip">
-    <div class="context-half">
-        <span class="context-label">pinned:</span>
-        @if (PinnedCollection.CollectionId.HasValue)
-        {
-            @if (!string.IsNullOrEmpty(PinnedCollection.Name))
-            {
-                <span class="context-name" title="@PinnedCollection.Name">@PinnedCollection.Name</span>
-            }
-            <span class="context-stats">unique: <b>@_pinnedUnique</b>, total: <b>@_pinnedTotal</b></span>
-        }
-    </div>
-
-    <div class="context-half">
+    @* Left half — selected (always filled: KB variant or collection/deck/sideboard) *@
+    <div class="context-half context-selected">
         @if (SelectedCollection.CollectionId.HasValue)
         {
-            <span class="context-label">selected:</span>
-            @if (!string.IsNullOrEmpty(SelectedCollection.Name))
-            {
-                <span class="context-name" title="@SelectedCollection.Name">@SelectedCollection.Name</span>
-            }
-            <span class="context-stats">unique: <b>@_selectedUnique</b>, total: <b>@_selectedTotal</b></span>
+            <span class="context-stats" title="unique: @_selectedUnique, total: @_selectedTotal">(@_selectedUnique/@_selectedTotal)</span>
+            <span class="context-name" title="@SelectedCollection.Name">@SelectedCollection.Name</span>
         }
         else
         {
             @* KB panel — replaces the selected half when no collection is displayed *@
-            <span class="context-label">selected:</span>
             <span class="context-name">KnowledgeBase Cards</span>
+        }
+    </div>
+
+    @* Middle — gold arrow pointing right *@
+    <div class="context-arrow" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 12H18" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round"></path>
+            <path d="M13 6L19 12L13 18" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+    </div>
+
+    @* Right half — pinned *@
+    <div class="context-half context-pinned">
+        @if (PinnedCollection.CollectionId.HasValue)
+        {
+            <span class="context-name" title="@PinnedCollection.Name">@PinnedCollection.Name</span>
+            <span class="context-stats" title="unique: @_pinnedUnique, total: @_pinnedTotal">(@_pinnedUnique/@_pinnedTotal)</span>
+        }
+        else
+        {
+            <span class="context-name context-placeholder">? (pin to set)</span>
         }
     </div>
 </div>
