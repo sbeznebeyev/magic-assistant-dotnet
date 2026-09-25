@@ -45,7 +45,8 @@
                           OnSelectDeck="@OnSelectDeck"
                           OnContextMenuToggle="@OnContextMenuToggle"
                           OnAskCreateNode="@OnAskCreateNode"
-                          OnAddMenuToggle="@OnAddMenuToggle" />
+                          OnAddMenuToggle="@OnAddMenuToggle"
+                          OnImportRequest="@OnImportRequest" />
             }
         }
 
@@ -53,7 +54,8 @@
         @if (IsExpanded)
         {
             <AddNodeRow Depth="@Depth" ShowSpacer="true" IsMenuOpen="IsAddMenuOpen"
-                        OnToggle="OnAddClick" OnCreateNode="AskCreateNode" />
+                        OnToggle="OnAddClick" OnCreateNode="AskCreateNode"
+                        ParentNodeId="@Node.Id" OnImportRequest="OnImportRequest" />
         }
     }
     else if (Node.NodeType == NodeType.Deck)
@@ -134,6 +136,8 @@
     /// <summary>Requests parent to open the name-input dialog for creating a node.</summary>
     [Parameter] public EventCallback<(int? parentId, NodeType type)> OnAskCreateNode { get; set; } = default!;
     [Parameter] public EventCallback<int> OnAddMenuToggle { get; set; } = default!;
+    /// <summary>Import request from this folder's add-row — forwarded straight up; the row carries the parent id itself.</summary>
+    [Parameter] public EventCallback<int?> OnImportRequest { get; set; }
 
     private bool IsExpanded => ExpandedSet != null && ExpandedSet.Contains(Node.Id);
 

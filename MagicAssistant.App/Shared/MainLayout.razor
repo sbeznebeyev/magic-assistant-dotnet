@@ -11,8 +11,6 @@
         <span class="title">⚔ Magic Assistant</span>
         <span class="subtitle">— Card Organizer</span>
         <span class="header-actions">
-            <span class="header-action" @onclick="OpenImportDialog" title="Import deck (current format)">Import</span>
-            <span class="header-action" @onclick="OpenExportDialog" title="Export deck">Export</span>
             <span class="header-action" @onclick="OpenLegacyImportDialog" title="Import legacy deck (Gatherer ID + full set names)">Legacy Import</span>
             <span class="header-action" @onclick="OpenUpdateDbDialog" title="Update DataBase from Scryfall">Update DB</span>
         </span>
@@ -21,9 +19,9 @@
     @* ── Dialogs (render only when visible) *@
     @if (_showSyncDialog) { <SyncKnowledgeBase IsOpen="@_showSyncDialog" IsOpenChanged="@(v => _showSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
-    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
+    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" ParentNodeId="@_importParentId" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
     @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
-    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_currentCollection.CollectionId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
+    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_exportTargetId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
     @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
     @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
@@ -47,6 +45,8 @@
                     OnNodeLockToggled="OnNodeLockToggled"
                     OnShowAllCards="OnShowKB"
                     OnNodeDeleted="OnNodeDeleted"
+                    OnImportRequested="OpenImportDialog"
+                    OnExportRequested="OpenExportDialog"
                     SelectedNodeId="@_currentCollection.CollectionId"
                     PinnedNodeId="@_pinnedCollection.CollectionId" />
                 @* TODO: Fix NullReferenceException in child components *@
@@ -136,8 +136,12 @@
     /// ContextStrip re-loads its unique/total stats on change.</summary>
     private int _stripRefresh;
     private bool _showImportDialog;
+    /// <summary>Parent node the import was requested from (add-node menu context; null = root) — new decks are created inside it.</summary>
+    private int? _importParentId;
     private bool _showLegacyImportDialog;
     private bool _showExportDialog;
+    /// <summary>Node id chosen in the navigator's ⋯ context menu — the export target (not necessarily the displayed collection).</summary>
+    private int? _exportTargetId;
     private bool _showEditCardDialog;
 
     private bool _showFilterDialog;
@@ -231,10 +235,14 @@
     }
 
     // ── Header Actions (clickable words in the app header) ──
-    private void OpenImportDialog() => _showImportDialog = true;
-    private void OpenExportDialog() => _showExportDialog = true;
     private void OpenLegacyImportDialog() => _showLegacyImportDialog = true;
     private void OpenUpdateDbDialog() => _showSyncDialog = true;
+
+    /// <summary>Import from the navigator's add-node menu — parentId null = root level (old header behavior).</summary>
+    private void OpenImportDialog(int? parentId) { _importParentId = parentId; _showImportDialog = true; }
+
+    /// <summary>Export from the navigator's ⋯ context menu — targets the clicked node, not the displayed collection.</summary>
+    private void OpenExportDialog(int nodeId) { _exportTargetId = nodeId; _showExportDialog = true; }
 
     // ── Dialog Openers ──
     private void OpenEditCard(MagicCardPhysical card) { _editCardTarget = card; _showEditCardDialog = true; }

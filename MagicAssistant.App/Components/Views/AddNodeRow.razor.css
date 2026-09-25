@@ -112,3 +112,15 @@
     background: rgba(255, 255, 255, 0.08);
     color: #fff;
 }
+
+/* ── Import item (moved from the app header into this menu) ── */
+.add-menu-sep {
+    border: none;
+    border-top: 1px solid #444;
+    margin: 4px 0;
+}
+
+/* Download/tray glyph — same stroke language as the KB node icon */
+.deck-nav-import-ico {
+    background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCcgZmlsbD0nbm9uZScgc3Ryb2tlPScjNmNiNmZmJyBzdHJva2Utd2lkdGg9JzQnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcgc3Ryb2tlLWxpbmVqb2luPSdyb3VuZCc+PHBhdGggZD0nTTMyIDh2MjgnLz48cGF0aCBkPSdNMjAgMjZsMTIgMTIgMTItMTInLz48cGF0aCBkPSdNMTAgNDR2OGE0IDQgMCAwIDAgNCA0aDM2YTQgNCAwIDAgMCA0LTR2LTgnLz48L3N2Zz4=");
+}

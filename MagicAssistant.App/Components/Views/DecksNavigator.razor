@@ -49,12 +49,14 @@
                           OnSelectDeck="OnSelectDeck"
                           OnContextMenuToggle="OnContextMenuToggle"
                           OnAskCreateNode="OnAskCreateNode"
-                          OnAddMenuToggle="OnAddMenuToggle" />
+                          OnAddMenuToggle="OnAddMenuToggle"
+                          OnImportRequest="OnImportFromMenu" />
             }
 
             @* ── Add Node Button (root level) — unified AddNodeRow; ShowSpacer=false keeps the current depth-0 offset *@
             <AddNodeRow Depth="0" ShowSpacer="false" IsMenuOpen="_showRootAddMenu"
-                        OnToggle="ToggleRootAddMenu" OnCreateNode="(t) => SelectAndShow(null, t)" />
+                        OnToggle="ToggleRootAddMenu" OnCreateNode="(t) => SelectAndShow(null, t)"
+                        OnImportRequest="OnImportFromMenu" />
         </div>
     }
 
@@ -85,6 +87,7 @@
                     }
                     <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="menu-dot dot-locked"></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
                     </button>
+                    <button @onclick="() => ExportFromMenu(_contextTarget)">📤 Export</button>
                 }
                 <hr class="context-sep" />
                 <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
@@ -203,6 +206,14 @@
 
     /// <summary>A node (and its subtree) was deleted — MainLayout drops any context referencing it.</summary>
     [Parameter] public EventCallback<int> OnNodeDeleted { get; set; }
+
+    /// <summary>Import requested from the add-node menu — parentId null = root level.
+    /// MainLayout opens DeckImportWizard with that parent context (new decks are created inside it).</summary>
+    [Parameter] public EventCallback<int?> OnImportRequested { get; set; }
+
+    /// <summary>Export requested from the ⋯ context menu — the clicked node (deck/collection).
+    /// MainLayout opens DeckExportWizard for that node, not for the displayed one.</summary>
+    [Parameter] public EventCallback<int> OnExportRequested { get; set; }
 
     /// <summary>Currently displayed collection node (MainLayout._currentCollection.CollectionId).
     /// Pure projection: non-null highlights that node, null (KB mode) highlights nothing —
@@ -614,6 +625,20 @@
     {
         CloseAddMenu();
         ShowCreateDialog(parentId, nodeType);
+    }
+
+    /// <summary>Import from the add-node menu — closes any open add-menu, then reports the parent context up (null = root).</summary>
+    private async Task OnImportFromMenu(int? parentId)
+    {
+        CloseAddMenu();
+        await OnImportRequested.InvokeAsync(parentId);
+    }
+
+    /// <summary>Export from the ⋯ context menu — exports the clicked node; folders are excluded by the menu itself (they hold no cards).</summary>
+    private async Task ExportFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnExportRequested.InvokeAsync(node.Id);
     }
 
     // ── Add Menu Overlay (click-outside to close) ──────────

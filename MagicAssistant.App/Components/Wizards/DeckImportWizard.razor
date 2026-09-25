@@ -36,6 +36,11 @@
                 </select>
             </div>
 
+            @if (!string.IsNullOrEmpty(_parentName))
+            {
+                <div class="form-hint">New deck will be created inside "<strong>@_parentName</strong>".</div>
+            }
+
             @if (!string.IsNullOrEmpty(_error))
             {
                 <div class="dialog-error">@_error</div>
@@ -59,8 +64,11 @@
     private bool _importing;
     private string? _error;
     private List<NavigatorNodeBase> _existingDecks = new();
+    private string? _parentName;
 
     [Parameter] public bool IsOpen { get; set; }
+    /// <summary>Parent node the add-node menu was opened under (null = root) — "new deck" is created inside it.</summary>
+    [Parameter] public int? ParentNodeId { get; set; }
     [Parameter] public EventCallback OnImported { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
@@ -78,6 +86,7 @@
             {
                 var tree = await DeckManagement!.GetAllNodesAsync();
                 _existingDecks = tree.Values.ToList();
+                _parentName = tree.Values.FirstOrDefault(n => n.Id == ParentNodeId)?.Name;
             }
             catch { }
         }
@@ -122,7 +131,7 @@
             if (_importMode == "new")
             {
                 // Create new deck and import cards
-                var deckId = await DeckManagement!.CreateNodeAsync(null, deckName!, NodeType.Deck);
+                var deckId = await DeckManagement!.CreateNodeAsync(ParentNodeId, deckName!, NodeType.Deck);
                 await ImportCardsToDeck(deckId, xmlContent);
             }
             else

@@ -122,3 +122,9 @@
 .dialog-success {
     color: #4caf50;
 }
+
+.form-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6cb6ff;
+}

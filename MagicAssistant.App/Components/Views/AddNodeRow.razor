@@ -21,6 +21,8 @@
             <button @onclick="() => CreateNode(NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
             <button @onclick="() => CreateNode(NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
             <button @onclick="() => CreateNode(NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
+            <hr class="add-menu-sep" />
+            <button @onclick="ImportNode"><span class="deck-nav-ico deck-nav-import-ico"></span> Import</button>
         </div>
     }
 </div>
@@ -32,6 +34,11 @@
     [Parameter] public bool IsMenuOpen { get; set; }
     [Parameter] public EventCallback OnToggle { get; set; } = default!;
     [Parameter] public EventCallback<NodeType> OnCreateNode { get; set; } = default!;
+    /// <summary>ID of the node this add-row sits under (null = root level). Rides along with the import
+    /// request so the wizard can create the new deck in place instead of at root.</summary>
+    [Parameter] public int? ParentNodeId { get; set; }
+    /// <summary>Import menu item — reports the parent context (null = root) up to the navigator.</summary>
+    [Parameter] public EventCallback<int?> OnImportRequest { get; set; }
 
     private async Task OnToggleClick()
     {
@@ -41,5 +48,10 @@
     private async Task CreateNode(NodeType type)
     {
         await OnCreateNode.InvokeAsync(type);
+    }
+
+    private async Task ImportNode()
+    {
+        await OnImportRequest.InvokeAsync(ParentNodeId);
     }
 }
