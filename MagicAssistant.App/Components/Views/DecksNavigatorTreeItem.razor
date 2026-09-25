@@ -137,7 +137,9 @@
 
     private bool IsExpanded => ExpandedSet != null && ExpandedSet.Contains(Node.Id);
 
-    // ── State marker: 8px gutter over the label — red dot = locked, green dot = pinned ──
+    // ── State marker: 10px dot with black rim — red = locked, green = pinned (locked wins).
+    // Deck/collection rows: the dot replaces the type icon in the 24px slot; folder rows: it stands alone;
+    // SB button: it sits in an 8px left gutter (.node-marker). ──
     private bool ShowMarker => Node.Locked || PinnedId == Node.Id;
     private string NodeMarkerClass => Node.Locked ? "marker-locked" : "marker-pinned";
 

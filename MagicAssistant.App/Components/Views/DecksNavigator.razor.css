@@ -259,9 +259,14 @@
     z-index: 1000;
 }
 
-/* ── Fixed Context Menu (positioned at click point) ─── */
+/* ── Fixed Context Menu (positioned at click point, clamped to viewport) ─── */
 .context-menu-fixed {
     position: fixed;
+    /* Click point arrives as --ctx-x/--ctx-y; clamp keeps the menu on-screen.
+       Budgets: 260px wide (longest item "📌 Pin sideboard (unlock to pin)"),
+       240px tall (label + 5 items + separator, worst case). */
+    left: clamp(8px, var(--ctx-x, 0px), calc(100vw - 260px));
+    top: clamp(8px, var(--ctx-y, 0px), calc(100vh - 240px));
     background: #2d2d2d;
     border: 1px solid #555;
     border-radius: 8px;
@@ -303,6 +308,31 @@
     color: #5a5a5a;
     background: none;
     cursor: default;
+}
+
+/* State dots in the menu — same language as the navigator markers (10px circle, black rim):
+   green = pin action, red = lock action. Disabled rows gray the dot out with the text. */
+.context-menu-fixed .menu-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.context-menu-fixed .menu-dot.dot-pinned {
+    background: #4caf50;
+}
+
+.context-menu-fixed .menu-dot.dot-locked {
+    background: #ff4d4d;
+}
+
+.context-menu-fixed button:disabled .menu-dot {
+    background: #5a5a5a;
 }
 
 .context-menu-fixed button.danger {

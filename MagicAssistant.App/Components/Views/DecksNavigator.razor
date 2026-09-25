@@ -65,23 +65,26 @@
         </div>
         @if (_contextTarget != null)
         {
-            <div class="context-menu-fixed" style="top: @(_contextMenuTop.ToString("F0") + "px"); left: @(_contextMenuLeft.ToString("F0") + "px");">
+            <div class="context-menu-fixed" style="--ctx-x: @(_contextMenuLeft.ToString("F0"))px; --ctx-y: @(_contextMenuTop.ToString("F0"))px;">
                 <span class="context-label">@_contextTarget.Name</span>
                 <button @onclick="() => BeginRename(_contextTarget)">✏ Rename</button>
                 @if (_contextTarget.NodeType != NodeType.Folder)
                 {
-                    @* Pin/Unpin — locked nodes get a gray read-only item; sideboard inherits the deck's lock *@
+                    @* Pin/Unpin — state dot instead of emoji (green = pin, red = lock); locked nodes get a gray read-only item; sideboard inherits the deck's lock *@
                     <button disabled="@_contextTarget.Locked"
                             title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
-                            @onclick="() => TogglePinFromMenu(_contextTarget)">@(_contextTarget.Id == PinnedNodeId ? "📌 Unpin" : _contextTarget.Locked ? "📌 Pin (unlock to pin)" : "📌 Pin")</button>
+                            @onclick="() => TogglePinFromMenu(_contextTarget)"><span class="menu-dot dot-pinned"></span>@(_contextTarget.Id == PinnedNodeId ? "Unpin" : _contextTarget.Locked ? "Pin (unlock to pin)" : "Pin")
+                    </button>
                     @if (_contextTarget is NavigatorNodeDeck menuDeck && menuDeck.Sideboard != null)
                     {
                         var menuSideboard = menuDeck.Sideboard;
                         <button disabled="@_contextTarget.Locked"
                                 title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
-                                @onclick="() => TogglePinFromMenu(menuSideboard)">@(menuSideboard.Id == PinnedNodeId ? "📌 Unpin sideboard" : _contextTarget.Locked ? "📌 Pin sideboard (unlock to pin)" : "📌 Pin sideboard")</button>
+                                @onclick="() => TogglePinFromMenu(menuSideboard)"><span class="menu-dot dot-pinned"></span>@(menuSideboard.Id == PinnedNodeId ? "Unpin sideboard" : _contextTarget.Locked ? "Pin sideboard (unlock to pin)" : "Pin sideboard")
+                        </button>
                     }
-                    <button @onclick="() => ToggleLockFromMenu(_contextTarget)">@(_contextTarget.Locked ? "🔓 Unlock" : "🔒 Lock")</button>
+                    <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="menu-dot dot-locked"></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
+                    </button>
                 }
                 <hr class="context-sep" />
                 <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
@@ -361,15 +364,6 @@
     }
 
     // ── Context menu ───────────────────────────────────────
-    private void OpenContextMenu(NavigatorNodeBase node)
-    {
-        _contextTarget = node;
-        _activeContextMenuNodeId = node.Id;
-        // Close any other open menus
-        _activeAddMenuNodeId = null;
-        _showRootAddMenu = false;
-    }
-
     private void CloseContextMenu()
     {
         _contextTarget = null;
