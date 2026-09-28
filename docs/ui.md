@@ -2,7 +2,9 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
-*Обновлено: 2026-09-25 — Import/Export перенесены из шапки приложения в навигатор: **Import** — в add-node меню (корневая строка и строки папок, после разделителя под Collection/Deck/Folder); `ParentNodeId` передаётся в DeckImportWizard — «new deck» создаётся под родителем меню (null = root, старое поведение), в диалоге подсказка «New deck will be created inside "X"». **Export** — в контекстное меню ⋯ (только deck/collection; экспортируется кликнутый узел через `MainLayout._exportTargetId`, а не отображаемая коллекция). В шапке остались Legacy Import и Update DB. Clamp контекстного меню: 240→270px по высоте (новый пункт).*
+*Обновлено: 2026-09-28 — Импорт перестроен под инвариант «создание после полного резолва»: узел не создаётся до разбора всех карт. Legacy-визард — машина состояний: предпроверка несинченных сетов → синк (языки + картинки) → таблица нераспознанных карт с поиском (3+ символа, debounce 300ms) → коммит только при 100% сопоставленных. Modern-визард: атомарный `CommitModernImportAsync` (валидация UUID по БЗ до создания). Детали — §7.1/§7.2.*
+
+*2026-09-25 — Import/Export перенесены из шапки приложения в навигатор: **Import** — в add-node меню (корневая строка и строки папок, после разделителя под Collection/Deck/Folder); `ParentNodeId` передаётся в DeckImportWizard — «new deck» создаётся под родителем меню (null = root, старое поведение), в диалоге подсказка «New deck will be created inside "X"». **Export** — в контекстное меню ⋯ (только deck/collection; экспортируется кликнутый узел через `MainLayout._exportTargetId`, а не отображаемая коллекция). В шапке остались Legacy Import и Update DB. Clamp контекстного меню: 240→270px по высоте (новый пункт).*
 
 ---
 
@@ -76,8 +78,8 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 |--------|---------|---------|
 | SyncKnowledgeBase | Header `Update DB` | Full set sync from Scryfall |
 | SyncSelectedSetCards | CardsListControl empty state → `OnOpenSync(setCode)` | Sync specific set |
-| DeckImportWizard | DecksNavigator add-node menu (`+` → Import; root or folder row) | XML import to new/existing deck — "new deck" is created under the menu's parent node |
-| OldDeckImportWizard | Header `Legacy Import` | Legacy XML (Gatherer ID) |
+| DeckImportWizard | DecksNavigator add-node menu (`+` → Import; root or folder row) | Atomic modern import — validation of all card IDs against KB, then node creation + cards in one transaction |
+| OldDeckImportWizard | Header `Legacy Import` | Staged legacy import: missing-set sync prompt → unresolved-cards table with search → commit only when 100% mapped |
 | DeckExportWizard | DecksNavigator context menu (⋯ → Export; deck/collection nodes only) | XML export + browser download of the clicked node |
 | EditMagicCardPhysicalDialog | CardsListControl ✎ (deck mode) | Edit card instance (count, ownership, price, tags) |
 | SplitDialog | CardsListControl ⫯ (deck mode, count > 1) | Split stack main/sideboard |
@@ -763,10 +765,13 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 **Form fields:** Select XML File (`InputFile`, accept=".xml"). Import to: dropdown — "New deck (from file name)" or existing deck names (the list stays global). When opened from a folder's menu, a hint below the dropdown names the target: "New deck will be created inside 'X'".
 
-**Import flow:**
-1. Parse XML to extract deck name from `<name>` element.
-2. If "new deck": create via `IDeckManagementService.CreateNodeAsync(ParentNodeId, name, NodeType.Deck)` — under the menu's parent node (root when null), then import cards via `IDeckImportExportService.ImportToCollectionAsync()`.
-3. If existing deck: merge cards directly (ON CONFLICT → add counts).
+**Import flow (atomic commit):**
+1. `IDeckImportExportService.CommitModernImportAsync(xmlContent, ParentNodeId, targetId)` — single call:
+   - parse XML (deck name from `<name>`);
+   - validate every card ID against KB (`ValidateCardIdsQuery`) — **unknown cards abort the import before anything is created**;
+   - commit via `ImportResolvedCardsCommand`: "new deck" → node + sideboard + cards in one transaction under the menu's parent node (root when null); existing deck → merge (ON CONFLICT → add counts).
+
+**Invariant:** no deck/collection node is ever created before all cards are validated.
 
 **Validation:** Import button disabled until file selected.
 
@@ -774,7 +779,31 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 **File:** `Components/Wizards/OldDeckImportWizard.razor`
 
-**Purpose:** Import legacy XML format (Gatherer ID + full set names), card resolution via KB. Same parameters and service dependencies as DeckImportWizard.
+**Purpose:** Import legacy XML format (Gatherer ID + full set names) through the staged interactive flow of `IDeckImportExportService`.
+
+**State machine:**
+
+```
+FileSelection → [Import Legacy] → Checking (CheckLegacyImportAsync)
+  → missing sets? → SetPrompt: list of sets without card data, language toggles
+     (shared "SyncKnowledgeBase.Languages" setting), "Download card images" checkbox
+     → [Download & Import] → Syncing: sequential SyncKBCommand per set,
+        progress polled via GetSyncProgressQuery (500ms), "set i of M", Cancel (CTS)
+  → Resolving (ResolveLegacyCardsAsync)
+     → all resolved → Committing (CommitImportAsync) → OnImported
+     → unresolved rows → UnresolvedTable: 2-column table —
+        col 1: card name + set; col 2: search input (starts at 3+ chars,
+        debounce 300ms, SearchCardMatchesAsync → top-10 candidates with set/CMC),
+        click candidate → selected chip with ✕ (re-pickable)
+        → [Import N cards] enabled only when EVERY row is mapped (strict all-or-nothing)
+        → CommitImportAsync with CardOverrides ("OriginalName|SetCode" → Scryfall UUID)
+```
+
+**Invariant:** the deck node is created only after 100% of cards are resolved and (if needed) manually mapped. Cancel at any stage — nothing is created or modified.
+
+**Parameters:** `IsOpen`, `OnImported`, `IsOpenChanged` (same as DeckImportWizard). Injects: `IDeckManagementService` (existing-deck list), `IDeckImportExportService` (all flow steps), `GetSyncProgressQueryHandler` (sync progress polling), `GetUserSettingQueryHandler`/`SaveUserSettingCommandHandler` (language selection persistence).
+
+**Split cards:** legacy face suffix is stripped for resolution — "Trial // Error (Error)" resolves as "Trial // Error".
 
 ### 7.3 DeckExportWizard
 

@@ -112,34 +112,12 @@
         try
         {
             var xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
+            var targetId = _importMode == "new" ? (int?)null : int.Parse(_importMode);
 
-            // Parse XML to get deck name
-            using var reader = System.Xml.XmlReader.Create(
-                new System.IO.StringReader(xmlContent),
-                new System.Xml.XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true });
-
-            string? deckName = _fileName.Replace(".xml", "");
-            while (reader.Read())
-            {
-                if (reader.NodeType == System.Xml.XmlNodeType.Element && reader.LocalName == "name")
-                {
-                    deckName = reader.ReadString();
-                    break;
-                }
-            }
-
-            if (_importMode == "new")
-            {
-                // Create new deck and import cards
-                var deckId = await DeckManagement!.CreateNodeAsync(ParentNodeId, deckName!, NodeType.Deck);
-                await ImportCardsToDeck(deckId, xmlContent);
-            }
-            else
-            {
-                // Add to existing deck
-                if (int.TryParse(_importMode, out var targetId))
-                    await ImportCardsToDeck(targetId, xmlContent);
-            }
+            // Atomic commit via the import domain module:
+            // parse → validate every card against KB → create node + persist in one transaction.
+            // Nothing is created when validation fails.
+            await ImportExport.CommitModernImportAsync(xmlContent, ParentNodeId, targetId);
 
             await OnImported.InvokeAsync();
         }
@@ -151,14 +129,6 @@
         {
             _importing = false;
         }
-    }
-
-    private async Task ImportCardsToDeck(int deckId, string xmlContent)
-    {
-        // Use vertical slice service for import
-        var imported = await ImportExport.ImportToCollectionAsync(deckId, xmlContent);
-        if (imported <= 0)
-            _error = "No cards were imported.";
     }
 
     private async Task OnCancel()

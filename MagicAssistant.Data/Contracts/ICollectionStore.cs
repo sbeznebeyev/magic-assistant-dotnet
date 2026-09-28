@@ -24,6 +24,15 @@ public interface ICollectionStore
     /// </summary>
     Task<Collection> CreateDeckAsync(string name, int? parentId = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// Atomic import commit: creates a deck (NodeType=2) with its sideboard child and adds
+    /// the given cards — all in ONE transaction. If any insert fails, neither the node
+    /// nor the cards appear in the database.
+    /// Cards must already carry valid CardIds present in the knowledge base;
+    /// their Location is stamped from the created node before insertion.
+    /// </summary>
+    Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null, CancellationToken ct = default);
+
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
     Task<bool> RenameAsync(int id, string newName, CancellationToken ct = default);
 

@@ -64,18 +64,25 @@ public interface IDbCardStore : ICardStore<MagicCard>
 
     /// <summary>
     /// Batch-resolve full set names to set codes in a single SQL query.
-    /// Used by OldImportDeckCommandHandler to convert legacy set names ("Core Set 2019")
-    /// to KB abbreviations ("M19").
+    /// Used by ResolveLegacyCardsQuery to convert legacy set names ("Core Set 2019")
+    /// to KB abbreviations ("m19").
     /// Returns a dictionary: FullName → SetCode. Only matched names are included.
     /// </summary>
     Task<Dictionary<string, string>> ResolveSetNamesAsync(ICollection<string> fullNames, CancellationToken ct = default);
 
     /// <summary>
     /// Batch-resolve cards by (Name, SetCode) pairs in a single SQL query.
-    /// Used by OldImportDeckCommandHandler to replace Gatherer IDs with Scryfall UUIDs.
+    /// Used by ResolveLegacyCardsQuery to replace Gatherer IDs with Scryfall UUIDs.
     /// Returns a dictionary: "{Name}|{Set}" → MagicCard. Only matched pairs are included.
     /// </summary>
     Task<Dictionary<string, MagicCard>> ResolveCardsByNameAndSetAsync(ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sync status of the given full set names in a single SQL query (CardSet + Cards counts).
+    /// Used by legacy import pre-check to detect "sets without cards" that need syncing from Scryfall.
+    /// Returns one row per requested name: resolved code (null when absent from CardSet) and card count.
+    /// </summary>
+    Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusAsync(ICollection<string> setNames, CancellationToken ct = default);
 
     /// <summary>
     /// Get distinct (Language, Id) pairs for all cards sharing the same OracleId.

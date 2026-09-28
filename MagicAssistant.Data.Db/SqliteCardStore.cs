@@ -1901,9 +1901,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
-        // Build OR-conditions for (Name, Set) pairs.
-        // Each pair gets a parameterized condition: (Name = @N0 AND Set = @S0) OR (Name = @N1 AND Set = @S1)
-        // This is a single query that returns all matching cards at once.
+        // A card matches a pair when ANY of its name fields equals the input name:
+        // Cards.Name / Cards.PrintedName / CardFaces.Name / CardFaces.PrintedName —
+        // the same chain the UI uses for display (ActiveName in CardDescriptionView).
+        // Localized KB rows keep English in Name and the localized name in PrintedName,
+        // so legacy files with non-English names resolve too.
         var pairsList = pairs.ToList();
         var conditions = new List<string>();
         var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
@@ -1916,27 +1918,87 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             paramObj[nKey] = name;
             paramObj[sKey] = (object?)set ?? DBNull.Value;
 
+            var nameMatch = "(Name = @" + nKey + " OR PrintedName = @" + nKey +
+                            " OR Id IN (SELECT CardId FROM CardFaces WHERE Name = @" + nKey +
+                            " OR PrintedName = @" + nKey + "))";
             if (set == null)
                 // Match cards where Set is NULL
-                conditions.Add("(Name = @" + nKey + " AND SetCode IS NULL)");
+                conditions.Add(nameMatch + " AND SetCode IS NULL");
             else
-                conditions.Add("(Name = @" + nKey + " AND SetCode = @" + sKey + ")");
+                conditions.Add(nameMatch + " AND SetCode = @" + sKey);
         }
 
-        var sql = $"SELECT * FROM Cards WHERE {string.Join(" OR ", conditions)}";
-        var rows = await conn.QueryAsync<MagicCardRow>(sql, paramObj);
+        // One UNION ALL branch per pair with a discriminator column, so results can be
+        // keyed by the REQUESTED (name, set) — the stored Name may differ from the input.
+        var sql = string.Join(" UNION ALL ",
+            conditions.Select((c, i) => $"SELECT *, {i} AS __m FROM Cards WHERE {c}"));
+        var rows = await conn.QueryAsync<ResolveMatchRow>(sql, paramObj);
         var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
 
-        // Build composite key → card mapping
+        // Build requested-pair key → card mapping (first match wins per pair)
         var result = new Dictionary<string, MagicCard>();
         foreach (var row in rows)
         {
-            var key = $"{row.Name}|{row.SetCode}";
+            var pair = pairsList[row.__m];
+            var key = $"{pair.Name}|{pair.Set ?? ""}";
             if (!result.ContainsKey(key))
                 result[key] = MapToMagicCard(row, ownCountsMap.GetValueOrDefault(row.Id));
         }
 
         return result;
+    }
+
+    private class ResolveMatchRow : MagicCardRow
+    {
+        public int __m { get; set; }
+    }
+
+    public async Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusAsync(ICollection<string> setNames, CancellationToken ct = default)
+    {
+        var names = setNames
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (names.Count == 0) return Array.Empty<SetSyncStatus>();
+
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // Derived table of requested names (UNION ALL — the VALUES table constructor
+        // with a column alias is not supported by the bundled SQLite) LEFT JOINed to
+        // CardSet (case-insensitive) + card count per set — one query, no N+1.
+        var selects = names.Select((_, i) => $"SELECT @N{i} AS Name");
+        var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+        for (int i = 0; i < names.Count; i++)
+            paramObj[$"N{i}"] = names[i];
+
+        var sql = $@"
+            SELECT n.Name AS Name,
+                   cs.SetCode AS SetCode,
+                   cs.Name AS SetName,
+                   (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
+            FROM ({string.Join(" UNION ALL ", selects)}) AS n
+            LEFT JOIN CardSet cs ON cs.Name COLLATE NOCASE = n.Name
+            GROUP BY n.Name, cs.SetCode, cs.Name";
+
+        var rows = await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj);
+
+        return rows
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new SetSyncStatus(first.Name, first.SetCode, first.SetName, g.Sum(r => r.CardCount));
+            })
+            .ToList();
+    }
+
+    private class SetSyncStatusRow
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? SetCode { get; set; }
+        public string? SetName { get; set; }
+        public int CardCount { get; set; }
     }
 
     /// <summary>

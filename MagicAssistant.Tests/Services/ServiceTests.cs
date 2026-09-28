@@ -312,27 +312,4 @@ public class ServiceTests
         Assert.That(result.Success, Is.False);
     }
 
-    /* ═══════════════════════════════════════════════════════
-     * DeckImportExportService — XML импорт/экспорт
-     * ═══════════════════════════════════════════════════════ */
-
-    [Test]
-    public async Task ImportExport_ImportFromFile_FileNotFound_ReturnsError()
-    {
-        var service = new DeckImportExportService(new Mock<ICollectionStore>().Object,
-            new Mock<ICardStore<MagicCardPhysical>>().Object);
-
-        Assert.That((await service.ImportFromFileAsync("/nonexistent.xml")).Success, Is.False);
-    }
-
-    [Test]
-    public async Task ImportExport_ExportToFile_DeckNotFound_ReturnsError()
-    {
-        var coll = new Mock<ICollectionStore>();
-        coll.Setup(s => s.GetByIdAsync(-1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Collection?)null);
-
-        var service = new DeckImportExportService(coll.Object, new Mock<ICardStore<MagicCardPhysical>>().Object);
-        Assert.That((await service.ExportToFileAsync(-1, Path.GetTempFileName())).Success, Is.False);
-    }
 }

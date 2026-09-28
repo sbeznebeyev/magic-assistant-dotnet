@@ -129,7 +129,7 @@ public static class XmlImport
     Build:
         var baseCard = new MagicCard
         {
-            Id = Guid.Parse(fields.GetValueOrDefault("id") ?? throw new ArgumentNullException("id")),
+            Id = ParseCardId(fields.GetValueOrDefault("id")),
             Name = fields.GetValueOrDefault("name") ?? string.Empty,
             SetCode = fields.GetValueOrDefault("edition")?.ToLowerInvariant(),
         };
@@ -157,6 +157,19 @@ public static class XmlImport
         return physical;
     }
         
+    /// <summary>
+    /// Parses the card id from XML.
+    /// Modern files contain Scryfall UUIDs; legacy files contain integer Gatherer IDs
+    /// which are not valid GUIDs — they get Guid.Empty as a placeholder and are replaced
+    /// with real Scryfall UUIDs by knowledge-base resolution before import.
+    /// </summary>
+    static Guid ParseCardId(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new ArgumentNullException("id", "Card <id> element is required.");
+        return Guid.TryParse(raw, out var guid) ? guid : Guid.Empty;
+    }
+
     /// <summary>
     /// Reads text content of a simple element. Caller positioned on start element.
     /// After call, reader is on the end element.

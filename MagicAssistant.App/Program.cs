@@ -126,7 +126,10 @@ builder.Services.AddScoped<SearchCardsQueryHandler>();
 builder.Services.AddScoped<SyncKBCommandHandler>(); // delegates to KnowledgeBaseSyncService
 builder.Services.AddScoped<GetScryfallAvailableSetsQueryHandler>();
 builder.Services.AddScoped<GetSyncProgressQueryHandler>();
-builder.Services.AddScoped<ImportDeckCommandHandler>();
+builder.Services.AddScoped<GetSetSyncStatusQueryHandler>();
+builder.Services.AddScoped<ResolveLegacyCardsQueryHandler>();
+builder.Services.AddScoped<ValidateCardIdsQueryHandler>();
+builder.Services.AddScoped<ImportResolvedCardsCommandHandler>();
 builder.Services.AddScoped<ExportDeckCommandHandler>();
 builder.Services.AddScoped<RemoveCardsFromDeckCommandHandler>();
 builder.Services.AddScoped<MoveCardsCommandHandler>();
@@ -163,8 +166,12 @@ builder.Services.AddScoped<IDeckCardService, DeckCardService>();
 builder.Services.AddScoped<IDeckImportExportService, DeckImportExportService>(sp =>
     new DeckImportExportService(
         sp.GetRequiredService<ICollectionStore>(),
-        sp.GetRequiredService<ICardStore<MagicCardPhysical>>(),
-        sp.GetRequiredService<IDbCardStore>()));
+        sp.GetRequiredService<ICardSearchService>(),
+        sp.GetRequiredService<GetSetSyncStatusQueryHandler>(),
+        sp.GetRequiredService<ResolveLegacyCardsQueryHandler>(),
+        sp.GetRequiredService<ValidateCardIdsQueryHandler>(),
+        sp.GetRequiredService<SyncKBCommandHandler>(),
+        sp.GetRequiredService<ImportResolvedCardsCommandHandler>()));
 builder.Services.AddScoped<IDeckManagementService, DeckManagementService>();
 builder.Services.AddScoped<ICardResolveService, CardResolveService>();
 builder.Services.AddScoped<ICardSearchService, CardSearchService>();

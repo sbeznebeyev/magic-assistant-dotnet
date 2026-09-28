@@ -137,6 +137,64 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         }
     }
 
+    public async Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null, CancellationToken ct = default)
+    {
+        var list = cards.ToList();
+
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        using var tx = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            // Insert main deck (NodeType = 2)
+            await conn.ExecuteAsync(
+                $"INSERT INTO Collection (Name, ParentId, NodeType) VALUES (@Name, @ParentId, {(int)NodeType.Deck})",
+                new { Name = name, ParentId = parentId }, tx);
+
+            var deckId = Convert.ToInt32(await conn.ExecuteScalarAsync("SELECT last_insert_rowid()"));
+
+            // Insert sideboard child (NodeType = 3, ParentId = deckId)
+            await conn.ExecuteAsync(
+                $"INSERT INTO Collection (Name, ParentId, NodeType) VALUES (@Name, @ParentId, {(int)NodeType.Sideboard})",
+                new { Name = $"{name} (sb)", ParentId = deckId }, tx);
+
+            // Stamp the created node into every card and insert (merge semantics on conflict)
+            var location = Location.FromId(deckId, name, false);
+            foreach (var card in list)
+            {
+                card.SetLocation(location);
+                await conn.ExecuteAsync(@"
+                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
+                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
+                    ON CONFLICT(CollectionId, CardId) DO UPDATE SET
+                        Count = Count + excluded.Count,
+                        IsOwn = excluded.IsOwn,
+                        Comment = excluded.Comment,
+                        ForTradeCount = excluded.ForTradeCount",
+                    new
+                    {
+                        CollectionId = deckId,
+                        CardId = card.Card.Id,
+                        Count = card.Count,
+                        IsOwn = card.IsOwn,
+                        Comment = card.Comment,
+                        DateAdded = card.DateAdded,
+                        ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
+                        MyPrice = card.MyPrice
+                    }, tx);
+            }
+
+            tx.Commit();
+            return new Collection(deckId, name, parentId, NodeType.Deck, 0);
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
+    }
+
     public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
