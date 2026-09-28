@@ -189,9 +189,14 @@
                     else
                     {
                         <span>No cards in knowledge base yet.</span>
-                        <button class="sync-btn-inline" @onclick="OnSyncClick">
-                            Sync from Scryfall
-                        </button>
+                        @* Explicit guard: Sync is a KB-only operation — collection/deck/sideboard
+                           display shows KB cards only and never offers sync. *@
+                        @if (!IsLocationMode)
+                        {
+                            <button class="sync-btn-inline" @onclick="OnSyncClick">
+                                Sync from Scryfall
+                            </button>
+                        }
                     }
                 </div>
             }
@@ -242,10 +247,6 @@
     private List<CardSetDto> _sets = new();
     private List<CardSetDto> _filteredSets = new();
     private string _setsSearchQuery = "";
-
-    // Set search debounce (same pattern as the name filter)
-    private System.Threading.Timer? _setsDebounceTimer;
-    private int _setsDebounceSequence;
 
     // Splitter / Resizable sidebar
     private ElementReference _splitterRef;
@@ -311,7 +312,6 @@
         await LoadViewModeAsync();
         await LoadPageSizeAsync();
         await LoadSetsFromKB();
-        ResolveSetSearchCodes();   // re-resolve SetCodes from the restored text against the fresh set list
         await LoadCounts();
         await ApplyFiltersAndPagination();
     }
@@ -391,33 +391,8 @@
         var text = e.Value?.ToString() ?? string.Empty;
         _setsSearchQuery = text;
         FilterViewModel.SetSearchText = text;  // canonical state — survives component remounts
-        ApplySetsFilter();                      // instant sidebar narrowing
-        ResolveSetSearchCodes();                // sync SetCodes (no-op below the 2-char threshold)
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            // Empty input — drop the pending debounce and restore the unfiltered list immediately
-            _setsDebounceTimer?.Dispose();
-            _setsDebounceTimer = null;
-            _setsDebounceSequence++;
-            FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
-        }
-        else
-        {
-            // Debounce the DB re-query — same pattern as the name filter (300ms)
-            _setsDebounceTimer?.Dispose();
-            _setsDebounceTimer = null;
-            int sequence = ++_setsDebounceSequence;
-            _setsDebounceTimer = new System.Threading.Timer(_ =>
-            {
-                InvokeAsync(() =>
-                {
-                    if (sequence != _setsDebounceSequence) return;
-                    FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
-                });
-            }, null, 300, Timeout.Infinite);
-        }
-
+        ApplySetsFilter();                      // instant sidebar narrowing only — the card grid
+                                                // follows the explicit single selection, not the search text
         StateHasChanged();
     }
 
@@ -436,38 +411,19 @@
         // Active search text takes precedence — the input is a free-text field in search mode
         if (!string.IsNullOrEmpty(_setsSearchQuery))
             return _setsSearchQuery;
-        // Show set codes when sets are selected as filter
-        if (FilterViewModel.SetCodes.Count == 1)
-            return FilterViewModel.SetCodes[0];
-        if (FilterViewModel.SetCodes.Count > 1)
-            return $"{FilterViewModel.SetCodes.Count} sets";
-        return string.Empty;
+        // Show the selected set code (single selection)
+        return FilterViewModel.SetCodes.Count == 1 ? FilterViewModel.SetCodes[0] : string.Empty;
     }
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
-    private int GetDisplayedSetsCount()
-    {
-        if (FilterViewModel.SetCodes.Count > 0)
-            return FilterViewModel.SetCodes.Count;  // Sets selected
-        if (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
-            return _filteredSets.Count;  // Text-filtered sets
-        return _sets.Count;  // All sets
-    }
+    private int GetDisplayedSetsCount() =>
+        FilterViewModel.SetCodes.Count == 1 ? 1 : _sets.Count;  // one set selected, or all sets
 
     private int GetDisplayedCardsCount()
     {
-        if (FilterViewModel.SetCodes.Count > 0)
-        {
-            // Selected sets: sum of declared CardCount from set metadata
-            return _sets.Where(s => FilterViewModel.SetCodes.Contains(s.Code))
-                .Sum(s => s.CardCount);
-        }
-        if (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
-        {
-            // Text-filtered sets: sum of declared CardCount from matching sets
-            return _filteredSets.Sum(s => s.CardCount);
-        }
-        // No filter: total cards from DB
+        if (FilterViewModel.SetCodes.Count == 1)
+            return _sets.FirstOrDefault(s => s.Code == FilterViewModel.SetCodes[0])?.CardCount ?? 0;
+        // No set selected: total cards from DB
         return _totalCount;
     }
 
@@ -487,34 +443,16 @@
         }
     }
 
-    /// <summary>Resolves the active set search text into FilterViewModel.SetCodes — the canonical channel
-    /// that feeds CardListFilter.SetCodes and survives component remounts. No-op when no search text is
-    /// active (explicit set selections stay untouched).</summary>
-    private void ResolveSetSearchCodes()
-    {
-        if (string.IsNullOrWhiteSpace(_setsSearchQuery) || _setsSearchQuery.Length < 2)
-            return;
-        FilterViewModel.SetSetCodes(_filteredSets.Select(s => s.Code));
-    }
-
     private async Task SelectSetFilter(string setCode)
     {
-        // Committing an explicit selection ends text-search mode and discards the resolved codes
-        if (!string.IsNullOrEmpty(FilterViewModel.SetSearchText))
-        {
-            FilterViewModel.SetSearchText = string.Empty;
-            _setsSearchQuery = "";  // input shows the set code(s) from now on
-            FilterViewModel.SetNewSetCodeFilter(null);
-        }
-        // Toggle: if already selected, remove it; otherwise add it
-        if (FilterViewModel.SetCodes.Contains(setCode))
-        {
-            FilterViewModel.SetCodes.Remove(setCode);
-        }
-        else
-        {
-            FilterViewModel.SetCodes.Add(setCode);
-        }
+        // Single selection: click = select exactly this set (replaces any previous selection).
+        // Clicking the already-selected set is a no-op — always exactly one node stays selected.
+        if (FilterViewModel.SetCodes.Count == 1 && FilterViewModel.SetCodes[0] == setCode) return;
+
+        // Committing an explicit selection ends text-search mode and discards the search text
+        FilterViewModel.SetSearchText = string.Empty;
+        _setsSearchQuery = "";  // input shows the set code from now on
+        FilterViewModel.SetNewSetCodeFilter(setCode);
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
     }
@@ -593,7 +531,6 @@
             _currentPage = 1;
             await LoadSetsFromKB();   // reload sets list after sync
             ApplySetsFilter();         // re-apply search filter on sets
-            ResolveSetSearchCodes();   // keep resolved codes in sync with the refreshed set list
             await LoadCounts();        // refresh total card count
             await ApplyFiltersAndPagination();
         }
@@ -623,6 +560,10 @@
 
     private async Task OnSyncClick()
     {
+        // Defense in depth: the button is not rendered in location mode, and this guard
+        // keeps the callback itself inert even if a future caller invokes it there.
+        if (IsLocationMode) return;
+
         if (FilterViewModel.SetCodes.Count == 1)
         {
             await OnOpenSync.InvokeAsync(FilterViewModel.SetCodes[0]);
@@ -1072,6 +1013,10 @@
         await OnCardSelected.InvokeAsync(card.Id);
     }
 
+    /// <summary>True when a collection/deck/sideboard is displayed (location mode) — the control
+    /// then only shows KB cards filtered by membership; Sync is not available in this mode.</summary>
+    private bool IsLocationMode => FilterViewModel.CurrentCollectionId.HasValue;
+
     /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
     private bool HasActiveFilters =>
         FilterViewModel.SetCodes.Count > 0
@@ -1110,7 +1055,6 @@
 
         // Dispose debounce timers
         _nameDebounceTimer?.Dispose();
-        _setsDebounceTimer?.Dispose();
 
         // Microsoft Learn pattern: try-catch JSDisconnectedException
         var module = _jsModule;

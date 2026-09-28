@@ -144,7 +144,7 @@
     cursor: pointer;
     font-size: 14px;
     color: #bbb;
-    border-left: 2px solid transparent;
+    border-left: 3px solid transparent;
 }
 
 .set-item:hover {
@@ -152,10 +152,16 @@
     color: #eee;
 }
 
+/* Single selection — gold accent matching the ContextStrip theme */
 .set-item.selected {
-    background: rgba(0, 120, 212, 0.15);
-    border-left-color: #0078d4;
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.30) 0%, rgba(255, 215, 0, 0.08) 100%);
+    border-left-color: #ffd700;
     color: #fff;
+    font-weight: 600;
+}
+
+.set-item.selected .set-name {
+    color: #ffd700;
 }
 
 .set-item.empty {

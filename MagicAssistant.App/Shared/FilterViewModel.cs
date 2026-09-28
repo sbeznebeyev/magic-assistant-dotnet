@@ -51,14 +51,16 @@ public class FilterViewModel
 
     // ── Filter properties ──
 
-    /// <summary>Set code filters — multiple values combined as OR expression (set1 OR set2 OR ...).
-    /// External components should use <see cref="SetNewSetCodeFilter(string)" /> instead of mutating directly.</summary>
+    /// <summary>Set code filters — values combined as OR expression (set1 OR set2 OR ...).
+    /// The CardsListControl sidebar uses single selection (0 = all sets, 1 = the selected set);
+    /// other callers may replace the whole list with a collection via <see cref="SetSetCodes" />.
+    /// External components should use the setter methods instead of mutating directly.</summary>
     public List<string> SetCodes { get; set; } = new();
 
-    /// <summary>Text from the "Filter sets..." sidebar input. CardsListControl resolves it into matching
-    /// set codes in <see cref="SetCodes" /> (the canonical OR filter); the property itself persists across
-    /// component remounts (e.g. deck → Knowledge Base), so an active set search survives navigation.
-    /// Reset by <see cref="Clear()" />.</summary>
+    /// <summary>Text from the "Filter sets..." sidebar input. Narrows only the visible set list in
+    /// CardsListControl's sidebar — the card grid follows the explicit single selection, not the search text.
+    /// The property persists across component remounts (e.g. deck → Knowledge Base), so an active set search
+    /// survives navigation. Reset by <see cref="Clear()" />.</summary>
     public string SetSearchText { get; set; } = string.Empty;
 
     /// <summary>Rarity filters — multiple values combined as OR expression (common OR uncommon OR ...).

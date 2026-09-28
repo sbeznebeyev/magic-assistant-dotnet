@@ -402,11 +402,11 @@
             case "legality": <DeckLegalityPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
             case "collector": <CollectorView /> break;
             default:
+                @* Location mode (collection/deck/sideboard): no sync channel — KB cards are display-only here. *@
                 <CardsListControl FilterViewModel="@_filterViewModel"
                                   OnCardSelected="OnCardSelected"
                                   OnCardSideChanged="OnCardSideChanged"
                                   OnOpenFilter="@(() => _showFilterDialog = true)"
-                                  OnOpenSync="OnOpenSyncDialog"
                                   RefreshTrigger="@_kbRefreshTrigger"
                                   OnCardOperation="RecordLastActionAsync"
                                   PinnedCollectionId="@_pinnedCollection.CollectionId"
