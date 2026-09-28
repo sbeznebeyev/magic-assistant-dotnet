@@ -5,6 +5,7 @@
 @using MagicAssistant.Data.Model.NavigatorNodes
 @inject IDeckManagementService DeckManagement
 @inject IDeckImportExportService ImportExport
+@inject IImageCacheService ImageCache
 @inject GetSyncProgressQueryHandler SyncProgressQuery
 @inject GetUserSettingQueryHandler GetSettingQueryHandler
 @inject SaveUserSettingCommandHandler SaveSettingCommandHandler
@@ -36,9 +37,10 @@
                     <label>Import to</label>
                     <select @bind="_importMode" class="dialog-select">
                         <option value="new">New deck (creates from file name)</option>
-                        @foreach (var deck in _existingDecks)
+                        @foreach (var (target, depth, isSideboard) in _importTargets)
                         {
-                            <option value="@deck.Id">@deck.Name (add to existing)</option>
+                            var indent = new string('\u00A0', depth * 2);
+                            <option value="@target.Id">@indent@(isSideboard ? "↳ " : "")@target.Name</option>
                         }
                     </select>
                 </div>
@@ -184,10 +186,12 @@
                                                @oninput="e => OnRowSearchInput(row, e)" />
                                         @if (row.Results is { Count: > 0 })
                                         {
-                                            <div class="search-results">
+                                            <div class="search-results" @onmouseleave="OnHoverLeave">
                                                 @foreach (var m in row.Results)
                                                 {
-                                                    <button type="button" class="result-item" @onclick="() => OnSelectMatch(row, m)">
+                                                    <button type="button" class="result-item"
+                                                            @onclick="() => OnSelectMatch(row, m)"
+                                                            @onmouseenter="() => OnHoverResult(m)">
                                                         <span class="result-name">@m.Name</span>
                                                         <span class="result-meta">@(string.IsNullOrEmpty(m.SetCode) ? "?" : m.SetCode) · CMC @(m.CmcNumber?.ToString() ?? "—")</span>
                                                     </button>
@@ -220,6 +224,26 @@
                 break;
         }
     </div>
+
+    @if (_state == WizardState.UnresolvedTable && _hoverCard is not null)
+    {
+        <div class="card-preview" @onclick:stopPropagation="true">
+            @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageCache.FrontImageExists(_hoverCard))
+            {
+                <div class="card-preview-img-wrap">
+                    <img src="@imgUrl" alt="@_hoverCard.Name" class="card-preview-img" />
+                </div>
+            }
+            else
+            {
+                <div class="card-preview-empty">
+                    <span>🖼</span>
+                    <span>Image not downloaded</span>
+                </div>
+            }
+            <div class="card-preview-name">@_hoverCard.Name</div>
+        </div>
+    }
 </div>
 
 @code {
@@ -268,9 +292,14 @@
 
     private LegacyCardResolution? _resolution;
     private List<UnresolvedRow> _rows = new();
+    private MagicCard? _hoverCard;
     private readonly Dictionary<string, CancellationTokenSource> _searchCts = new();
 
-    private List<NavigatorNodeBase> _existingDecks = new();
+    /// <summary>
+    /// Valid import targets: Collection, Deck and Sideboard nodes only (folders cannot hold cards).
+    /// Depth — nesting level for display; IsSideboard marks a deck's sideboard child.
+    /// </summary>
+    private List<(NavigatorNodeBase Node, int Depth, bool IsSideboard)> _importTargets = new();
 
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnImported { get; set; }
@@ -286,11 +315,41 @@
             try
             {
                 var tree = await DeckManagement!.GetAllNodesAsync();
-                _existingDecks = tree.Values.ToList();
+                var targets = new List<(NavigatorNodeBase, int, bool)>();
+                foreach (var root in tree.Values)
+                    CollectImportTargets(root, 0, targets);
+                _importTargets = targets;
             }
             catch { }
 
             await LoadLanguagesAsync();
+        }
+    }
+
+    /// <summary>
+    /// Walks the navigation tree collecting import targets.
+    /// Folders are transparent containers — skipped as targets, but their children are walked;
+    /// a deck contributes itself plus its sideboard; collections contribute themselves.
+    /// </summary>
+    private static void CollectImportTargets(NavigatorNodeBase node, int depth, List<(NavigatorNodeBase Node, int Depth, bool IsSideboard)> result)
+    {
+        switch (node)
+        {
+            case NavigatorNodeFolder folder:
+                if (folder.Children is not null)
+                    foreach (var child in folder.Children)
+                        CollectImportTargets(child, depth + 1, result);
+                break;
+
+            case NavigatorNodeDeck deck:
+                result.Add((deck, depth, false));
+                if (deck.Sideboard is { } sb)
+                    result.Add((sb, depth + 1, true));
+                break;
+
+            default: // NavigatorNodeCollection — can hold cards
+                result.Add((node, depth, false));
+                break;
         }
     }
 
@@ -312,6 +371,7 @@
         _syncProgress = null;
         _resolution = null;
         _rows = new();
+        _hoverCard = null;
         foreach (var cts in _searchCts.Values) cts.Cancel();
         _searchCts.Clear();
     }
@@ -510,6 +570,20 @@
         row.SelectedId = card.Id;
         row.SelectedLabel = $"{card.Name} ({(string.IsNullOrEmpty(card.SetCode) ? "?" : card.SetCode)})";
         row.Results = null;
+        _hoverCard = null;
+        StateHasChanged();
+    }
+
+    private void OnHoverResult(MagicCard card)
+    {
+        if (ReferenceEquals(_hoverCard, card)) return;
+        _hoverCard = card;
+        StateHasChanged();
+    }
+
+    private void OnHoverLeave()
+    {
+        _hoverCard = null;
         StateHasChanged();
     }
 
@@ -543,6 +617,9 @@
             var targetId = _importMode == "new" ? (int?)null : int.Parse(_importMode);
             await ImportExport.CommitImportAsync(_deckName, null, targetId, _resolution!.Resolved, overrides);
             await OnImported.InvokeAsync();
+            // Commit succeeded — the state machine has no further step; close the dialog.
+            // (Without this, _state stays Committing and the window hangs on "Importing...".)
+            await Close();
         }
         catch (Exception ex)
         {

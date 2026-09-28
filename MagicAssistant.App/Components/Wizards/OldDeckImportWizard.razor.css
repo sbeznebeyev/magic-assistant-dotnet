@@ -3,13 +3,13 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
 }
 
 .dialog-box {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     background: #1e1e1e;
     border: 1px solid #555;
     border-radius: 8px;
@@ -293,4 +293,58 @@
     cursor: pointer;
     font-size: 12px;
     padding: 0 2px;
+}
+
+/* ── Hover preview of a candidate card (UnresolvedTable) ── */
+.card-preview {
+    align-self: stretch; /* flex stretch → exactly the dialog-box height */
+    width: 260px;
+    background: #1e1e1e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.card-preview-img-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+.card-preview-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.card-preview-empty {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    color: #888;
+    font-size: 12px;
+    text-align: center;
+}
+
+.card-preview-name {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #eee;
+    border-top: 1px solid #444;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
