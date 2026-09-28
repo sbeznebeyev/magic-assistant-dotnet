@@ -111,6 +111,14 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* Lazy-load placeholder shown while the image file is being downloaded (or when it cannot be). */
+.card-image-loading {
+    min-height: 220px;
+    align-items: center;
+    color: #888;
+    font-size: 13px;
+}
+
 /* ── Language Toggle Buttons ───────────────────────── */
 .card-lang-toggles {
     display: flex;

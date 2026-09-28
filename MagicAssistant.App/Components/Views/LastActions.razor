@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject IDeckCardService DeckCardService
 @inject ILogger<LastActions> Logger
+@inject ICardImageLoader ImageLoader
 
 <div class="last-actions-view">
     <div class="section-header">
@@ -21,15 +22,15 @@
                 <div class="action-row">
 
                     <div class="action-body">
-                        @* Card image *@
+                        @* Card image (lazy: renders once the file is on disk; missing → auto-download) *@
                         <div class="action-img">
-                            @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(item.Card, true)))
+                            @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(item.Card, true)) && ImageLoader.FrontExists(item.Card))
                             {
                                 <img src="@ImageHelper.GetImageUrl(item.Card, true)" alt="front" loading="lazy" />
                             }
                             else
                             {
-                                <span class="action-img-placeholder">?</span>
+                                <span class="action-img-placeholder">@(ImageLoader.Failed(item.Card) ? "?" : "⏳")</span>
                             }
                         </div>
 
@@ -92,6 +93,7 @@
     protected override void OnInitialized()
     {
         Queue.Changed += OnQueueChanged;
+        _ = EnsureImagesAsync(); // items already in the queue at mount time
     }
 
     /// <summary>Central handler: reload totals + re-render when the queue changes.
@@ -112,6 +114,29 @@
                 Logger.LogError(ex, "LastActions refresh failed.");
             }
         });
+        // New entries may have uncached images — the event can fire off the render context,
+        // so the lazy-load batch runs inside InvokeAsync as well.
+        InvokeAsync(() => _ = EnsureImagesAsync());
+    }
+
+    /// <summary>
+    /// Lazy image loading for queue thumbnails: missing front images are downloaded in parallel
+    /// (one per-card command each, deduplicated by the loader); the list re-renders as files land.
+    /// </summary>
+    private async Task EnsureImagesAsync()
+    {
+        var missing = Queue.Items
+            .Where(i => i.Card is not null && !ImageLoader.FrontExists(i.Card))
+            .ToList();
+
+        if (missing.Count == 0) return;
+
+        var tasks = missing.Select(i => ImageLoader.EnsureAsync(i.Card)).ToList(); // all start at once
+        foreach (var t in tasks)
+        {
+            await t;
+            StateHasChanged();
+        }
     }
 
     /// <summary>Totals per (location, card) for the queued entries — one grouped query over the

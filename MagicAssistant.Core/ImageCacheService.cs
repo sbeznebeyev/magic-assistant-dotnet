@@ -171,6 +171,11 @@ public class ImageCacheService : IImageCacheService
                 var response = await _httpClient.GetAsync(url, ct);
                 response.EnsureSuccessStatusCode();
 
+                // The set directory may not exist (set synced without images) — create it on the spot.
+                var dir = Path.GetDirectoryName(fullFileName);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+
                 using var stream = await response.Content.ReadAsStreamAsync(ct);
                 using var fileStream = File.Create(fullFileName);
                 await stream.CopyToAsync(fileStream, ct);

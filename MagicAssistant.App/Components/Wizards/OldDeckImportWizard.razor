@@ -5,7 +5,7 @@
 @using MagicAssistant.Data.Model.NavigatorNodes
 @inject IDeckManagementService DeckManagement
 @inject IDeckImportExportService ImportExport
-@inject IImageCacheService ImageCache
+@inject ICardImageLoader ImageLoader
 @inject GetSyncProgressQueryHandler SyncProgressQuery
 @inject GetUserSettingQueryHandler GetSettingQueryHandler
 @inject SaveUserSettingCommandHandler SaveSettingCommandHandler
@@ -228,7 +228,7 @@
     @if (_state == WizardState.UnresolvedTable && _hoverCard is not null)
     {
         <div class="card-preview" @onclick:stopPropagation="true">
-            @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageCache.FrontImageExists(_hoverCard))
+            @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageLoader.FrontExists(_hoverCard))
             {
                 <div class="card-preview-img-wrap">
                     <img src="@imgUrl" alt="@_hoverCard.Name" class="card-preview-img" />
@@ -236,9 +236,10 @@
             }
             else
             {
+                @* Lazy: the image is downloaded on hover and pops in when the file lands. *@
                 <div class="card-preview-empty">
                     <span>🖼</span>
-                    <span>Image not downloaded</span>
+                    <span>@(ImageLoader.Failed(_hoverCard) ? "Image not downloaded" : "Downloading image...")</span>
                 </div>
             }
             <div class="card-preview-name">@_hoverCard.Name</div>
@@ -579,6 +580,18 @@
         if (ReferenceEquals(_hoverCard, card)) return;
         _hoverCard = card;
         StateHasChanged();
+
+        // Lazy image loading: the preview shows a placeholder until the file is on disk.
+        if (!ImageLoader.FrontExists(card))
+            _ = EnsureHoverImageAsync(card);
+    }
+
+    private async Task EnsureHoverImageAsync(MagicCard card)
+    {
+        await ImageLoader.EnsureAsync(card);
+        // Re-render only if this card is still the hovered one.
+        if (ReferenceEquals(_hoverCard, card))
+            StateHasChanged();
     }
 
     private void OnHoverLeave()

@@ -150,6 +150,8 @@ builder.Services.AddScoped<GetCardInstancesQueryHandler>();
 builder.Services.AddScoped<GetKBAvailableSetsQueryHandler>();
 builder.Services.AddScoped<GetCardSetQueryHandler>();
 builder.Services.AddScoped<SyncCardSetsCommandHandler>();
+// On-demand per-card image download (lazy loading) — reuses the set-sync image pipeline
+builder.Services.AddScoped<DownloadCardImagesCommandHandler>();
 // GetCollectorProgressQueryHandler — uses IDbCardStore.GetCollectorProgressRawAsync (single SQL, no ICollectionStore needed)
 builder.Services.AddScoped<GetCollectorProgressQueryHandler>();
 
@@ -173,6 +175,8 @@ builder.Services.AddScoped<IDeckImportExportService, DeckImportExportService>(sp
         sp.GetRequiredService<SyncKBCommandHandler>(),
         sp.GetRequiredService<ImportResolvedCardsCommandHandler>()));
 builder.Services.AddScoped<IDeckManagementService, DeckManagementService>();
+// Lazy card image loading for the UI (checks local cache, triggers per-card download)
+builder.Services.AddScoped<ICardImageLoader, CardImageLoader>();
 builder.Services.AddScoped<ICardResolveService, CardResolveService>();
 builder.Services.AddScoped<ICardSearchService, CardSearchService>();
 builder.Services.AddScoped<IKnowledgeBaseSyncService, KnowledgeBaseSyncService>();

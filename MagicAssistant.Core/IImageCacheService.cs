@@ -5,8 +5,10 @@ namespace MagicAssistant.Core;
 public interface IImageCacheService
 {
     bool FrontImageExists(MagicCard card);
+    bool BackImageExists(MagicCard card);
     Task<bool> DownloadAsync(MagicCard card, CancellationToken ct = default);
     string BuildFrontFullPath(MagicCard card);
+    string BuildBackFullPath(MagicCard card);
     string GetFrontFileName(MagicCard card);
 
     /// <summary>
