@@ -797,7 +797,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             Type = row.Type,
             Power = row.Power,
             Toughness = row.Toughness,
-            SetCode = row.Set,
+            SetCode = row.SetCode,
             Rarity = row.Rarity,
             OracleText = row.OracleText,
             Rulings = row.Rulings,
@@ -904,7 +904,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public string? Type { get; set; }
         public string? Power { get; set; }
         public string? Toughness { get; set; }
-        public string? Set { get; set; }
+        public string? SetCode { get; set; }  // matches the c.SetCode column name (Dapper maps by exact name)
         public string? Rarity { get; set; }
         public string? OracleText { get; set; }
         public string? Rulings { get; set; }

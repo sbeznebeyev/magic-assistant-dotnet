@@ -248,6 +248,10 @@
     private List<CardSetDto> _filteredSets = new();
     private string _setsSearchQuery = "";
 
+    /// <summary>Location mode: flat copies (ParentSetCode reset) of the sets present in the current node's cards.
+    /// The sidebar shows only these; the KB-mode list is always sourced from _sets, which keeps its hierarchy intact.</summary>
+    private List<CardSetDto> _locationSets = new();
+
     // Splitter / Resizable sidebar
     private ElementReference _splitterRef;
     private int _sidebarWidth = 220;
@@ -328,7 +332,7 @@
             if (string.IsNullOrEmpty(FilterViewModel.SetSearchText) && !string.IsNullOrEmpty(_setsSearchQuery))
             {
                 _setsSearchQuery = string.Empty;
-                _filteredSets = _sets;
+                ApplySetsFilter();  // mode-aware base: _locationSets in location mode, _sets in KB
             }
 
             // Detect an external reset via ClearGeneration: after Clear All the debounced name buffer
@@ -368,6 +372,10 @@
     }
 
     // ── Sets Loading ──────────────────────────────────────
+    /// <summary>Loads the KB set list into _sets only.
+    /// Deliberately does NOT call ApplySetsFilter(): in location mode the base list is _locationSets,
+    /// which is still empty/stale here — filtering would wipe _filteredSets. Both callers
+    /// (OnInitializedAsync, the RefreshTrigger branch) re-apply the filter afterwards.</summary>
     private async Task LoadSetsFromKB()
     {
         try
@@ -377,7 +385,6 @@
                 .OrderByDescending(s => s.ReleasedAt)
                 .ThenBy(s => s.ParentSetCode)
                 .ToList();
-            ApplySetsFilter();
         }
         catch (Exception ex)
         {
@@ -417,7 +424,9 @@
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
     private int GetDisplayedSetsCount() =>
-        FilterViewModel.SetCodes.Count == 1 ? 1 : _sets.Count;  // one set selected, or all sets
+        IsLocationMode
+            ? _filteredSets.Count                                              // location: only the node's sets are listed
+            : (FilterViewModel.SetCodes.Count == 1 ? 1 : _sets.Count);         // KB: one set selected, or all sets
 
     private int GetDisplayedCardsCount()
     {
@@ -429,18 +438,35 @@
 
     private void ApplySetsFilter()
     {
+        // Base list depends on the mode: KB — all synced sets; location — only the node's sets (flat copies).
+        var baseSets = IsLocationMode ? _locationSets : _sets;
+
         if (string.IsNullOrWhiteSpace(_setsSearchQuery) || _setsSearchQuery.Length < 2)
         {
-            _filteredSets = _sets;
+            _filteredSets = baseSets;
         }
         else
         {
             var q = _setsSearchQuery.ToLowerInvariant();
-            _filteredSets = _sets
+            _filteredSets = baseSets
                 .Where(s => s.Name.ToLowerInvariant().Contains(q) ||
                             s.Code.ToLowerInvariant().Contains(q))
                 .ToList();
         }
+    }
+
+    /// <summary>Location mode: rebuilds the sidebar set list from the current node's cards.
+    /// Takes flat copies (ParentSetCode reset) so _sets keeps its hierarchy untouched, and drops the
+    /// selection if it references a set absent in this node (no-op for an empty selection).</summary>
+    private void ApplyLocationSets(IEnumerable<string> setCodes)
+    {
+        var codes = new HashSet<string>(setCodes);
+        _locationSets = _sets.Where(s => codes.Contains(s.Code))
+                             .Select(s => s with { ParentSetCode = null })
+                             .ToList();
+        if (FilterViewModel.SetCodes.Any(c => !codes.Contains(c)))
+            FilterViewModel.SetNewSetCodeFilter(null);
+        ApplySetsFilter();  // narrow the node's sets by the search text, if any
     }
 
     private async Task SelectSetFilter(string setCode)
@@ -699,6 +725,21 @@
         _loading = true;
         try
         {
+            // Location mode: load physical instances first — needed both for per-card counts/actions
+            // and to rebuild the sidebar set list from this node's distinct sets.
+            if (FilterViewModel.CurrentCollectionId.HasValue)
+            {
+                var physical = await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value);
+                _physicalByCardId = physical.ToDictionary(p => p.Card.Id, p => p);
+                ApplyLocationSets(physical.Select(p => p.Card.SetCode).OfType<string>().Distinct());
+            }
+            else
+            {
+                _physicalByCardId = null;
+                _locationSets = new List<CardSetDto>();  // back to KB mode — drop the node-scoped list
+                ApplySetsFilter();                        // _filteredSets = _sets, narrowed by search if any
+            }
+
             // FilterViewModel.SortField already matches CardListFilter.SortFields values
             var sortField = FilterViewModel.SortField;
 
@@ -749,11 +790,6 @@
             _totalCount = result.TotalCount;
             _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
-
-            // Location mode: physical instances for count display and per-card actions
-            _physicalByCardId = FilterViewModel.CurrentCollectionId.HasValue
-                ? (await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value)).ToDictionary(p => p.Card.Id, p => p)
-                : null;
 
             // KB mode with a pinned target: totals of the displayed cards in the pinned collection
             // (deck mode shows the current deck's count in the Total column — no pinned query needed)
