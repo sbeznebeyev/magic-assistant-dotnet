@@ -192,7 +192,7 @@
                                                     <button type="button" class="result-item"
                                                             @onclick="() => OnSelectMatch(row, m)"
                                                             @onmouseenter="() => OnHoverResult(m)">
-                                                        <span class="result-name">@m.Name</span>
+                                                        <span class="result-name">@(m.PrintedName ?? m.Name)</span>
                                                         <span class="result-meta">@(string.IsNullOrEmpty(m.SetCode) ? "?" : m.SetCode) · CMC @(m.CmcNumber?.ToString() ?? "—")</span>
                                                     </button>
                                                 }
@@ -231,7 +231,7 @@
             @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageLoader.FrontExists(_hoverCard))
             {
                 <div class="card-preview-img-wrap">
-                    <img src="@imgUrl" alt="@_hoverCard.Name" class="card-preview-img" />
+                    <img src="@imgUrl" alt="@(_hoverCard.PrintedName ?? _hoverCard.Name)" class="card-preview-img" />
                 </div>
             }
             else
@@ -242,7 +242,7 @@
                     <span>@(ImageLoader.Failed(_hoverCard) ? "Image not downloaded" : "Downloading image...")</span>
                 </div>
             }
-            <div class="card-preview-name">@_hoverCard.Name</div>
+            <div class="card-preview-name">@(_hoverCard.PrintedName ?? _hoverCard.Name)</div>
         </div>
     }
 </div>
@@ -569,7 +569,7 @@
     private void OnSelectMatch(UnresolvedRow row, MagicCard card)
     {
         row.SelectedId = card.Id;
-        row.SelectedLabel = $"{card.Name} ({(string.IsNullOrEmpty(card.SetCode) ? "?" : card.SetCode)})";
+        row.SelectedLabel = $"{(card.PrintedName ?? card.Name)} ({(string.IsNullOrEmpty(card.SetCode) ? "?" : card.SetCode)})";
         row.Results = null;
         _hoverCard = null;
         StateHasChanged();
