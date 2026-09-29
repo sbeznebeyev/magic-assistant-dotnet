@@ -18,7 +18,9 @@
         @* ── Left: Sets Sidebar ── *@
         <div class="sets-sidebar" style="width: @(_sidebarWidth + "px");">
             <div class="sets-header">
-                <span class="sets-title">KB (sets: @GetDisplayedSetsCount(), cards: @GetDisplayedCardsCount())</span>
+                <span class="sets-title">@(IsLocationMode
+                    ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
+                    : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()})")</span>
             </div>
             <div class="sets-search-bar">
                 <input value="@GetSetsInputValue()"
@@ -430,11 +432,20 @@
 
     private int GetDisplayedCardsCount()
     {
+        if (IsLocationMode)
+            // Unique cards in the current node, narrowed by the selected set when one is chosen.
+            return _physicalByCardId?.Values
+                .Count(p => FilterViewModel.SetCodes.Count != 1 || p.Card.SetCode == FilterViewModel.SetCodes[0]) ?? 0;
         if (FilterViewModel.SetCodes.Count == 1)
             return _sets.FirstOrDefault(s => s.Code == FilterViewModel.SetCodes[0])?.CardCount ?? 0;
-        // No set selected: total cards from DB
+        // KB, no set selected: total cards from DB
         return _totalCount;
     }
+
+    /// <summary>Location mode only: all card copies in the current node (SUM of physical counts —
+    /// same semantics as the tree's CardCount). 0 outside location mode or before the first load.</summary>
+    private int GetLocationTotalCount() =>
+        _physicalByCardId?.Values.Sum(p => p.Count) ?? 0;
 
     private void ApplySetsFilter()
     {
