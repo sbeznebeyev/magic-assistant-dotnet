@@ -209,6 +209,47 @@ public class DeckImportExportService : IDeckImportExportService
     }
 
     // ═══════════════════════════════════════════════════════
+    //  Import collection assembly (legacy)
+    // ═══════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<MagicCardPhysical>> BuildLegacyImportCardsAsync(
+        string xmlContent,
+        LegacyCardResolution resolution,
+        IReadOnlyDictionary<string, Guid>? cardOverrides = null,
+        CancellationToken ct = default)
+    {
+        var importResult = ParseOrThrow(xmlContent);
+
+        // Auto-resolved (Name|SetCode) → Scryfall UUID; same key space as the overrides
+        // (original file values — the query only stamps Id, never renames).
+        var resolvedIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var p in resolution.Resolved)
+            resolvedIds[$"{p.Name}|{p.SetCode}"] = p.Card.Id;
+
+        var cards = new List<MagicCardPhysical>(importResult.Cards.Count);
+        foreach (var card in importResult.Cards)
+        {
+            var physical = card is MagicCardPhysical p
+                ? p
+                : new MagicCardPhysical(card.GetBase(), Location.FromId(0, "unresolved", false), true);
+
+            var key = $"{physical.Name}|{physical.SetCode}";
+            if (cardOverrides is { Count: > 0 } && cardOverrides.TryGetValue(key, out var mapped))
+                physical.Card.Id = mapped;
+            else if (resolvedIds.TryGetValue(key, out var resolved))
+                physical.Card.Id = resolved;
+            else
+                throw new InvalidOperationException(
+                    $"Card '{key}' is neither resolved nor mapped — the import cannot be committed.");
+
+            cards.Add(physical);
+        }
+
+        return Task.FromResult<IReadOnlyList<MagicCardPhysical>>(cards);
+    }
+
+    // ═══════════════════════════════════════════════════════
     //  Commit (atomic)
     // ═══════════════════════════════════════════════════════
 

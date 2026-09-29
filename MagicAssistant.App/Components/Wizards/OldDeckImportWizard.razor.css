@@ -297,8 +297,12 @@
 
 /* ── Hover preview of a candidate card (UnresolvedTable) ── */
 .card-preview {
-    align-self: stretch; /* flex stretch → exactly the dialog-box height */
-    width: 260px;
+    position: absolute; /* вне flex-потока оверлея — диалог не сдвигается */
+    top: 50%;
+    right: 24px;
+    transform: translateY(-50%);
+    width: 350px;
+    height: 500px;
     background: #1e1e1e;
     border: 1px solid #555;
     border-radius: 8px;

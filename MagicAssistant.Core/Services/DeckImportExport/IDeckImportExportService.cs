@@ -72,6 +72,23 @@ public interface IDeckImportExportService
     Task<IReadOnlyList<MagicCard>> SearchCardMatchesAsync(string query, CancellationToken ct = default);
 
     // ═══════════════════════════════════════════════════════
+    //  Import collection assembly (legacy)
+    // ═══════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Assembles the single import collection for a legacy file: every physical from the XML
+    /// with its final Scryfall UUID — auto-resolved ones stamped from
+    /// <paramref name="resolution"/>, manually mapped ones from
+    /// <paramref name="cardOverrides"/> (key "OriginalName|SetCode").
+    /// Throws when any card is neither resolved nor mapped — the commit invariant.
+    /// </summary>
+    Task<IReadOnlyList<MagicCardPhysical>> BuildLegacyImportCardsAsync(
+        string xmlContent,
+        LegacyCardResolution resolution,
+        IReadOnlyDictionary<string, Guid>? cardOverrides = null,
+        CancellationToken ct = default);
+
+    // ═══════════════════════════════════════════════════════
     //  Commit (atomic)
     // ═══════════════════════════════════════════════════════
 

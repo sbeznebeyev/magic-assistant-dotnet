@@ -213,7 +213,7 @@
 
                 <div class="dialog-actions">
                     <button class="btn-primary" @onclick="OnCommitFromTable" disabled="@(!AllMapped)">
-                        Import @_resolution!.Resolved.Count card(s)
+                        Import @_check!.TotalCards card(s)
                     </button>
                     <button class="btn-secondary" @onclick="Close">Cancel</button>
                 </div>
@@ -628,7 +628,8 @@
         try
         {
             var targetId = _importMode == "new" ? (int?)null : int.Parse(_importMode);
-            await ImportExport.CommitImportAsync(_deckName, null, targetId, _resolution!.Resolved, overrides);
+            var cards = await ImportExport.BuildLegacyImportCardsAsync(_xmlContent, _resolution!, overrides);
+            await ImportExport.CommitImportAsync(_deckName, null, targetId, cards);
             await OnImported.InvokeAsync();
             // Commit succeeded — the state machine has no further step; close the dialog.
             // (Without this, _state stays Committing and the window hangs on "Importing...".)

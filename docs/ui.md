@@ -2,7 +2,9 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
-*Обновлено: 2026-09-28 — Импорт перестроен под инвариант «создание после полного резолва»: узел не создаётся до разбора всех карт. Legacy-визард — машина состояний: предпроверка несинченных сетов → синк (языки + картинки) → таблица нераспознанных карт с поиском (3+ символа, debounce 300ms) → коммит только при 100% сопоставленных. Modern-визард: атомарный `CommitModernImportAsync` (валидация UUID по БЗ до создания). Детали — §7.1/§7.2.*
+*Обновлено: 2026-09-29 — Legacy-визард: коммит через `BuildLegacyImportCardsAsync` (полная коллекция: авто-резолв + ручные маппинги, счётчики из XML); кнопка «Import N» считает все карты файла. Hover-превью кандидата — фиксированные 300×400, закреплено справа по центру вьюпорта, диалог не сдвигается.*
+
+*2026-09-28 — Импорт перестроен под инвариант «создание после полного резолва»: узел не создаётся до разбора всех карт. Legacy-визард — машина состояний: предпроверка несинченных сетов → синк (языки + картинки) → таблица нераспознанных карт с поиском (3+ символа, debounce 300ms) → коммит только при 100% сопоставленных. Modern-визард: атомарный `CommitModernImportAsync` (валидация UUID по БЗ до создания). Детали — §7.1/§7.2.*
 
 *2026-09-25 — Import/Export перенесены из шапки приложения в навигатор: **Import** — в add-node меню (корневая строка и строки папок, после разделителя под Collection/Deck/Folder); `ParentNodeId` передаётся в DeckImportWizard — «new deck» создаётся под родителем меню (null = root, старое поведение), в диалоге подсказка «New deck will be created inside "X"». **Export** — в контекстное меню ⋯ (только deck/collection; экспортируется кликнутый узел через `MainLayout._exportTargetId`, а не отображаемая коллекция). В шапке остались Legacy Import и Update DB. Clamp контекстного меню: 240→270px по высоте (новый пункт).*
 
@@ -795,11 +797,13 @@ FileSelection → [Import Legacy] → Checking (CheckLegacyImportAsync)
         col 1: card name + set; col 2: search input (starts at 3+ chars,
         debounce 300ms, SearchCardMatchesAsync → top-10 candidates with set/CMC),
         click candidate → selected chip with ✕ (re-pickable)
-        → [Import N cards] enabled only when EVERY row is mapped (strict all-or-nothing)
-        → CommitImportAsync with CardOverrides ("OriginalName|SetCode" → Scryfall UUID)
+        → [Import N cards] (N = every card in the file) enabled only when EVERY row is mapped (strict all-or-nothing)
+        → BuildLegacyImportCardsAsync (full collection: auto-resolved + manually mapped, counts from XML) → CommitImportAsync
 ```
 
 **Invariant:** the deck node is created only after 100% of cards are resolved and (if needed) manually mapped. Cancel at any stage — nothing is created or modified.
+
+**Hover preview:** hovering a search candidate shows a card preview with lazy image loading (`ICardImageLoader`): fixed 300×400, pinned to the right of the viewport and vertically centered (`position: absolute` — outside the overlay's flex flow, so the dialog never shifts).
 
 **Parameters:** `IsOpen`, `OnImported`, `IsOpenChanged` (same as DeckImportWizard). Injects: `IDeckManagementService` (existing-deck list), `IDeckImportExportService` (all flow steps), `GetSyncProgressQueryHandler` (sync progress polling), `GetUserSettingQueryHandler`/`SaveUserSettingCommandHandler` (language selection persistence).
 
