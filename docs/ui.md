@@ -2,11 +2,13 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
+*2026-09-30 — После завершения импорта (оба визарда) MainLayout дополнительно делает `_kbRefreshTrigger++` → CardsListControl перезагружает отображаемый список: если импорт шёл в открытую локацию, новые карты видны сразу; иначе это безвредный повторный fetch.*
+
 *2026-09-29 — Prerendering выключен (App.razor): единый `InteractiveServerRenderMode(prerender: false)` для HeadOutlet и Routes; первый HTML — пустая оболочка, компоненты инициализируются один раз после подключения SignalR-circuit (без двойного `OnInitializedAsync` и двойной загрузки данных). Детали — §1.1.*
 
 *Обновлено: 2026-09-29 — Навигатор: два пункта чистки в контекстном меню — **🧹 Clear** (deck/collection-узлы, folder не виден; чистит сам выбранный узел) и **🧹 Clear sideboard** (только deck с SB; чистит дочерний SB-узел). Оба: серый disabled при locked, как pin-пункты; диалог подтверждения в стиле Delete («Delete all N cards from the deck/collection "X"? The deck/collection itself is kept.» / «...from the sideboard of "X"? The sideboard itself is kept.»); `OnClearRequested(nodeId)` / `OnClearSideboardRequested(sideboardId)` — ID самого целевого узла (для SB — `NavigatorNodeDeck.Sideboard.Id`, не родительской колоды) → MainLayout: `IDeckCardService.ClearNodeAsync` (CQRS: `RemoveCardsFromDeckCommand` → `ICollectionStore.RemoveCardsAsync`, 1 SQL-запрос; пустой `CardIds` = чистка всех карт узла, результат = сумма возвращённых копий) — карты удаляются, сам узел остаётся; статус-бар, `_stripRefresh++`, `_kbRefreshTrigger++`, `RefreshCardCountsAsync()`. Детали — §2.1.*
 
-*2026-09-29 — Legacy-визард: коммит через `BuildLegacyImportCardsAsync` (полная коллекция: авто-резолв + ручные маппинги, счётчики из XML); кнопка «Import N» считает все карты файла. Hover-превью кандидата — фиксированные 300×400, закреплено справа по центру вьюпорта, диалог не сдвигается.*
+*2026-09-29 — Legacy-визард: коммит через `BuildLegacyImportCardsAsync` (полная коллекция: авто-резолв + ручные маппинги, счётчики из XML); кнопка «Import N» — N берётся из коллекции для сохранения (`BuildLegacyImportCardsAsync`, строится после маппинга последней строки): `cards.Sum(c => c.Count)`, повторки включены; пока все строки не замаплены, кнопка без числа и disabled. Hover-превью кандидата — фиксированные 300×400, закреплено справа по центру вьюпорта, диалог не сдвигается.*
 
 *2026-09-28 — Импорт перестроен под инвариант «создание после полного резолва»: узел не создаётся до разбора всех карт. Legacy-визард — машина состояний: предпроверка несинченных сетов → синк (языки + картинки) → таблица нераспознанных карт с поиском (3+ символа, debounce 300ms) → коммит только при 100% сопоставленных. Modern-визард: атомарный `CommitModernImportAsync` (валидация UUID по БЗ до создания). Детали — §7.1/§7.2.*
 
@@ -805,8 +807,9 @@ FileSelection → [Import Legacy] → Checking (CheckLegacyImportAsync)
         col 1: card name + set; col 2: search input (starts at 3+ chars,
         debounce 300ms, SearchCardMatchesAsync → top-10 candidates with set/CMC),
         click candidate → selected chip with ✕ (re-pickable)
-        → [Import N cards] (N = every card in the file) enabled only when EVERY row is mapped (strict all-or-nothing)
+        → [Import N cards] (N = total copies in the save collection built by `BuildLegacyImportCardsAsync` once every row is mapped; includes duplicates; label shows no number until then) enabled only when EVERY row is mapped (strict all-or-nothing)
         → BuildLegacyImportCardsAsync (full collection: auto-resolved + manually mapped, counts from XML) → CommitImportAsync
+     → OnImported → MainLayout: _stripRefresh++ + _kbRefreshTrigger++ (the viewed list reloads — new cards visible immediately when the import targeted it) + RefreshCardCountsAsync()
 ```
 
 **Invariant:** the deck node is created only after 100% of cards are resolved and (if needed) manually mapped. Cancel at any stage — nothing is created or modified.

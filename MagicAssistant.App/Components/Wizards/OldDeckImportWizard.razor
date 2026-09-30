@@ -212,8 +212,8 @@
                 }
 
                 <div class="dialog-actions">
-                    <button class="btn-primary" @onclick="OnCommitFromTable" disabled="@(!AllMapped)">
-                        Import @_check!.TotalCards card(s)
+                    <button class="btn-primary" @onclick="OnCommitFromTable" disabled="@(_importCards == null)">
+                        @(_importCards is { } ready ? $"Import {ready.Sum(c => c.Count)} card(s)" : "Import")
                     </button>
                     <button class="btn-secondary" @onclick="Close">Cancel</button>
                 </div>
@@ -293,6 +293,13 @@
 
     private LegacyCardResolution? _resolution;
     private List<UnresolvedRow> _rows = new();
+
+    /// <summary>
+    /// The save collection, built once every row is mapped — the single source of truth for the commit
+    /// and for the "Import N" count (N = total copies, including duplicates). Null until fully mapped.
+    /// </summary>
+    private IReadOnlyList<MagicCardPhysical>? _importCards;
+
     private MagicCard? _hoverCard;
     private readonly Dictionary<string, CancellationTokenSource> _searchCts = new();
 
@@ -372,6 +379,7 @@
         _syncProgress = null;
         _resolution = null;
         _rows = new();
+        _importCards = null;
         _hoverCard = null;
         foreach (var cts in _searchCts.Values) cts.Cancel();
         _searchCts.Clear();
@@ -528,7 +536,8 @@
 
         if (_resolution.Unresolved.Count == 0)
         {
-            await DoCommitAsync(null);
+            var cards = await ImportExport.BuildLegacyImportCardsAsync(_xmlContent, _resolution!);
+            await DoCommitAsync(cards);
         }
         else
         {
@@ -566,13 +575,39 @@
         catch (OperationCanceledException) { /* superseded by a newer input */ }
     }
 
-    private void OnSelectMatch(UnresolvedRow row, MagicCard card)
+    private async Task OnSelectMatch(UnresolvedRow row, MagicCard card)
     {
         row.SelectedId = card.Id;
         row.SelectedLabel = $"{(card.PrintedName ?? card.Name)} ({(string.IsNullOrEmpty(card.SetCode) ? "?" : card.SetCode)})";
         row.Results = null;
         _hoverCard = null;
+
+        // The last row got mapped — build the save collection now; it drives both the commit and the count.
+        if (AllMapped)
+            await BuildImportCardsAsync();
+
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Builds the save collection from the file + resolution + manual mappings. In-memory only;
+    /// throws nothing here — a failure just leaves the button disabled with the error shown.
+    /// </summary>
+    private async Task BuildImportCardsAsync()
+    {
+        _error = null;
+        try
+        {
+            var overrides = _rows
+                .Where(r => r.SelectedId.HasValue)
+                .ToDictionary(r => r.Key, r => r.SelectedId!.Value);
+            _importCards = await ImportExport.BuildLegacyImportCardsAsync(_xmlContent, _resolution!, overrides);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _importCards = null;
+        }
     }
 
     private void OnHoverResult(MagicCard card)
@@ -604,6 +639,7 @@
     {
         row.SelectedId = null;
         row.SelectedLabel = null;
+        _importCards = null; // stale until every row is mapped again
         StateHasChanged();
     }
 
@@ -611,16 +647,11 @@
 
     private async Task OnCommitFromTable()
     {
-        if (!AllMapped) return;
-
-        var overrides = _rows
-            .Where(r => r.SelectedId.HasValue)
-            .ToDictionary(r => r.Key, r => r.SelectedId!.Value);
-
-        await DoCommitAsync(overrides.Count > 0 ? overrides : null);
+        if (_importCards == null) return; // button is disabled while the save collection is not built
+        await DoCommitAsync(_importCards);
     }
 
-    private async Task DoCommitAsync(IReadOnlyDictionary<string, Guid>? overrides)
+    private async Task DoCommitAsync(IReadOnlyList<MagicCardPhysical> cards)
     {
         _error = null;
         _state = WizardState.Committing;
@@ -628,7 +659,6 @@
         try
         {
             var targetId = _importMode == "new" ? (int?)null : int.Parse(_importMode);
-            var cards = await ImportExport.BuildLegacyImportCardsAsync(_xmlContent, _resolution!, overrides);
             await ImportExport.CommitImportAsync(_deckName, null, targetId, cards);
             await OnImported.InvokeAsync();
             // Commit succeeded — the state machine has no further step; close the dialog.

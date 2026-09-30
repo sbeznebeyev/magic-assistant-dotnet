@@ -333,8 +333,21 @@
         _selectedSetForSync = setCode;
         _showSelectedSetSyncDialog = true;
     }
-    private async Task OnImportCompleted() { _statusText = "Import completed"; _stripRefresh++; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
-    private async Task OnLegacyImportCompleted() { _statusText = "Legacy import completed"; _stripRefresh++; if (_navigator is { } nav) await nav.RefreshCardCountsAsync(); }
+    private async Task OnImportCompleted()
+    {
+        _statusText = "Import completed";
+        _stripRefresh++;      // ContextStrip stats may have changed
+        _kbRefreshTrigger++;  // reload the viewed list in case the import targeted it
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();
+    }
+
+    private async Task OnLegacyImportCompleted()
+    {
+        _statusText = "Legacy import completed";
+        _stripRefresh++;      // ContextStrip stats may have changed
+        _kbRefreshTrigger++;  // reload the viewed list in case the import targeted it
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();
+    }
     private void OnExportCompleted() { _statusText = "Export completed"; }
     private async Task OnEditCardSaved(MagicCardPhysical? card)
     {
