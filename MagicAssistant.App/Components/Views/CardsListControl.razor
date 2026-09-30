@@ -852,7 +852,7 @@
         if (newCount < 0) return;
 
         if (newCount == 0)
-            await DeckCardService.RemoveCardsAsync(FilterViewModel.CurrentCollectionId.Value, new[] { card.Id }, false);
+            await DeckCardService.RemoveCardsAsync(FilterViewModel.CurrentCollectionId.Value, new[] { card.Id });
         else
             await DeckCardService.UpdateCardAsync(FilterViewModel.CurrentCollectionId.Value, card.Id,
                 new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = newCount });

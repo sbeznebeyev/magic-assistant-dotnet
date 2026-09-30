@@ -60,6 +60,15 @@ public interface ICollectionStore
     Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
+    /// Remove card rows from a collection node in a single SQL round-trip.
+    /// Non-empty cardIds: all copies of each listed card; empty: every card row of the node
+    /// (the "clear" operation — the node itself is kept).
+    /// Locked nodes throw, as do unknown node IDs.
+    /// Returns the total number of card COPIES removed (SUM(Count)), not the row count.
+    /// </summary>
+    Task<int> RemoveCardsAsync(int collectionId, ICollection<Guid> cardIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
     Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);

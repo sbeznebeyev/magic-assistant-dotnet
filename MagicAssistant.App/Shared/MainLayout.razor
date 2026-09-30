@@ -47,6 +47,8 @@
                     OnNodeDeleted="OnNodeDeleted"
                     OnImportRequested="OpenImportDialog"
                     OnExportRequested="OpenExportDialog"
+                    OnClearSideboardRequested="OnClearSideboardRequested"
+                    OnClearRequested="OnClearRequested"
                     SelectedNodeId="@_currentCollection.CollectionId"
                     PinnedNodeId="@_pinnedCollection.CollectionId" />
                 @* TODO: Fix NullReferenceException in child components *@
@@ -243,6 +245,46 @@
 
     /// <summary>Export from the navigator's ⋯ context menu — targets the clicked node, not the displayed collection.</summary>
     private void OpenExportDialog(int nodeId) { _exportTargetId = nodeId; _showExportDialog = true; }
+
+    /// <summary>Clear sideboard from the navigator ⋯ menu (deck nodes only): wipes all cards out of the
+    /// sideboard node (its own ID, not the parent deck's) via IDeckCardService — the SB node itself is kept.
+    /// Refreshes strip stats, the viewed list (in case the SB is displayed) and navigator card counts.</summary>
+    private async Task OnClearSideboardRequested(int sideboardId)
+    {
+        try
+        {
+            var removed = await DeckCardService.ClearNodeAsync(sideboardId);
+            _statusText = removed > 0 ? $"Sideboard cleared ({removed} cards)" : "Sideboard was already empty";
+            _stripRefresh++;   // ContextStrip stats may have changed (SB pinned/selected)
+            _kbRefreshTrigger++;  // reload the viewed list in case the sideboard is displayed
+            StateHasChanged();
+            if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // SB badge count in the navigator
+        }
+        catch (Exception ex)
+        {
+            _statusText = $"Clear sideboard failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Clear from the navigator ⋯ menu (deck/collection nodes, folders ignored): wipes all cards
+    /// out of the clicked node via IDeckCardService — the node itself is kept. Refreshes strip stats,
+    /// the viewed list (in case the node is displayed) and navigator card counts.</summary>
+    private async Task OnClearRequested(int nodeId)
+    {
+        try
+        {
+            var removed = await DeckCardService.ClearNodeAsync(nodeId);
+            _statusText = removed > 0 ? $"Collection cleared ({removed} cards)" : "Collection was already empty";
+            _stripRefresh++;   // ContextStrip stats may have changed (node pinned/selected)
+            _kbRefreshTrigger++;  // reload the viewed list in case this node is displayed
+            StateHasChanged();
+            if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // badge count in the navigator
+        }
+        catch (Exception ex)
+        {
+            _statusText = $"Clear failed: {ex.Message}";
+        }
+    }
 
     // ── Dialog Openers ──
     private void OpenEditCard(MagicCardPhysical card) { _editCardTarget = card; _showEditCardDialog = true; }

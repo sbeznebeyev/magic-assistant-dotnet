@@ -2,7 +2,11 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
-*Обновлено: 2026-09-29 — Legacy-визард: коммит через `BuildLegacyImportCardsAsync` (полная коллекция: авто-резолв + ручные маппинги, счётчики из XML); кнопка «Import N» считает все карты файла. Hover-превью кандидата — фиксированные 300×400, закреплено справа по центру вьюпорта, диалог не сдвигается.*
+*2026-09-29 — Prerendering выключен (App.razor): единый `InteractiveServerRenderMode(prerender: false)` для HeadOutlet и Routes; первый HTML — пустая оболочка, компоненты инициализируются один раз после подключения SignalR-circuit (без двойного `OnInitializedAsync` и двойной загрузки данных). Детали — §1.1.*
+
+*Обновлено: 2026-09-29 — Навигатор: два пункта чистки в контекстном меню — **🧹 Clear** (deck/collection-узлы, folder не виден; чистит сам выбранный узел) и **🧹 Clear sideboard** (только deck с SB; чистит дочерний SB-узел). Оба: серый disabled при locked, как pin-пункты; диалог подтверждения в стиле Delete («Delete all N cards from the deck/collection "X"? The deck/collection itself is kept.» / «...from the sideboard of "X"? The sideboard itself is kept.»); `OnClearRequested(nodeId)` / `OnClearSideboardRequested(sideboardId)` — ID самого целевого узла (для SB — `NavigatorNodeDeck.Sideboard.Id`, не родительской колоды) → MainLayout: `IDeckCardService.ClearNodeAsync` (CQRS: `RemoveCardsFromDeckCommand` → `ICollectionStore.RemoveCardsAsync`, 1 SQL-запрос; пустой `CardIds` = чистка всех карт узла, результат = сумма возвращённых копий) — карты удаляются, сам узел остаётся; статус-бар, `_stripRefresh++`, `_kbRefreshTrigger++`, `RefreshCardCountsAsync()`. Детали — §2.1.*
+
+*2026-09-29 — Legacy-визард: коммит через `BuildLegacyImportCardsAsync` (полная коллекция: авто-резолв + ручные маппинги, счётчики из XML); кнопка «Import N» считает все карты файла. Hover-превью кандидата — фиксированные 300×400, закреплено справа по центру вьюпорта, диалог не сдвигается.*
 
 *2026-09-28 — Импорт перестроен под инвариант «создание после полного резолва»: узел не создаётся до разбора всех карт. Legacy-визард — машина состояний: предпроверка несинченных сетов → синк (языки + картинки) → таблица нераспознанных карт с поиском (3+ символа, debounce 300ms) → коммит только при 100% сопоставленных. Modern-визард: атомарный `CommitModernImportAsync` (валидация UUID по БЗ до создания). Детали — §7.1/§7.2.*
 
@@ -44,6 +48,8 @@
 ## 1. Application Layout
 
 ### 1.1 Three-Panel Structure
+
+**Prerendering:** disabled in `App.razor` — one shared `InteractiveServerRenderMode(prerender: false)` instance applied to both `HeadOutlet` and `Routes` (mixing prerendered and non-prerendered interactive components in one tree is not allowed). The first HTML response is an empty shell; every component initializes exactly once after the SignalR circuit attaches — no double `OnInitializedAsync`, no duplicate data loading on startup. Intentional: the app is fully interactive (all content arrives from SQLite), so prerendering would only render "Loading" states.
 
 MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 
@@ -171,11 +177,13 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 |--------|----------|
 | ✏ Rename | Overlay rename dialog (name input + Save/Cancel, Enter to save) |
 | 🟢 Pin / Unpin | Deck/collection nodes only. Toggles the pin on the clicked node; disabled while locked. Decks get a second item **Pin sideboard** for their sideboard |
+| 🧹 Clear sideboard | Deck nodes only (rendered in the sideboard block). Opens a confirmation dialog ("Delete all N cards from the sideboard of \"X\"? The sideboard itself is kept.", N = `Sideboard.CardCount`); **disabled (gray) while the deck is locked**, same as the pin items. Confirm → `OnClearSideboardRequested(sideboardId)` (the SB node's own ID, not the parent deck's) → MainLayout: `IDeckCardService.ClearNodeAsync` — every card row in the SB is removed, the SB node itself is kept; status bar + strip/refresh triggers + navigator counts |
+| 🧹 Clear | Deck/collection nodes only (folders get no item). Opens a confirmation dialog ("Delete all N cards from the deck/collection \"X\"? The deck/collection itself is kept.", N = the node's `CardCount`); **disabled (gray) while locked**, same as the pin items. Confirm → `OnClearRequested(nodeId)` (the clicked node's own ID) → MainLayout: `IDeckCardService.ClearNodeAsync` — every card row of the node is removed, the node itself is kept; status bar + strip/refresh triggers + navigator counts |
 | 🔒 Lock / 🔓 Unlock | Deck/collection nodes only. Toggles node lock status |
 | 📤 Export | Deck/collection nodes only. Closes the menu, fires `OnExportRequested(node.Id)` → MainLayout opens DeckExportWizard for that node (not the displayed collection) |
 | 🗑 Delete | Overlay delete confirmation ("Delete X and all its cards?") |
 
-**Menu scope:** folders get Rename and Delete only — Pin/Lock/Export items render on deck/collection nodes (`NodeType != Folder`). Node creation lives in the add-node menu, not here.
+**Menu scope:** folders get Rename and Delete only — Pin/Lock/Export/Clear items render on deck/collection nodes (`NodeType != Folder`), Clear sideboard renders on deck nodes that have a sideboard. Node creation lives in the add-node menu, not here.
 
 **"+ add node" row:** Inline row at root level and below each folder's children. Clicking `+` opens dropdown: Collection / Deck / Folder, then a separator and **Import**: fires `OnImportRequested(parentId)` — null at root, the folder id for folder rows; MainLayout opens DeckImportWizard with that parent context, so "new deck" is created inside it.
 

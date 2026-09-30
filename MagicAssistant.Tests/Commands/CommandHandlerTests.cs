@@ -56,59 +56,51 @@ public class CommandHandlerTests
     /* ─── RemoveCardsFromDeck — удаление карт ──────────────── */
 
     [Test]
-    public async Task RemoveCards_RemovesAvailableCards()
+    public async Task RemoveCards_DelegatesToStoreWithCardIds()
     {
-        // BUG в исходном коде: RemoveCardsFromDeckCommand принимает ICollection<IMagicCard>,
-        // где IMagicCard.Count для MagicCard всегда возвращает 1 (hardcoded в ICard реализации).
-        // Хендлер использует Math.Min(instance.Count, card.Count) для определения количества на удаление.
-        // Это означает, что при удалении через MagicCard (не MagicCardPhysical) 
-        // ВСЕГДА удаляется максимум 1 копия, независимо от того сколько копий в колоде.
-        // Для удаления N копий необходимо передать N отдельных MagicCard объектов или использовать MagicCardPhysical.
-        // Тест документирует эту семантику: 1 MagicCard → удаление 1 копии из доступных.
+        // Хендлер — чистый делегат: один вызов ICollectionStore.RemoveCardsAsync, результат — как есть.
 
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
         var cardId = Guid.NewGuid();
-        var physical = CreatePhysical(cardId, 1, 2);
+        coll.Setup(s => s.RemoveCardsAsync(1, It.IsAny<ICollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(2);
 
-        coll.Setup(s => s.GetByIdAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Collection(1, "Deck", null, NodeType.Deck, 0));
-        coll.Setup(s => s.GetDeckCardsAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { physical });
-        cardStore.Setup(s => s.RemoveAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        var handler = new RemoveCardsFromDeckCommandHandler(coll.Object);
+        var result = await handler.Handle(new RemoveCardsFromDeckCommand(1, new[] { cardId }));
 
-        var handler = new RemoveCardsFromDeckCommandHandler(cardStore.Object, coll.Object);
-        var result = await handler.Handle(new RemoveCardsFromDeckCommand(1,
-            new[] { (IMagicCard)new MagicCard { Id = cardId } }));
+        Assert.That(result, Is.EqualTo(2), "Результат стора (SUM(Count) удалённых копий) возвращается как есть");
+        coll.Verify(s => s.RemoveCardsAsync(
+            1, It.Is<ICollection<Guid>>(ids => ids.Contains(cardId)), It.IsAny<CancellationToken>()), Times.Once);
+    }
 
-        // MagicCard.Count всегда = 1 → Math.Min(2, 1) = 1
-        Assert.That(result, Is.EqualTo(1),
-            "Ожидалось удаление ровно 1 копии: MagicCard.Count всегда возвращает 1, " +
-            "поэтому Math.Min(instance.Count=2, card.Count=1) = 1. " +
-            "BUG: для удаления всех копий карты нужно передать MagicCardPhysical с нужным Count.");
+    [Test]
+    public async Task RemoveCards_NullCardIds_DelegatesWithEmptyList()
+    {
+        var coll = new Mock<ICollectionStore>();
+        coll.Setup(s => s.RemoveCardsAsync(1, It.IsAny<ICollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
 
-        // Убедимся, что RemoveAsync был вызван с count=1
-        cardStore.Verify(s => s.RemoveAsync(
-            It.Is<MagicCardPhysical>(p => p.Count == 1),
-            It.IsAny<CancellationToken>()));
+        var handler = new RemoveCardsFromDeckCommandHandler(coll.Object);
+        await handler.Handle(new RemoveCardsFromDeckCommand(1, null!));
+
+        coll.Verify(s => s.RemoveCardsAsync(
+            1, It.Is<ICollection<Guid>>(ids => !ids.Any()), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
     public async Task RemoveCards_DeckNotFound_Throws()
     {
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
-        coll.Setup(s => s.GetByIdAsync(999, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Collection?)null);
+        coll.Setup(s => s.RemoveCardsAsync(999, It.IsAny<ICollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Deck '999' not found"));
 
-        var handler = new RemoveCardsFromDeckCommandHandler(cardStore.Object, coll.Object);
+        var handler = new RemoveCardsFromDeckCommandHandler(coll.Object);
 
         bool exceptionThrown = false;
         try
         {
             await handler.Handle(new RemoveCardsFromDeckCommand(999,
-                new[] { (IMagicCard)new MagicCard { Id = Guid.NewGuid() } }));
+                new[] { Guid.NewGuid() }));
         }
         catch (InvalidOperationException ex)
         {
@@ -122,25 +114,21 @@ public class CommandHandlerTests
     }
 
     [Test]
-    public async Task RemoveCards_CardNotInDeck_ReturnsZero()
+    public async Task ClearSideboard_DelegatesBySideboardNodeId()
     {
+        // Чистка идёт по ID самого SB-узла (7), а не родительской колоды:
+        // пустой CardIds = удалить все карты узла, сам узел остаётся.
+
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
-        var physical = CreatePhysical(Guid.NewGuid(), 1, 1);
+        coll.Setup(s => s.RemoveCardsAsync(7, It.IsAny<ICollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(5);
 
-        coll.Setup(s => s.GetByIdAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Collection(1, "Deck", null, NodeType.Deck, 0));
-        coll.Setup(s => s.GetDeckCardsAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { physical });
+        var handler = new RemoveCardsFromDeckCommandHandler(coll.Object);
+        var result = await handler.Handle(new RemoveCardsFromDeckCommand(7, Array.Empty<Guid>()));
 
-        var handler = new RemoveCardsFromDeckCommandHandler(cardStore.Object, coll.Object);
-        var result = await handler.Handle(new RemoveCardsFromDeckCommand(1,
-            new[] { (IMagicCard)new MagicCard { Id = Guid.NewGuid() } }));
-
-        Assert.That(result, Is.EqualTo(0), "Карта не найдена в колоде — ничего не должно быть удалено");
-
-        // RemoveAsync НЕ должен был быть вызван
-        cardStore.Verify(s => s.RemoveAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.That(result, Is.EqualTo(5), "Все 5 копий из сайдборда (2+3) — результат стора");
+        coll.Verify(s => s.RemoveCardsAsync(
+            7, It.Is<ICollection<Guid>>(ids => !ids.Any()), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /* ─── MoveCards — перемещение между колодами ───────────── */

@@ -98,7 +98,8 @@ public class ServiceTests
         cardStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object);
+        var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object,
+            new RemoveCardsFromDeckCommandHandler(coll.Object));
 
         var result0 = await service.SplitCardAsync(1, cardId, 0);
         Assert.That(result0, Is.Null, "rightCount=0 → nothing to split, must return null");
@@ -128,7 +129,8 @@ public class ServiceTests
         cardStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object);
+        var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object,
+            new RemoveCardsFromDeckCommandHandler(coll.Object));
         var result = await service.SplitCardAsync(1, cardId, 2);
         Assert.That(result, Is.Not.Null, "Splitting 4→(2+2) must return the right part");
         Assert.That(result!.Count, Is.EqualTo(2), "Right part must have count=2");

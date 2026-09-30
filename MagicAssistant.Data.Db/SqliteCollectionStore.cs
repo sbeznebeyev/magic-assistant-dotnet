@@ -453,6 +453,33 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return true;
     }
 
+    public async Task<int> RemoveCardsAsync(int collectionId, ICollection<Guid> cardIds, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+
+        // Locked nodes (Collection/Deck/Sideboard: NodeType 1-3) block card removal; the node must exist.
+        var locked = await conn.QuerySingleOrDefaultAsync<bool?>(
+            "SELECT Locked FROM Collection WHERE Id = @Id AND NodeType IN (1,2,3)",
+            new { Id = collectionId });
+        if (locked == null)
+            throw new InvalidOperationException($"Deck '{collectionId}' not found");
+        if (locked == true)
+            throw new InvalidOperationException($"Cannot remove cards from a locked node (Id={collectionId})");
+
+        // Single SQL round-trip: DELETE ... RETURNING Count — each deleted row yields its copy
+        // count; the in-memory sum is the total number of card copies removed, not the row count.
+        var ids = cardIds?.ToList() ?? new List<Guid>();
+        const string clearAllSql = "DELETE FROM Deck WHERE CollectionId = @CollectionId RETURNING Count";
+        const string clearListedSql = "DELETE FROM Deck WHERE CollectionId = @CollectionId AND CardId IN @CardIds RETURNING Count";
+
+        var counts = (await conn.QueryAsync<int>(
+            ids.Any() ? clearListedSql : clearAllSql,
+            new { CollectionId = collectionId, CardIds = ids })).ToList();
+
+        return counts.Sum();
+    }
+
     public async Task<bool> UpdateAsync(MagicCardPhysical card, ICollection<MagicCardField> fields, CancellationToken ct = default)
     {
         var locationId = card.Location.RawId;

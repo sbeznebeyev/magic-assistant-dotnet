@@ -238,6 +238,72 @@ public class SqliteCollectionStoreTests
     }
 
     [Test]
+    public async Task RemoveCardsAsync_EmptyList_ClearsAllCards_ReturnsTotalCopies()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        await _store.AddAllAsync(new[]
+        {
+            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 },
+            new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 3 },
+        });
+
+        var removed = await _store.RemoveCardsAsync(deck.Id, Array.Empty<Guid>());
+
+        Assert.That(removed, Is.EqualTo(5), "SUM(Count) — общее число копий, а не количество строк");
+        Assert.That(await _store.GetDeckCardsAsync(deck.Id), Is.Empty);
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_WithCardIds_RemovesAllCopiesOfListedOnly()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        await _store.AddAllAsync(new[]
+        {
+            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 },
+            new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 3 },
+        });
+
+        var removed = await _store.RemoveCardsAsync(deck.Id, new[] { _id_1 });
+
+        Assert.That(removed, Is.EqualTo(2));
+        var rest = await _store.GetDeckCardsAsync(deck.Id);
+        Assert.That(rest, Has.Count.EqualTo(1));
+        Assert.That(rest.First().Card.Id, Is.EqualTo(_id_2), "Неперечисленная карта не тронута");
+        Assert.That(rest.First().Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_UnknownCardId_ReturnsZero()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        await _store.AddAsync(new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 });
+
+        var removed = await _store.RemoveCardsAsync(deck.Id, new[] { Guid.NewGuid() });
+
+        Assert.That(removed, Is.EqualTo(0));
+        Assert.That(await _store.GetDeckCardsAsync(deck.Id), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_LockedNode_Throws_CardsKept()
+    {
+        var deck = await _store.CreateDeckAsync("Locked Deck");
+        await _store.AddAsync(new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 });
+        await _store.LockAsync(deck.Id);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(deck.Id, Array.Empty<Guid>()));
+        Assert.That(ex!.Message, Does.Contain("locked"));
+        Assert.That(await _store.GetDeckCardsAsync(deck.Id), Has.Count.EqualTo(1), "Карты не удалены");
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_NodeNotFound_Throws()
+    {
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(9999, Array.Empty<Guid>()));
+        Assert.That(ex!.Message, Does.Contain("not found"));
+    }
+
+    [Test]
     public async Task UpdateAsync_UpdatesCardCount()
     {
         var deck = await _store.CreateDeckAsync("Test Deck");

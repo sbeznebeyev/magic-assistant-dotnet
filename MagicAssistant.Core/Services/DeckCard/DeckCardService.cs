@@ -1,3 +1,4 @@
+using MagicAssistant.Core.Commands;
 using MagicAssistant.Core.Services.CardResolve;
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model;
@@ -15,15 +16,18 @@ public class DeckCardService : IDeckCardService
     private readonly ICollectionStore _collectionStore;
     private readonly ICardStore<MagicCardPhysical> _cardStore;
     private readonly ICardResolveService _resolveService;
+    private readonly RemoveCardsFromDeckCommandHandler _removeCardsHandler;
 
     public DeckCardService(
         ICollectionStore collectionStore,
         ICardStore<MagicCardPhysical> cardStore,
-        ICardResolveService resolveService)
+        ICardResolveService resolveService,
+        RemoveCardsFromDeckCommandHandler removeCardsHandler)
     {
         _collectionStore = collectionStore;
         _cardStore = cardStore;
         _resolveService = resolveService;
+        _removeCardsHandler = removeCardsHandler;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -74,28 +78,27 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
-    public async Task<int> RemoveCardsAsync(int deckId, ICollection<Guid> cardIds, bool removeSideboard = false, CancellationToken ct = default)
+    public async Task<int> RemoveCardsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
         if (cardIds == null || !cardIds.Any())
             return 0;
 
-        var removed = 0;
-        var deckIdStr = deckId.ToString();
+        // CQRS: full-row removal of every listed card from the node.
+        return await _removeCardsHandler.Handle(
+            new RemoveCardsFromDeckCommand(deckId, cardIds), ct);
+    }
 
-        foreach (var cardId in cardIds)
-        {
-            var existing = await _collectionStore.GetCardsAsync(cardId, ct);
-            var matching = existing.FirstOrDefault(e => e.Location.Id == deckIdStr && e.Card.Id == cardId);
-            if (matching == null)
-                continue;
+    /// <inheritdoc />
+    public async Task<int> ClearNodeAsync(int nodeId, CancellationToken ct = default)
+    {
+        if (nodeId <= 0)
+            throw new ArgumentException("Invalid node ID.", nameof(nodeId));
 
-            await _cardStore.RemoveAsync(matching, ct);
-            removed++;
-        }
-
-        return removed;
+        // CQRS: empty CardIds = clear — wipe every card row of the node; the node itself is kept.
+        return await _removeCardsHandler.Handle(
+            new RemoveCardsFromDeckCommand(nodeId, Array.Empty<Guid>()), ct);
     }
 
     /// <inheritdoc />

@@ -1,6 +1,10 @@
 # MagicAssistant — ASP.NET Core приложение
 
-*Последнее обновление: 2026-09-29 (Legacy-импорт: склейка единой коллекции импорта — новый шаг `BuildLegacyImportCards` в ступенчатом API `DeckImportExportService`: все physicals из XML с финальными UUID — авто-резолв + ручные маппинги, счётчики из файла; инвариант «коммит при 100% резолва» охраняется и на уровне сервиса. UI: hover-превью кандидата — фиксированные 300×400 справа по центру вьюпорта, диалог не сдвигается. Детали — ui.md §7.2)*
+*2026-09-29 (Prerendering выключен: App.razor — единый экземпляр `InteractiveServerRenderMode(prerender: false)` для HeadOutlet и Routes (смешивание prerender-режимов в одном дереве запрещено). Приложение полностью интерактивное — prerender-проход рендерил бы только пустую оболочку и запускал `OnInitializedAsync` каждого компонента дважды; теперь жизненный цикл однократный, двойной загрузки данных при старте нет. Детали — ui.md §1.1)*
+
+*Последнее обновление: 2026-09-29 (Clear sideboard: `RemoveCardsFromDeckCommand` переформирован на `(int DeckId, ICollection<Guid> CardIds)` — DeckId = ID самого узла (колода/коллекция/SB); непустой список = удаление ВСЕХ копий карт, пустой = чистка всех карт узла (узел остаётся). Хендлер — чистый делегат в новый `ICollectionStore.RemoveCardsAsync(collectionId, cardIds)`: одна SQL-команда за 1 бращение к БД (`DELETE ... RETURNING Count` — результат = сумма возвращённых копий, а не число строк; locked/отсутствующие узлы — throw). `DeckCardService.RemoveCardsAsync` делегирует в хендлер (CQRS), новый `IDeckCardService.ClearNodeAsync(nodeId)` — ID самого целевого узла (для SB это `NavigatorNodeDeck.Sideboard.Id`, т.к. `GetChildrenAsync` исключает sideboard-детей (`NodeType != 3`)). UI: пункты «🧹 Clear» (deck/collection, folder не виден) и «🧹 Clear sideboard» (только deck с SB) в контекстном меню навигатора — оба с диалогом подтверждения, серый disabled при locked. Детали — ui.md §2.1)*
+
+*2026-09-29 (Legacy-импорт: склейка единой коллекции импорта — новый шаг `BuildLegacyImportCards` в ступенчатом API `DeckImportExportService`: все physicals из XML с финальными UUID — авто-резолв + ручные маппинги, счётчики из файла; инвариант «коммит при 100% резолва» охраняется и на уровне сервиса. UI: hover-превью кандидата — фиксированные 300×400 справа по центру вьюпорта, диалог не сдвигается. Детали — ui.md §7.2)*
 
 *2026-09-28: Импорт перестроен под **инвариант «создание после полного резолва»**: новый узел никогда не создаётся до разбора всех карт. `DeckImportExportService` — доменный модуль всех действий с импортом: ступенчатый API (Check → SyncMissingSets → ResolveLegacyCards → SearchCardMatches → Commit) поверх атомарных CQRS-единиц. Новые: `ImportResolvedCardsCommand`, `GetSetSyncStatusQuery`, `ResolveLegacyCardsQuery`, `ValidateCardIdsQuery`, store-метод `CreateDeckWithCardsAsync` (одна транзакция). Удалены one-shot `ImportDeckCommand` и `LegacyImportDeckCommand`. Legacy-визард: предпроверка несинченных сетов → синк с выбором языков/картинок → таблица нераспознанных карт с поиском (3+ символа) → коммит только при 100% сопоставленных. Детали — ui.md §7.2)*
 
@@ -112,7 +116,7 @@ MagicAssistant.slnx (net10.0)
 │   │   ├── LockNodeCommand.cs        ← блокировка узла (Locked=1); для deck — состояние распространяется на sideboard
 │   │   ├── UnlockNodeCommand.cs      ← разблокировка узла (Locked=0); для deck — снимает lock со sideboard
 │   │   ├── AddCardsToDeckCommand.cs  ← добавление карт в колоду
-│   │   ├── RemoveCardsFromDeckCommand.cs ← удаление карт из колоды
+│   │   ├── RemoveCardsFromDeckCommand.cs ← чистый делегат в `ICollectionStore.RemoveCardsAsync` (1 SQL-запрос): непустой `CardIds` = удаление ВСЕХ копий карт, пустой = чистка всех карт узла
 │   │   ├── MoveCardsCommand.cs       ← перемещение карт между коллекциями (merge-семантика)
 │   │   ├── UpdateCardCommand.cs      ← обновление свойств карты
 │   │   ├── SyncKBCommand.cs          ← делегирует в KnowledgeBaseSyncService
@@ -410,7 +414,7 @@ UI не требует заранее скачанных картинок: ес�
 |---------|----------|---------------------|
 | `CreateNodeCommand` | Унифицированное создание узла (Folder/Collection/Deck; Deck → + sideboard в одной транзакции) | — |
 | `AddCardsToDeckCommand` | Добавление карт в колоду (конвертация IMagicCard → MagicCardPhysical) | — |
-| `RemoveCardsFromDeckCommand` | Удаление карт из колоды | — |
+| `RemoveCardsFromDeckCommand` | `(int DeckId, ICollection<Guid> CardIds)` — DeckId = ID самого узла; делегирует в `ICollectionStore.RemoveCardsAsync`: 1 SQL-запрос (`DELETE ... RETURNING Count`, результат = сумма возвращённых копий, а не число строк), непустой список: удаление ВСЕХ копий карт, пустой: чистка всех карт узла (узел остаётся). Используется `DeckCardService.RemoveCardsAsync` / `ClearNodeAsync(nodeId)` (CQRS) | — |
 | `MoveCardsCommand` | Перемещение карт между коллекциями: удаление из источника + добавление в цель (merge-семантика ON CONFLICT) | — |
 | `UpdateCardCommand` | Обновление свойств карты (count, ownership, price, comment, tags) | — |
 | `ImportResolvedCardsCommand` | Атомарный коммит полностью зарезолленного импорта: new-режим → `CreateDeckWithCardsAsync` (одна транзакция), existing-режим → merge. CardOverrides — выборы из таблицы нераспознанных карт |

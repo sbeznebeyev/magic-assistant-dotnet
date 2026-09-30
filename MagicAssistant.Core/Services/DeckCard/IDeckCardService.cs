@@ -28,10 +28,18 @@ public interface IDeckCardService
     Task<ICollection<MagicCardPhysical>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default);
 
     /// <summary>
-    /// Remove cards from a deck by their card IDs.
-    /// Supports partial removal (by count) and full removal.
+    /// Remove ALL copies of the given cards from a collection node (full-row removal via RemoveCardsFromDeckCommand).
+    /// Returns the number of card copies actually removed.
     /// </summary>
-    Task<int> RemoveCardsAsync(int deckId, ICollection<Guid> cardIds, bool removeSideboard = false, CancellationToken ct = default);
+    Task<int> RemoveCardsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Wipe every card out of a node — nodeId is the node's own ID (deck, collection or sideboard;
+    /// for the sideboard that is NavigatorNodeDeck.Sideboard.Id, not the parent deck's).
+    /// The node itself is kept; only its Deck rows are removed (RemoveCardsFromDeckCommand with empty CardIds).
+    /// Returns the number of card copies actually removed.
+    /// </summary>
+    Task<int> ClearNodeAsync(int nodeId, CancellationToken ct = default);
 
     /// <summary>
     /// Move cards from source deck to target deck.

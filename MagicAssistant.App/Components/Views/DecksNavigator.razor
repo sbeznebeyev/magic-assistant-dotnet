@@ -84,7 +84,15 @@
                                 title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
                                 @onclick="() => TogglePinFromMenu(menuSideboard)"><span class="menu-dot dot-pinned"></span>@(menuSideboard.Id == PinnedNodeId ? "Unpin sideboard" : _contextTarget.Locked ? "Pin sideboard (unlock to pin)" : "Pin sideboard")
                         </button>
+                        @* Clear sideboard — deck nodes only; gray read-only item while locked, same as the pin items *@
+                        <button disabled="@_contextTarget.Locked"
+                                title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                                @onclick="() => AskClearSideboard(menuDeck)">🧹 Clear sideboard</button>
                     }
+                    @* Clear — deck/collection nodes only (folders get no item); gray read-only while locked, same as the pin items *@
+                    <button disabled="@_contextTarget.Locked"
+                            title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                            @onclick="() => AskClear(_contextTarget)">🧹 Clear</button>
                     <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="menu-dot dot-locked"></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
                     </button>
                     <button @onclick="() => ExportFromMenu(_contextTarget)">📤 Export</button>
@@ -143,6 +151,36 @@
             </div>
         </div>
     }
+
+    @* ── Clear Sideboard Confirmation (deck nodes only; the SB node itself is kept) ── *@
+    @if (_showClearSbConfirm)
+    {
+        <div class="dialog-overlay" @onclick="CloseClearSbConfirm">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">Clear sideboard</div>
+                <p>Delete all @_clearSbTargetSideboardCardCount cards from the sideboard of "<strong>@_clearSbTarget?.Name</strong>"? The sideboard itself is kept.</p>
+                <div class="dialog-actions">
+                    <button class="btn-danger" @onclick="ConfirmClearSideboard">Clear</button>
+                    <button class="btn-secondary" @onclick="CloseClearSbConfirm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Clear Confirmation (deck/collection nodes; the node itself is kept) ── *@
+    @if (_showClearConfirm)
+    {
+        <div class="dialog-overlay" @onclick="CloseClearConfirm">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">Clear</div>
+                <p>Delete all @_clearTargetCardCount cards from the @GetClearNodeKind() "<strong>@_clearTarget?.Name</strong>"? The @GetClearNodeKind() itself is kept.</p>
+                <div class="dialog-actions">
+                    <button class="btn-danger" @onclick="ConfirmClear">Clear</button>
+                    <button class="btn-secondary" @onclick="CloseClearConfirm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -179,6 +217,20 @@
     private bool _showDeleteConfirm;
     private NavigatorNodeBase? _deleteTarget;
 
+    // ── Clear Sideboard Confirmation ─────────────────────
+    private bool _showClearSbConfirm;
+    private NavigatorNodeDeck? _clearSbTarget;
+
+    /// <summary>Sideboard card count for the confirmation text (captured when the dialog opens).</summary>
+    private int _clearSbTargetSideboardCardCount;
+
+    // ── Clear Confirmation (deck/collection nodes) ───────
+    private bool _showClearConfirm;
+    private NavigatorNodeBase? _clearTarget;
+
+    /// <summary>Node card count for the confirmation text (captured when the dialog opens).</summary>
+    private int _clearTargetCardCount;
+
     // ── Root add menu ──────────────────────────────────────
     private bool _showRootAddMenu;
 
@@ -214,6 +266,16 @@
     /// <summary>Export requested from the ⋯ context menu — the clicked node (deck/collection).
     /// MainLayout opens DeckExportWizard for that node, not for the displayed one.</summary>
     [Parameter] public EventCallback<int> OnExportRequested { get; set; }
+
+    /// <summary>Clear sideboard requested from the ⋯ context menu (deck nodes only) — the SIDEBOARD node's
+    /// own ID (NavigatorNodeDeck.Sideboard.Id), not the parent deck's. MainLayout wipes all cards out of
+    /// that sideboard via IDeckCardService (the SB node is kept) and refreshes navigator counts / strip stats.</summary>
+    [Parameter] public EventCallback<int> OnClearSideboardRequested { get; set; }
+
+    /// <summary>Clear requested from the ⋯ context menu (deck/collection nodes only, folders ignored) —
+    /// the clicked node's own ID. MainLayout wipes all cards out of that node via IDeckCardService
+    /// (the node is kept) and refreshes navigator counts / strip stats.</summary>
+    [Parameter] public EventCallback<int> OnClearRequested { get; set; }
 
     /// <summary>Currently displayed collection node (MainLayout._currentCollection.CollectionId).
     /// Pure projection: non-null highlights that node, null (KB mode) highlights nothing —
@@ -487,6 +549,68 @@
     }
 
     // ── Delete ─────────────────────────────────────────────
+    // ── Clear Sideboard (⋯ context menu — deck nodes only) ──
+
+    /// <summary>Open the clear-sideboard confirmation. Locked decks never fire here —
+    /// the menu renders the item disabled, mirroring the pin items.</summary>
+    private ValueTask AskClearSideboard(NavigatorNodeDeck deck)
+    {
+        if (deck.Locked || deck.Sideboard == null) return default;
+        CloseContextMenu();
+        _clearSbTarget = deck;
+        _clearSbTargetSideboardCardCount = deck.Sideboard.CardCount;
+        _showClearSbConfirm = true;
+        return default;
+    }
+
+    private async Task ConfirmClearSideboard()
+    {
+        if (_clearSbTarget?.Sideboard == null) return;
+        // The sideboard node's own ID — the SB rows in Deck are keyed by it, not by the parent deck's ID.
+        var sideboardId = _clearSbTarget.Sideboard.Id;
+        CloseClearSbConfirm();
+        await OnClearSideboardRequested.InvokeAsync(sideboardId);
+    }
+
+    private void CloseClearSbConfirm()
+    {
+        _showClearSbConfirm = false;
+        _clearSbTarget = null;
+        _clearSbTargetSideboardCardCount = 0;
+    }
+
+    // ── Clear (⋯ context menu — deck/collection nodes, folders ignored) ──
+
+    /// <summary>Open the clear confirmation. Locked nodes never fire here —
+    /// the menu renders the item disabled, mirroring the pin items.</summary>
+    private ValueTask AskClear(NavigatorNodeBase node)
+    {
+        if (node.Locked || node.NodeType == NodeType.Folder) return default;
+        CloseContextMenu();
+        _clearTarget = node;
+        _clearTargetCardCount = node.CardCount;
+        _showClearConfirm = true;
+        return default;
+    }
+
+    private async Task ConfirmClear()
+    {
+        if (_clearTarget == null) return;
+        var nodeId = _clearTarget.Id;
+        CloseClearConfirm();
+        await OnClearRequested.InvokeAsync(nodeId);
+    }
+
+    private void CloseClearConfirm()
+    {
+        _showClearConfirm = false;
+        _clearTarget = null;
+        _clearTargetCardCount = 0;
+    }
+
+    /// <summary>"deck" or "collection" for the confirmation text (folders never open this dialog).</summary>
+    private string GetClearNodeKind() => _clearTarget?.NodeType == NodeType.Deck ? "deck" : "collection";
+
     private ValueTask AskDelete(NavigatorNodeBase node)
     {
         if (node.Locked) return default;
@@ -753,6 +877,8 @@
             if (_contextTarget != null) CloseContextMenu();
             else if (_showCreateDialog) CloseCreateDialog();
             else if (_showRenameDialog) CloseRenameDialog();
+            else if (_showClearSbConfirm) CloseClearSbConfirm();
+            else if (_showClearConfirm) CloseClearConfirm();
             else if (_showDeleteConfirm) CloseDeleteConfirm();
         }
     }
