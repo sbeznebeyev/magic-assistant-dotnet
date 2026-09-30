@@ -263,9 +263,10 @@
 .context-menu-fixed {
     position: fixed;
     /* Click point arrives as --ctx-x/--ctx-y; clamp keeps the menu on-screen.
-       Budgets: 260px wide (longest item "📌 Pin sideboard (unlock to pin)"),
-       270px tall (label + 6 items + separator, worst case). */
-    left: clamp(8px, var(--ctx-x, 0px), calc(100vw - 260px));
+       Budgets: 320px wide (content-sized — worst case is the locked paired row
+       "Pin sideboard (unlock to pin)" in the 2/3 cell, nowrap),
+       270px tall (label + 6 rows + separator, worst case — deck with sideboard). */
+    left: clamp(8px, var(--ctx-x, 0px), calc(100vw - 320px));
     top: clamp(8px, var(--ctx-y, 0px), calc(100vh - 270px));
     background: #2d2d2d;
     border: 1px solid #555;
@@ -287,7 +288,8 @@
 }
 
 .context-menu-fixed button {
-    display: block;
+    display: flex;
+    align-items: center;
     width: 100%;
     text-align: left;
     background: none;
@@ -298,9 +300,37 @@
     cursor: pointer;
 }
 
+/* Uniform icon panel: every row's icon lives in a fixed-width cell (icons centered inside),
+   so all labels start at the same x and icons align vertically across rows. */
+.context-menu-fixed .ctx-cell {
+    width: 28px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .context-menu-fixed button:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #fff;
+}
+
+/* Deck with sideboard: paired rows — deck action (1/3) | sideboard action (2/3).
+   Width is content-driven (no fixed min-width); nowrap keeps each label on one line. */
+.context-menu-fixed .ctx-pair {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+}
+
+.context-menu-fixed .ctx-pair button {
+    white-space: nowrap;
+}
+
+/* Inline SVG menu icons (rename «ab|», clear eraser, export upload, delete red X):
+   sized to the row text; currentColor follows the button's gray→white hover. */
+.context-menu-fixed .ctx-icon {
+    width: 15px;
+    height: 15px;
 }
 
 /* Locked node — Pin/Unpin stays visible but read-only (grayed out, no hover) */
@@ -319,8 +349,6 @@
     border-radius: 50%;
     border: 1px solid #000;
     box-sizing: border-box;
-    margin-right: 8px;
-    vertical-align: middle;
 }
 
 .context-menu-fixed .menu-dot.dot-pinned {

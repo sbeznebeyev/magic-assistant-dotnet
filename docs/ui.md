@@ -2,6 +2,14 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
+*2026-09-30 — Навигатор, контекстное меню: для deck c sideboard пункты Pin/Unpin и Clear объединены в горизонтальные пары (`.ctx-pair`, grid 1fr:2fr) — левая ячейка = операция с deck, правая = со sideboard; без SB — как раньше, одиночные кнопки. Ширина меню — по контенту (`white-space: nowrap` в парах, фиксированного min-width нет); бюджет `clamp` 320×270. Иконки пунктов — inline SVG (не эмодзи): Rename — «ab|», Clear/Clear sideboard — ластик, Import — download, Export — upload, Delete — жирный красный крестик; pin/lock сохраняют state dots. Детали — §2.1.*
+
+*2026-09-30 — Навигатор, контекстное меню: добавлены пары **Import | Import sideboard** и **Export | Export sideboard** (те же пропорции 1fr:2fr для deck c SB; без SB — одиночные Import/Export). Import передаёт CollectionId целевого узла в `DeckImportWizard` (`TargetNodeId`) — карты сливаются в существующий узел (merge), select цели скрывается; Import disabled при locked, как Clear. Export sideboard экспортирует сам SB-узел по его ID. Детали — §2.1.*
+
+*2026-09-30 — Навигатор, контекстное меню: строка Lock/Unlock перемещена между Pin и Clear (порядок: Rename → Pin → Lock → Clear → Import → Export → Delete; в парной ветке deck c SB Lock — отдельная строка между парами).*
+
+*2026-09-30 — Навигатор, контекстное меню: каждая строка теперь flex из двух панельок — иконная ячейка `.ctx-cell` фиксированной ширины 28px (иконка/state dot по центру) и текстовая (подпись слева в оставшемся месте); все подписи начинаются с одного x, иконки выстроены вертикально. Касается всех пунктов, включая pin/lock dots.*
+
 *2026-09-30 — После завершения импорта (оба визарда) MainLayout дополнительно делает `_kbRefreshTrigger++` → CardsListControl перезагружает отображаемый список: если импорт шёл в открытую локацию, новые карты видны сразу; иначе это безвредный повторный fetch.*
 
 *2026-09-29 — Prerendering выключен (App.razor): единый `InteractiveServerRenderMode(prerender: false)` для HeadOutlet и Routes; первый HTML — пустая оболочка, компоненты инициализируются один раз после подключения SignalR-circuit (без двойного `OnInitializedAsync` и двойной загрузки данных). Детали — §1.1.*
@@ -173,19 +181,20 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 - **Lock button (deck/collection rows only):** works like the Pin buttons — hidden until row hover, stays visible (amber) while locked. Folders have no lock; a sideboard inherits its deck's lock state (Core propagates it in `LockAsync`/`UnlockAsync`). Click → `OnLockToggle(id)` → `IDeckManagementService.LockAsync/UnlockAsync` → in-place tree mutation + `OnNodeLockToggled((id, locked))` to MainLayout, which refreshes `_currentCollection.IsLocked` / `_pinnedCollection.IsLocked` and **unpins the node if it just became locked**.
 - **Pin buttons are hidden on locked nodes** (deck/collection/sideboard) — a locked node cannot be pinned; locking an already-pinned node removes its pin. A locked node can still be selected and displayed (`_currentCollection`).
 
-**Context menu (⋯ button):**
+**Context menu (⋯ button):** icons are inline SVG (`.ctx-icon`, 15px, currentColor): Rename — «ab|», Clear/Clear sideboard — eraser, Export — upload, Delete — bold red X; pin/lock keep their state dots.
 
 | Action | Behavior |
 |--------|----------|
 | ✏ Rename | Overlay rename dialog (name input + Save/Cancel, Enter to save) |
-| 🟢 Pin / Unpin | Deck/collection nodes only. Toggles the pin on the clicked node; disabled while locked. Decks get a second item **Pin sideboard** for their sideboard |
-| 🧹 Clear sideboard | Deck nodes only (rendered in the sideboard block). Opens a confirmation dialog ("Delete all N cards from the sideboard of \"X\"? The sideboard itself is kept.", N = `Sideboard.CardCount`); **disabled (gray) while the deck is locked**, same as the pin items. Confirm → `OnClearSideboardRequested(sideboardId)` (the SB node's own ID, not the parent deck's) → MainLayout: `IDeckCardService.ClearNodeAsync` — every card row in the SB is removed, the SB node itself is kept; status bar + strip/refresh triggers + navigator counts |
-| 🧹 Clear | Deck/collection nodes only (folders get no item). Opens a confirmation dialog ("Delete all N cards from the deck/collection \"X\"? The deck/collection itself is kept.", N = the node's `CardCount`); **disabled (gray) while locked**, same as the pin items. Confirm → `OnClearRequested(nodeId)` (the clicked node's own ID) → MainLayout: `IDeckCardService.ClearNodeAsync` — every card row of the node is removed, the node itself is kept; status bar + strip/refresh triggers + navigator counts |
+| 🟢 Pin / Unpin | Deck/collection nodes only. Toggles the pin on the clicked node; disabled while locked. **Deck with sideboard: rendered as a horizontal pair** — deck action (1/3 width) \| **Pin sideboard** for their sideboard (2/3 width), same row |
+| 🧹 Clear sideboard | Deck nodes with sideboard only, **same row as 🧹 Clear** (right cell, 2/3 width). Opens a confirmation dialog ("Delete all N cards from the sideboard of \"X\"? The sideboard itself is kept.", N = `Sideboard.CardCount`); **disabled (gray) while the deck is locked**, same as the pin items. Confirm → `OnClearSideboardRequested(sideboardId)` (the SB node's own ID, not the parent deck's) → MainLayout: `IDeckCardService.ClearNodeAsync` — every card row in the SB is removed, the SB node itself is kept; status bar + strip/refresh triggers + navigator counts |
+| 🧹 Clear | Deck/collection nodes only (folders get no item); deck with sideboard renders it as the left cell (1/3 width) of the pair row. Opens a confirmation dialog ("Delete all N cards from the deck/collection \"X\"? The deck/collection itself is kept.", N = the node's `CardCount`); **disabled (gray) while locked**, same as the pin items. Confirm → `OnClearRequested(nodeId)` (the clicked node's own ID) → MainLayout: `IDeckCardService.ClearNodeAsync` — every card row of the node is removed, the node itself is kept; status bar + strip/refresh triggers + navigator counts |
 | 🔒 Lock / 🔓 Unlock | Deck/collection nodes only. Toggles node lock status |
-| 📤 Export | Deck/collection nodes only. Closes the menu, fires `OnExportRequested(node.Id)` → MainLayout opens DeckExportWizard for that node (not the displayed collection) |
+| ⬇ Import / **Import sideboard** | Deck/collection nodes; deck with sideboard renders the pair (deck 1/3 \| SB 2/3). Closes the menu, fires `OnImportIntoRequested(collectionId)` — the clicked node's own ID (or the SB's) → MainLayout opens DeckImportWizard pre-targeted at that CollectionId (`TargetNodeId`): cards **merge into the existing node**, the "Import to" select is hidden; **disabled (gray) while locked**, same as Clear. The add-node menu's Import keeps its old semantics (new deck inside the parent) |
+| 📤 Export / **Export sideboard** | Deck/collection nodes; deck with sideboard renders the pair (deck 1/3 \| SB 2/3). Closes the menu, fires `OnExportRequested(nodeId)` — the clicked node's ID or the sideboard's own ID → MainLayout opens DeckExportWizard for that node (not the displayed collection) |
 | 🗑 Delete | Overlay delete confirmation ("Delete X and all its cards?") |
 
-**Menu scope:** folders get Rename and Delete only — Pin/Lock/Export/Clear items render on deck/collection nodes (`NodeType != Folder`), Clear sideboard renders on deck nodes that have a sideboard. Node creation lives in the add-node menu, not here.
+**Menu scope:** folders get Rename and Delete only — Pin/Lock/Import/Export/Clear items render on deck/collection nodes (`NodeType != Folder`), Clear sideboard / Import sideboard / Export sideboard render on deck nodes that have a sideboard. Node creation lives in the add-node menu, not here.
 
 **"+ add node" row:** Inline row at root level and below each folder's children. Clicking `+` opens dropdown: Collection / Deck / Folder, then a separator and **Import**: fires `OnImportRequested(parentId)` — null at root, the folder id for folder rows; MainLayout opens DeckImportWizard with that parent context, so "new deck" is created inside it.
 

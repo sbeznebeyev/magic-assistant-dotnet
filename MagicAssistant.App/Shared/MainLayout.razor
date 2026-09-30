@@ -19,7 +19,7 @@
     @* ── Dialogs (render only when visible) *@
     @if (_showSyncDialog) { <SyncKnowledgeBase IsOpen="@_showSyncDialog" IsOpenChanged="@(v => _showSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
-    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" ParentNodeId="@_importParentId" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
+    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" ParentNodeId="@_importParentId" TargetNodeId="@_importTargetId" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
     @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
     @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_exportTargetId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
     @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
@@ -46,6 +46,7 @@
                     OnShowAllCards="OnShowKB"
                     OnNodeDeleted="OnNodeDeleted"
                     OnImportRequested="OpenImportDialog"
+                    OnImportIntoRequested="OpenImportIntoDialog"
                     OnExportRequested="OpenExportDialog"
                     OnClearSideboardRequested="OnClearSideboardRequested"
                     OnClearRequested="OnClearRequested"
@@ -140,6 +141,8 @@
     private bool _showImportDialog;
     /// <summary>Parent node the import was requested from (add-node menu context; null = root) — new decks are created inside it.</summary>
     private int? _importParentId;
+    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import / Import sideboard); null = wizard picks the target.</summary>
+    private int? _importTargetId;
     private bool _showLegacyImportDialog;
     private bool _showExportDialog;
     /// <summary>Node id chosen in the navigator's ⋯ context menu — the export target (not necessarily the displayed collection).</summary>
@@ -241,7 +244,11 @@
     private void OpenUpdateDbDialog() => _showSyncDialog = true;
 
     /// <summary>Import from the navigator's add-node menu — parentId null = root level (old header behavior).</summary>
-    private void OpenImportDialog(int? parentId) { _importParentId = parentId; _showImportDialog = true; }
+    private void OpenImportDialog(int? parentId) { _importParentId = parentId; _importTargetId = null; _showImportDialog = true; }
+
+    /// <summary>Import into an existing node from the navigator ⋯ menu — the CollectionId cards are merged into
+    /// (the clicked node, or its sideboard's own ID). The wizard opens pre-targeted at that node.</summary>
+    private void OpenImportIntoDialog(int collectionId) { _importParentId = null; _importTargetId = collectionId; _showImportDialog = true; }
 
     /// <summary>Export from the navigator's ⋯ context menu — targets the clicked node, not the displayed collection.</summary>
     private void OpenExportDialog(int nodeId) { _exportTargetId = nodeId; _showExportDialog = true; }

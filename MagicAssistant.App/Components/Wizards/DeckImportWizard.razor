@@ -27,16 +27,24 @@
             @* ── Step 2: Target Deck ── *@
             <div class="form-group">
                 <label>Import to</label>
-                <select @bind="_importMode" class="dialog-select">
-                    <option value="new">New deck (creates from file name)</option>
-                    @foreach (var deck in _existingDecks)
-                    {
-                        <option value="@deck.Id">@deck.Name (add to existing)</option>
-                    }
-                </select>
+                @if (TargetNodeId is { } fixedTarget)
+                {
+                    @* ⋯ context menu — the target CollectionId is fixed, no select *@
+                    <div class="file-info">→ @_targetName (merge into existing)</div>
+                }
+                else
+                {
+                    <select @bind="_importMode" class="dialog-select">
+                        <option value="new">New deck (creates from file name)</option>
+                        @foreach (var deck in _existingDecks)
+                        {
+                            <option value="@deck.Id">@deck.Name (add to existing)</option>
+                        }
+                    </select>
+                }
             </div>
 
-            @if (!string.IsNullOrEmpty(_parentName))
+            @if (TargetNodeId is not { } && !string.IsNullOrEmpty(_parentName))
             {
                 <div class="form-hint">New deck will be created inside "<strong>@_parentName</strong>".</div>
             }
@@ -65,10 +73,15 @@
     private string? _error;
     private List<NavigatorNodeBase> _existingDecks = new();
     private string? _parentName;
+    /// <summary>Name of the fixed import target (TargetNodeId) for the "merge into existing" line.</summary>
+    private string? _targetName;
 
     [Parameter] public bool IsOpen { get; set; }
     /// <summary>Parent node the add-node menu was opened under (null = root) — "new deck" is created inside it.</summary>
     [Parameter] public int? ParentNodeId { get; set; }
+    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import / Import sideboard).
+    /// When set, the target select is hidden and cards are added to this node instead of a new deck.</summary>
+    [Parameter] public int? TargetNodeId { get; set; }
     [Parameter] public EventCallback OnImported { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
@@ -87,6 +100,7 @@
                 var tree = await DeckManagement!.GetAllNodesAsync();
                 _existingDecks = tree.Values.ToList();
                 _parentName = tree.Values.FirstOrDefault(n => n.Id == ParentNodeId)?.Name;
+                _targetName = tree.Values.FirstOrDefault(n => n.Id == TargetNodeId)?.Name ?? "?";
             }
             catch { }
         }
@@ -113,6 +127,7 @@
         {
             var xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
             var targetId = _importMode == "new" ? (int?)null : int.Parse(_importMode);
+            if (TargetNodeId is { } fixedTarget) targetId = fixedTarget;  // ⋯ menu — fixed CollectionId wins
 
             // Atomic commit via the import domain module:
             // parse → validate every card against KB → create node + persist in one transaction.

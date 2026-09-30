@@ -69,36 +69,78 @@
         {
             <div class="context-menu-fixed" style="--ctx-x: @(_contextMenuLeft.ToString("F0"))px; --ctx-y: @(_contextMenuTop.ToString("F0"))px;">
                 <span class="context-label">@_contextTarget.Name</span>
-                <button @onclick="() => BeginRename(_contextTarget)">✏ Rename</button>
+                <button @onclick="() => BeginRename(_contextTarget)">
+                    <span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" aria-hidden="true"><text x="1" y="17" font-size="15" font-weight="bold" fill="currentColor">ab</text><rect x="19.5" y="3" width="2.5" height="18" fill="currentColor"/></svg></span>Rename
+                </button>
                 @if (_contextTarget.NodeType != NodeType.Folder)
                 {
-                    @* Pin/Unpin — state dot instead of emoji (green = pin, red = lock); locked nodes get a gray read-only item; sideboard inherits the deck's lock *@
-                    <button disabled="@_contextTarget.Locked"
-                            title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
-                            @onclick="() => TogglePinFromMenu(_contextTarget)"><span class="menu-dot dot-pinned"></span>@(_contextTarget.Id == PinnedNodeId ? "Unpin" : _contextTarget.Locked ? "Pin (unlock to pin)" : "Pin")
-                    </button>
+                    @* Pin/Unpin + Clear — state dot (green = pin, red = lock) / eraser SVG; locked nodes get gray read-only items; sideboard inherits the deck's lock.
+                       Deck with a sideboard: paired rows — deck action (1/3 width) | sideboard action (2/3 width). *@
                     @if (_contextTarget is NavigatorNodeDeck menuDeck && menuDeck.Sideboard != null)
                     {
                         var menuSideboard = menuDeck.Sideboard;
+                        <div class="ctx-pair">
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                                    @onclick="() => TogglePinFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-pinned"></span></span>@(menuDeck.Id == PinnedNodeId ? "Unpin" : _contextTarget.Locked ? "Pin (unlock to pin)" : "Pin")
+                            </button>
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                                    @onclick="() => TogglePinFromMenu(menuSideboard)"><span class="ctx-cell"><span class="menu-dot dot-pinned"></span></span>@(menuSideboard.Id == PinnedNodeId ? "Unpin sideboard" : _contextTarget.Locked ? "Pin sideboard (unlock to pin)" : "Pin sideboard")
+                            </button>
+                        </div>
+                        <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-locked"></span></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
+                        </button>
+                        <div class="ctx-pair">
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                                    @onclick="() => AskClear(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear</button>
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                                    @onclick="() => AskClearSideboard(menuDeck)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear sideboard</button>
+                        </div>
+                    }
+                    else
+                    {
                         <button disabled="@_contextTarget.Locked"
                                 title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
-                                @onclick="() => TogglePinFromMenu(menuSideboard)"><span class="menu-dot dot-pinned"></span>@(menuSideboard.Id == PinnedNodeId ? "Unpin sideboard" : _contextTarget.Locked ? "Pin sideboard (unlock to pin)" : "Pin sideboard")
+                                @onclick="() => TogglePinFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-pinned"></span></span>@(_contextTarget.Id == PinnedNodeId ? "Unpin" : _contextTarget.Locked ? "Pin (unlock to pin)" : "Pin")
                         </button>
-                        @* Clear sideboard — deck nodes only; gray read-only item while locked, same as the pin items *@
+                        <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-locked"></span></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
+                        </button>
                         <button disabled="@_contextTarget.Locked"
                                 title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
-                                @onclick="() => AskClearSideboard(menuDeck)">🧹 Clear sideboard</button>
+                                @onclick="() => AskClear(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear</button>
                     }
-                    @* Clear — deck/collection nodes only (folders get no item); gray read-only while locked, same as the pin items *@
-                    <button disabled="@_contextTarget.Locked"
-                            title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
-                            @onclick="() => AskClear(_contextTarget)">🧹 Clear</button>
-                    <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="menu-dot dot-locked"></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
-                    </button>
-                    <button @onclick="() => ExportFromMenu(_contextTarget)">📤 Export</button>
+                    @* Import — cards merge into the clicked node's CollectionId (or its sideboard); gray read-only while locked, same as Clear.
+                       Export — read-only, never disabled. Deck with sideboard: paired rows 1/3 | 2/3, same as pin/clear. *@
+                    @if (_contextTarget is NavigatorNodeDeck ioDeck && ioDeck.Sideboard != null)
+                    {
+                        <div class="ctx-pair">
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
+                                    @onclick="() => ImportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import</button>
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
+                                    @onclick="() => ImportSideboardFromMenu(ioDeck)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import sideboard</button>
+                        </div>
+                        <div class="ctx-pair">
+                            <button @onclick="() => ExportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export</button>
+                            <button @onclick="() => ExportSideboardFromMenu(ioDeck)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export sideboard</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button disabled="@_contextTarget.Locked"
+                                title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
+                                @onclick="() => ImportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import</button>
+                        <button @onclick="() => ExportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export</button>
+                    }
                 }
                 <hr class="context-sep" />
-                <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
+                <button class="danger" @onclick="() => AskDelete(_contextTarget)">
+                    <span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>Delete
+                </button>
             </div>
         }
     }
@@ -262,6 +304,10 @@
     /// <summary>Import requested from the add-node menu — parentId null = root level.
     /// MainLayout opens DeckImportWizard with that parent context (new decks are created inside it).</summary>
     [Parameter] public EventCallback<int?> OnImportRequested { get; set; }
+
+    /// <summary>Import requested from the ⋯ context menu — the CollectionId cards are merged INTO (the clicked node,
+    /// or its sideboard's own ID). MainLayout opens DeckImportWizard pre-targeted at that existing node.</summary>
+    [Parameter] public EventCallback<int> OnImportIntoRequested { get; set; }
 
     /// <summary>Export requested from the ⋯ context menu — the clicked node (deck/collection).
     /// MainLayout opens DeckExportWizard for that node, not for the displayed one.</summary>
@@ -758,11 +804,35 @@
         await OnImportRequested.InvokeAsync(parentId);
     }
 
+    /// <summary>Import from the ⋯ context menu — imports INTO the clicked node's own CollectionId (merge semantics);
+    /// folders are excluded by the menu itself. MainLayout opens DeckImportWizard pre-targeted at that node.</summary>
+    private async Task ImportFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnImportIntoRequested.InvokeAsync(node.Id);
+    }
+
+    /// <summary>Import sideboard from the ⋯ context menu (deck nodes only) — imports INTO the sideboard node's own ID.</summary>
+    private async Task ImportSideboardFromMenu(NavigatorNodeDeck deck)
+    {
+        if (deck.Sideboard == null) return;
+        CloseContextMenu();
+        await OnImportIntoRequested.InvokeAsync(deck.Sideboard.Id);
+    }
+
     /// <summary>Export from the ⋯ context menu — exports the clicked node; folders are excluded by the menu itself (they hold no cards).</summary>
     private async Task ExportFromMenu(NavigatorNodeBase node)
     {
         CloseContextMenu();
         await OnExportRequested.InvokeAsync(node.Id);
+    }
+
+    /// <summary>Export sideboard from the ⋯ context menu (deck nodes only) — exports the sideboard node's own ID.</summary>
+    private async Task ExportSideboardFromMenu(NavigatorNodeDeck deck)
+    {
+        if (deck.Sideboard == null) return;
+        CloseContextMenu();
+        await OnExportRequested.InvokeAsync(deck.Sideboard.Id);
     }
 
     // ── Add Menu Overlay (click-outside to close) ──────────
