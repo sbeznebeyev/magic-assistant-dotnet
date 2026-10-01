@@ -303,44 +303,6 @@ public class CommandHandlerTests
             "Хендлер ищет карту по CardId И Location.Id. Карта в deck-2, запрос для deck-1 → не найдена");
     }
 
-    /* ─── ExportDeck — экспорт в XML ──────────────────────── */
-
-    [Test]
-    public async Task ExportDeck_ValidDeck_CreatesXmlFile()
-    {
-        var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
-        var tempFile = Path.GetTempFileName();
-        try
-        {
-            coll.Setup(s => s.GetByIdAsync(1, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Collection(1, "My Deck", null, NodeType.Deck, 1));
-            coll.Setup(s => s.GetDeckCardsAsync(1, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new[] { CreatePhysical(Guid.NewGuid(), 1) });
-
-            var handler = new ExportDeckCommandHandler(coll.Object, cardStore.Object);
-            var result = await handler.Handle(new ExportDeckCommand(1, tempFile));
-
-            Assert.That(result.Success, Is.True);
-            var xml = await File.ReadAllTextAsync(tempFile);
-            Assert.That(xml, Does.Contain("My Deck"));
-        }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
-    }
-
-    [Test]
-    public async Task ExportDeck_DeckNotFound_ReturnsError()
-    {
-        var coll = new Mock<ICollectionStore>();
-        coll.Setup(s => s.GetByIdAsync(999, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Collection?)null);
-
-        var handler = new ExportDeckCommandHandler(coll.Object, new Mock<ICardStore<MagicCardPhysical>>().Object);
-        var result = await handler.Handle(new ExportDeckCommand(999, Path.GetTempFileName()));
-
-        Assert.That(result.Success, Is.False);
-    }
-
     private static MagicCardPhysical CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };

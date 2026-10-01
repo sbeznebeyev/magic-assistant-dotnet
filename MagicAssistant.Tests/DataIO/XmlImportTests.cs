@@ -3,7 +3,7 @@ namespace MagicAssistant.Tests.DataIO;
 [TestFixture]
 public class XmlImportTests
 {
-    // Magic Assistant XML format (produced by XmlExport):
+    // Legacy Magic Assistant XML format (old files: Gatherer IDs + full set names):
     // <cards><name>...</name><key>...</key><comment>...</comment><type>...</type>
     //   <list>
     //     <mcp><card><id>..</id><name>..</name><edition>..</edition></card>

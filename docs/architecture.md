@@ -4,6 +4,8 @@
 
 *Последнее обновление: 2026-09-29 (Clear sideboard: `RemoveCardsFromDeckCommand` переформирован на `(int DeckId, ICollection<Guid> CardIds)` — DeckId = ID самого узла (колода/коллекция/SB); непустой список = удаление ВСЕХ копий карт, пустой = чистка всех карт узла (узел остаётся). Хендлер — чистый делегат в новый `ICollectionStore.RemoveCardsAsync(collectionId, cardIds)`: одна SQL-команда за 1 бращение к БД (`DELETE ... RETURNING Count` — результат = сумма возвращённых копий, а не число строк; locked/отсутствующие узлы — throw). `DeckCardService.RemoveCardsAsync` делегирует в хендлер (CQRS), новый `IDeckCardService.ClearNodeAsync(nodeId)` — ID самого целевого узла (для SB это `NavigatorNodeDeck.Sideboard.Id`, т.к. `GetChildrenAsync` исключает sideboard-детей (`NodeType != 3`)). UI: пункты «🧹 Clear» (deck/collection, folder не виден) и «🧹 Clear sideboard» (только deck с SB) в контекстном меню навигатора — оба с диалогом подтверждения, серый disabled при locked. Детали — ui.md §2.1)*
 
+*2026-10-01: Нативный импорт/экспорт переведён с XML на **JSON** (нативный формат v1): `JsonImport`/`JsonExport` в Data.IO (`json/`), общий `CardCollectionImportResult` (вынесен из XmlImport). Обёртка format/version/name/comment/type/exportedAt; reference-ядро карты id/name/set/count обязательно; опциональные поля omit-по-умолчанию; неизвестные поля игнорируются. `IDeckImportExportService.ExportDeckToJsonAsync` — новый нативный экспорт; `CommitModernImportAsync` парсит JSON (`ParseJsonOrThrow`). Нативный XML-экспорт удалён целиком (XmlExport.cs, ExportDeckCommand + handler, ExportDeckToXmlAsync/ExportToFileAsync из сервиса); legacy-парсер XmlImport остался — на нём жив OldDeckImportWizard (Gatherer ID + полные имена сетов). Детали — ui.md §7.1/§7.3*
+
 *2026-09-29 (Legacy-импорт: склейка единой коллекции импорта — новый шаг `BuildLegacyImportCards` в ступенчатом API `DeckImportExportService`: все physicals из XML с финальными UUID — авто-резолв + ручные маппинги, счётчики из файла; инвариант «коммит при 100% резолва» охраняется и на уровне сервиса. UI: hover-превью кандидата — фиксированные 300×400 справа по центру вьюпорта, диалог не сдвигается. Детали — ui.md §7.2)*
 
 *2026-09-28: Импорт перестроен под **инвариант «создание после полного резолва»**: новый узел никогда не создаётся до разбора всех карт. `DeckImportExportService` — доменный модуль всех действий с импортом: ступенчатый API (Check → SyncMissingSets → ResolveLegacyCards → SearchCardMatches → Commit) поверх атомарных CQRS-единиц. Новые: `ImportResolvedCardsCommand`, `GetSetSyncStatusQuery`, `ResolveLegacyCardsQuery`, `ValidateCardIdsQuery`, store-метод `CreateDeckWithCardsAsync` (одна транзакция). Удалены one-shot `ImportDeckCommand` и `LegacyImportDeckCommand`. Legacy-визард: предпроверка несинченных сетов → синк с выбором языков/картинок → таблица нераспознанных карт с поиском (3+ символа) → коммит только при 100% сопоставленных. Детали — ui.md §7.2)*
@@ -38,7 +40,7 @@ MagicAssistant.Core/Services/
 │   ├── IKnowledgeBaseSyncService.cs
 │   └── KnowledgeBaseSyncService.cs
 │
-├── DeckImportExport/         XML импорт/экспорт колод
+├── DeckImportExport/         импорт/экспорт колод (нативный JSON + legacy XML)
 │   ├── IDeckImportExportService.cs
 │   └── DeckImportExportService.cs
 │
@@ -57,7 +59,7 @@ MagicAssistant.Core/Services/
 DeckCardService        → CardResolveService (для MaterializeFromIdsAsync, ExpandGroups)
 KnowledgeBaseSync      → (не зависит от других срезов, только Data/Http контракты)
 DeckManagement         → (не зависит от других срезов, использует CQRS команды/queries)
-DeckImportExport       → (не зависит от других срезов, только ICollectionStore + XmlImport/Export)
+DeckImportExport       → (не зависит от других срезов; ICollectionStore + JsonImport/JsonExport (нативный) и XmlImport (legacy))
 CardSearch             → (не зависит от других срезов, только IDbCardStore + ICollectionStore)
 DeckAnalysis           → IAnalysisService (существующий сервис анализа колод)
 ```
@@ -122,7 +124,6 @@ MagicAssistant.slnx (net10.0)
 │   │   ├── SyncKBCommand.cs          ← делегирует в KnowledgeBaseSyncService
 │   │   ├── SyncCardSetsCommand.cs    ← синхронизация метаданных сетов
 │   │   ├── ImportResolvedCardsCommand.cs ← атомарный коммит полностью зарезолленного импорта (new: узел+sideboard+карты в одной транзакции; existing: merge)
-│   │   ├── ExportDeckCommand.cs      ← экспорт колоды в Magic Assistant XML
 │   │   └── SaveUserSettingCommand.cs ← сохранение пользовательских настроек
 │   ├── Queries/                    ← CQRS: чтение данных
 │   │   ├── GetScryfallAvailableSetsQuery.cs ← доступные сеты из Scryfall
@@ -181,9 +182,12 @@ MagicAssistant.slnx (net10.0)
 │                                   ← JOIN-запросы к Cards для подтягивания полной информации
 │
 ├── MagicAssistant.Data.IO          ← Экспорт/импорт форматов (net10.0)
-│   └── xml/                        ← Только XML формат Magic Assistant
-│       ├── XmlImport.cs            ← Парсинг Magic Assistant XML → IMagicCard[]
-│       └── XmlExport.cs            ← IMagicCard[] → Magic Assistant XML
+│   ├── CardCollectionImportResult.cs ← Общий результат парсинга (XML и JSON)
+│   ├── json/                       ← Нативный формат Magic Assistant JSON (v1)
+│   │   ├── JsonImport.cs           ← Парсинг JSON → IMagicCard[] (reference-ядро id/name/set/count обязательно)
+│   │   └── JsonExport.cs           ← IMagicCard[] → JSON (omit-по-умолчанию, pretty)
+│   └── xml/                        ← Legacy XML формат Magic Assistant
+│       └── XmlImport.cs            ← Парсинг legacy XML (Gatherer ID + полные имена сетов) → IMagicCard[]
 │
 ├── MagicAssistant.Http             ← Контракты доступа к внешним данным + DTOs (net10.0)
 │   ├── Contracts/                  ← IScrayfallClient
@@ -212,7 +216,7 @@ MagicAssistant.App
 
 MagicAssistant.Core (бизнес-логика)
   ├── MagicAssistant.Data (контракты локальных данных + Model)
-  ├── MagicAssistant.Data.IO (XmlImport/XmlExport для команд импорта/экспорта)
+  ├── MagicAssistant.Data.IO (JsonImport/JsonExport — нативный формат; XmlImport — legacy)
   └── MagicAssistant.Http (контракты внешних данных + DTOs)
 
 MagicAssistant.Data.Db (реализация БД)
@@ -418,7 +422,6 @@ UI не требует заранее скачанных картинок: ес�
 | `MoveCardsCommand` | Перемещение карт между коллекциями: удаление из источника + добавление в цель (merge-семантика ON CONFLICT) | — |
 | `UpdateCardCommand` | Обновление свойств карты (count, ownership, price, comment, tags) | — |
 | `ImportResolvedCardsCommand` | Атомарный коммит полностью зарезолленного импорта: new-режим → `CreateDeckWithCardsAsync` (одна транзакция), existing-режим → merge. CardOverrides — выборы из таблицы нераспознанных карт |
-| `ExportDeckCommand` | Экспорт колоды в Magic Assistant XML файл | — |
 | `SyncKBCommand` | Полная синхронизация сета из Scryfall (оркестрирующая команда) | `IKnowledgeBaseSyncService` |
 | `SaveUserSettingCommand` | Сохранение пользовательских настроек (splitter, view mode, page size) | — |
 
@@ -467,20 +470,20 @@ UI не требует заранее скачанных картинок: ес�
 
 ### Результат
 
-## XmlImport / XmlExport (Data.IO)
+## Форматы импорта/экпорта (Data.IO)
 
-Формат Magic Assistant XML — единственный поддерживаемый формат импорта/экспорта.
+Два формата: **нативный JSON (v1)** — основной для UI-импорта/экспорта, и **legacy XML** — только OldDeckImportWizard (Gatherer ID + полные имена сетов). Оба возвращают общий `CardCollectionImportResult`.
 
-### XmlImport
-- Парсит `<cards>` → `<list>` → `<mcp>` (MagicCardPhysical)
+### JsonImport / JsonExport (нативный формат)
+- Обёртка: `format: "magic-assistant/deck"`, `version: 1`, `name`, `comment`, `type: "deck"`, `exportedAt` (ISO 8601) — всегда пишутся
+- Карта: reference-ядро `id` (Scryfall UUID), `name`, `set`, `count` — всегда; импорт требует все четыре (отсутствие = FormatException, дефолт для count не ставится)
+- Опциональные поля omit-по-умолчанию: `own` только false, `price` ≠0 (короткое round-trip представление float), `comment`/`custom`/`special` непустые, `forTrade` >0 и без тега fortrade
+- Pretty-print с отступом 2; неизвестные поля при импорте игнорируются (forward-compat); чужой format/несоответствующий version → FormatException
+
+### XmlImport (legacy)
+- Парсит legacy XML: `<cards>` → `<list>` → `<mcp>` (MagicCardPhysical); Gatherer ID + полные имена сетов
 - Поддерживает только физические карты (`<mcp>`); базовые карты `<mc>` не импортируются
 - `ReadElementValue()` — различает простые элементы и элементы с дочерними узлами
-
-### XmlExport
-- `<cards>` → `<list>` → `<mcp>` (только MagicCardPhysical)
-- Пишет только non-default значения
-- Базовые карты (`MagicCard` без физического обёртывания) не экспортируются
-- Properties → `<properties><entry><string>Key</string><string>Value</string></entry></properties>`
 
 ## DI-конфигурация (Program.cs)
 
@@ -500,7 +503,7 @@ UI не требует заранее скачанных картинок: ес�
 
 **Scoped:**
 
-- Все Command/Query handlers: `AddCardsToDeckCommandHandler`, `GetDeckCardsQueryHandler`, `SearchCardsQueryHandler`, `SyncKBCommandHandler`, `GetScryfallAvailableSetsQueryHandler`, `GetSyncProgressQueryHandler`, `GetSetSyncStatusQueryHandler`, `ResolveLegacyCardsQueryHandler`, `ValidateCardIdsQueryHandler`, `ImportResolvedCardsCommandHandler`, `ExportDeckCommandHandler`, `RemoveCardsFromDeckCommandHandler`, `MoveCardsCommandHandler`, `UpdateCardCommandHandler`, `CreateNodeCommandHandler`, `DeleteNodeCommandHandler`, `RenameNodeCommandHandler`, `LockNodeCommandHandler`, `UnlockNodeCommandHandler`, `GetDeckAnalysisQueryHandler`, `GetNodesTreeQueryHandler`, `GetNodeByIdQueryHandler`, `GetNodesBranchQueryHandler`, `GetCardByIdQueryHandler`, `GetCardPrintingsQueryHandler`, `GetCardLanguagesQueryHandler`, `GetCardInstancesQueryHandler`, `GetKBAvailableSetsQueryHandler`, `GetCardSetQueryHandler`, `SyncCardSetsCommandHandler`, `GetCollectorProgressQueryHandler`, `SaveUserSettingCommandHandler`, `GetUserSettingQueryHandler`
+- Все Command/Query handlers: `AddCardsToDeckCommandHandler`, `GetDeckCardsQueryHandler`, `SearchCardsQueryHandler`, `SyncKBCommandHandler`, `GetScryfallAvailableSetsQueryHandler`, `GetSyncProgressQueryHandler`, `GetSetSyncStatusQueryHandler`, `ResolveLegacyCardsQueryHandler`, `ValidateCardIdsQueryHandler`, `ImportResolvedCardsCommandHandler`, `RemoveCardsFromDeckCommandHandler`, `MoveCardsCommandHandler`, `UpdateCardCommandHandler`, `CreateNodeCommandHandler`, `DeleteNodeCommandHandler`, `RenameNodeCommandHandler`, `LockNodeCommandHandler`, `UnlockNodeCommandHandler`, `GetDeckAnalysisQueryHandler`, `GetNodesTreeQueryHandler`, `GetNodeByIdQueryHandler`, `GetNodesBranchQueryHandler`, `GetCardByIdQueryHandler`, `GetCardPrintingsQueryHandler`, `GetCardLanguagesQueryHandler`, `GetCardInstancesQueryHandler`, `GetKBAvailableSetsQueryHandler`, `GetCardSetQueryHandler`, `SyncCardSetsCommandHandler`, `GetCollectorProgressQueryHandler`, `SaveUserSettingCommandHandler`, `GetUserSettingQueryHandler`
 - Вертикальные сервисы: `IDeckManagementService`, `IDeckCardService`, `ICardResolveService`, `IKnowledgeBaseSyncService`, `IDeckImportExportService`, `ICardSearchService`, `IDeckAnalysisService`
 - `KbRefreshService` — подписка/уведомление UI о завершении синхронизации БЗ
 
@@ -814,8 +817,8 @@ IAnalysisService
 - **ImageCacheService** — `{set}/{lang}/{front|back}/{uid}.png`, создание директорий по языкам, UID-проверка
 - **SyncKBCommand** — фазы (resolve → download → map → images → save → done), прогресс через SyncSetStateRegistry
 - **SyncCardSetsCommand** — синхронизация списка сетов Scryfall в БД (флаг FullUpdate); вызывается из диалога SyncKnowledgeBase
-- **ImportDeckCommand / ExportDeckCommand** — через XmlImport/XmlExport из Data.IO
-- **Все Commands**: CreateNode, CreateDeck, CreateCollection, CreateFolder, DeleteNode, RenameNode, LockNode, UnlockNode, AddCards, RemoveCards, MoveCards, UpdateCard, SyncKB, SyncCardSets, ImportResolvedCards, ExportDeck, SaveUserSetting
+- **Импорт/экспорт** — нативный JSON (JsonImport/JsonExport из Data.IO); legacy XML-импорт — XmlImport (OldDeckImportWizard)
+- **Все Commands**: CreateNode, CreateDeck, CreateCollection, CreateFolder, DeleteNode, RenameNode, LockNode, UnlockNode, AddCards, RemoveCards, MoveCards, UpdateCard, SyncKB, SyncCardSets, ImportResolvedCards, SaveUserSetting
 - **Все Queries**: SearchCards, GetDeckCards, GetScryfallAvailableSets, GetKBAvailableSets, GetSyncProgress, GetNodesTree, GetNodeById, GetNodesBranch, GetCardById, GetCardPrintings, GetCardLanguages, GetCardInstances, GetCardSet, GetDeckAnalysis, GetCollectorProgress, GetUserSetting, GetSetSyncStatus, ResolveLegacyCards, ValidateCardIds
 - **Инвариант импорта**: новый узел (колода/коллекция) никогда не создаётся до полного резолва всех карт. Коммит — только после 100% резолва (+ ручного сопоставления нераспознанных); new-режим атомарен (`CreateDeckWithCardsAsync`, одна транзакция). Оркестрация интерактива — в `DeckImportExportService` (доменный модуль всех действий с импортом), бизнес-логика — в атомарных командах/запросах
 - **MainLayout** — 3 панели, header-действия, TabBar, рендер диалогов (LocationPickerDialog и EditDeckPropertiesDialog — dormant), status bar; CardsListControl — единый браузер карт для KB- и deck-режимов

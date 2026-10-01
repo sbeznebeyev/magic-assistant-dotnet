@@ -1,10 +1,10 @@
-using MagicAssistant.Data.IO.xml;
+using MagicAssistant.Data.IO.json;
 using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Tests.DataIO;
 
 [TestFixture]
-public class XmlRoundTripTests
+public class JsonRoundTripTests
 {
     /* ═══════════════════════════════════════════════════════
      * Round-trip: Export → Import должен сохранить данные
@@ -26,12 +26,13 @@ public class XmlRoundTripTests
             Custom = "custom-data",
         };
 
-        var xml = XmlExport.ExportToXml("Test Deck", "key-123", "A test deck", "deck", new[] { physical });
-        var result = XmlImport.ImportFromXml(xml);
+        var json = JsonExport.ExportToJson("Test Deck", "A test deck", "deck", new[] { physical });
+        var result = JsonImport.ImportFromJson(json);
 
         Assert.That(result.Name, Is.EqualTo("Test Deck"));
-        Assert.That(result.Key, Is.EqualTo("key-123"));
         Assert.That(result.Comment, Is.EqualTo("A test deck"));
+        Assert.That(result.Type, Is.EqualTo("deck"));
+        Assert.That(result.Key, Is.Null, "the native JSON format has no key field");
         Assert.That(result.Cards, Has.Count.EqualTo(1));
 
         var imported = (MagicCardPhysical)result.Cards[0];
@@ -49,7 +50,7 @@ public class XmlRoundTripTests
     [Test]
     public void RoundTrip_PhysicalCard_PreservesBorrowedOwnership()
     {
-        // Borrowed card (IsOwn = false)
+        // Borrowed card (IsOwn = false) — "own": false must survive the round-trip.
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m20" },
             Location.FromPath("deck-1"), false)
@@ -57,14 +58,12 @@ public class XmlRoundTripTests
             Count = 1,
         };
 
-        var xml = XmlExport.ExportToXml("Deck", null, null, "deck", new[] { physical });
-        var result = XmlImport.ImportFromXml(xml);
+        var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
+        var result = JsonImport.ImportFromJson(json);
 
         var imported = (MagicCardPhysical)result.Cards[0];
         Assert.That(imported.IsOwn, Is.False,
-            "Borrowed card (IsOwn=false) should remain borrowed after round-trip. " +
-            "BUG: XmlExport only writes <ownership>false</ownership> when !IsOwn, " +
-            "but XmlImport.ReadMagicCardPhysical defaults to IsOwn=true and only overrides if <ownership> element exists.");
+            "Borrowed card (IsOwn=false) should remain borrowed after round-trip.");
     }
 
     [Test]
@@ -83,11 +82,10 @@ public class XmlRoundTripTests
                 Location.FromPath("deck-1"), false) { Count = 1, Comment = "Borrowed" },
         };
 
-        var xml = XmlExport.ExportToXml("My Deck", "key-123", "A test deck", "deck", cards);
-        var result = XmlImport.ImportFromXml(xml);
+        var json = JsonExport.ExportToJson("My Deck", "A test deck", "deck", cards);
+        var result = JsonImport.ImportFromJson(json);
 
         Assert.That(result.Name, Is.EqualTo("My Deck"));
-        Assert.That(result.Key, Is.EqualTo("key-123"));
         Assert.That(result.Comment, Is.EqualTo("A test deck"));
         Assert.That(result.Cards, Has.Count.EqualTo(3));
 
@@ -100,11 +98,10 @@ public class XmlRoundTripTests
     [Test]
     public void RoundTrip_EmptyDeck_PreservesMetadata()
     {
-        var xml = XmlExport.ExportToXml("Empty Deck", "key-456", "No cards", "deck", Array.Empty<IMagicCard>());
-        var result = XmlImport.ImportFromXml(xml);
+        var json = JsonExport.ExportToJson("Empty Deck", "No cards", "deck", Array.Empty<IMagicCard>());
+        var result = JsonImport.ImportFromJson(json);
 
         Assert.That(result.Name, Is.EqualTo("Empty Deck"));
-        Assert.That(result.Key, Is.EqualTo("key-456"));
         Assert.That(result.Comment, Is.EqualTo("No cards"));
         Assert.That(result.Cards, Is.Empty);
     }
@@ -116,20 +113,20 @@ public class XmlRoundTripTests
             new MagicCard { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
             Location.FromPath("deck-1"), true)
         {
-            Comment = "Tags: <foil> & \"signed\" card",
+            Comment = "Tags: <foil> & \"signed\" card — кириллица",
         };
 
-        var xml = XmlExport.ExportToXml("Deck", null, null, "deck", new[] { physical });
-        var result = XmlImport.ImportFromXml(xml);
+        var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
+        var result = JsonImport.ImportFromJson(json);
 
         var imported = (MagicCardPhysical)result.Cards[0];
-        Assert.That(imported.Comment, Is.EqualTo("Tags: <foil> & \"signed\" card"));
+        Assert.That(imported.Comment, Is.EqualTo("Tags: <foil> & \"signed\" card — кириллица"));
     }
 
     [Test]
-    public void RoundTrip_CountOne_NotExplicitlyWritten_StillImportsAsOne()
+    public void RoundTrip_CountOne_AlwaysWritten_StillImportsAsOne()
     {
-        // Count=1 is the default — XmlExport skips writing it
+        // Unlike the legacy XML format, count is part of the reference core and always written.
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             Location.FromPath("deck-1"), true)
@@ -137,15 +134,13 @@ public class XmlRoundTripTests
             Count = 1,
         };
 
-        var xml = XmlExport.ExportToXml("Deck", null, null, "deck", new[] { physical });
+        var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
-        // Verify count element is NOT in XML (default behavior)
-        Assert.That(xml, Does.Not.Contain("<count>1</count>"));
+        Assert.That(json, Does.Contain("\"count\": 1"));
 
-        var result = XmlImport.ImportFromXml(xml);
+        var result = JsonImport.ImportFromJson(json);
         var imported = (MagicCardPhysical)result.Cards[0];
 
-        // Should still be 1 after round-trip
         Assert.That(imported.Count, Is.EqualTo(1));
     }
 
@@ -159,15 +154,33 @@ public class XmlRoundTripTests
             MyPrice = 0f,
         };
 
-        var xml = XmlExport.ExportToXml("Deck", null, null, "deck", new[] { physical });
+        var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
-        // Verify price element is NOT in XML (default behavior)
-        Assert.That(xml, Does.Not.Contain("<price>"));
+        Assert.That(json, Does.Not.Contain("\"price\""));
 
-        var result = XmlImport.ImportFromXml(xml);
+        var result = JsonImport.ImportFromJson(json);
         var imported = (MagicCardPhysical)result.Cards[0];
 
         Assert.That(imported.MyPrice, Is.EqualTo(0f));
     }
 
+    [Test]
+    public void RoundTrip_ForTradeCount_Preserved()
+    {
+        var physical = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+            Location.FromPath("deck-1"), true)
+        {
+            Count = 3,
+        };
+        physical.SetForTradeCount(2);
+
+        var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
+        Assert.That(json, Does.Contain("\"forTrade\": 2"));
+
+        var result = JsonImport.ImportFromJson(json);
+        var imported = (MagicCardPhysical)result.Cards[0];
+
+        Assert.That(imported.GetForTradeCount(), Is.EqualTo(2));
+    }
 }

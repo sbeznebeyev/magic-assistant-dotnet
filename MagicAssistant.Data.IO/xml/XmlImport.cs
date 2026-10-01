@@ -1,5 +1,6 @@
 using System.Xml;
 using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.IO;
 using MagicAssistant.Data.Model;
 namespace MagicAssistant.Data.IO.xml;
 
@@ -192,14 +193,5 @@ public static class XmlImport
     {
         var val = fields.GetValueOrDefault(key);
         return string.IsNullOrWhiteSpace(val) ? null : val;
-    }
-
-    public class CardCollectionImportResult
-    {
-        public string Name { get; set; } = string.Empty;
-        public string? Key { get; set; }
-        public string? Comment { get; set; }
-        public string? Type { get; set; }
-        public List<IMagicCard> Cards { get; set; } = new();
     }
 }

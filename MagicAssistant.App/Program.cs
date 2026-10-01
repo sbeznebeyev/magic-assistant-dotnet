@@ -130,7 +130,6 @@ builder.Services.AddScoped<GetSetSyncStatusQueryHandler>();
 builder.Services.AddScoped<ResolveLegacyCardsQueryHandler>();
 builder.Services.AddScoped<ValidateCardIdsQueryHandler>();
 builder.Services.AddScoped<ImportResolvedCardsCommandHandler>();
-builder.Services.AddScoped<ExportDeckCommandHandler>();
 builder.Services.AddScoped<RemoveCardsFromDeckCommandHandler>();
 builder.Services.AddScoped<MoveCardsCommandHandler>();
 builder.Services.AddScoped<UpdateCardCommandHandler>();

@@ -6,3 +6,18 @@ window.galleryHelpers = {
         return el ? el.clientWidth : 0;
     }
 };
+
+// File download helper — content is passed as an argument, never interpolated into code.
+window.downloadFile = {
+    save: function (fileName, content, mimeType) {
+        var blob = new Blob([content], { type: mimeType });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+};

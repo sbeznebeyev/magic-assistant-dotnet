@@ -18,11 +18,8 @@ public interface IDeckImportExportService
     //  Export
     // ═══════════════════════════════════════════════════════
 
-    /// <summary>Export a deck to Magic Assistant XML format. Returns the XML string.</summary>
-    Task<string> ExportDeckToXmlAsync(int deckId, CancellationToken ct = default);
-
-    /// <summary>Export a deck to Magic Assistant XML and save to file.</summary>
-    Task<ExportDeckResult> ExportToFileAsync(int deckId, string filePath, CancellationToken ct = default);
+    /// <summary>Export a deck to the native Magic Assistant JSON format (v1). Returns the JSON string.</summary>
+    Task<string> ExportDeckToJsonAsync(int deckId, CancellationToken ct = default);
 
     // ═══════════════════════════════════════════════════════
     //  Import pre-checks (read-only)
@@ -106,14 +103,17 @@ public interface IDeckImportExportService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Modern import (Scryfall UUIDs in the file): parses XML, validates that every card
-    /// exists in the knowledge base, then commits atomically. Throws when unknown cards
+    /// Modern import (Scryfall UUIDs in the file): parses native JSON, validates that every
+    /// card exists in the knowledge base, then commits atomically. Throws when unknown cards
     /// are present — no node is created in that case.
+    /// When a new deck is created, <paramref name="deckName"/> overrides the name from the file
+    /// (null/blank = use the file's name).
     /// </summary>
     Task<ImportCommitResult> CommitModernImportAsync(
-        string xmlContent,
+        string jsonContent,
         int? parentId,
         int? targetCollectionId,
+        string? deckName = null,
         CancellationToken ct = default);
 }
 

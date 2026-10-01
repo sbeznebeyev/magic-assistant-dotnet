@@ -1,6 +1,8 @@
 using MagicAssistant.Core.Commands;
 using MagicAssistant.Core.Queries;
 using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.IO;
+using MagicAssistant.Data.IO.json;
 using MagicAssistant.Data.IO.xml;
 using MagicAssistant.Data.Model;
 using MagicAssistant.Core.Services.CardSearch;
@@ -45,7 +47,7 @@ public class DeckImportExportService : IDeckImportExportService
     // ═══════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<string> ExportDeckToXmlAsync(int deckId, CancellationToken ct = default)
+    public async Task<string> ExportDeckToJsonAsync(int deckId, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
@@ -53,50 +55,11 @@ public class DeckImportExportService : IDeckImportExportService
         var cards = await _collectionStore.GetDeckCardsAsync(deckId, ct);
         var deckNode = await _collectionStore.GetByIdAsync(deckId, ct);
 
-        return XmlExport.ExportToXml(
+        return JsonExport.ExportToJson(
             name: deckNode?.Name ?? "Unknown Deck",
-            key: null,
             comment: null,
             type: "deck",
             cards);
-    }
-
-    /// <inheritdoc />
-    public async Task<ExportDeckResult> ExportToFileAsync(
-        int deckId, string filePath, CancellationToken ct = default)
-    {
-        var result = new ExportDeckResult();
-
-        try
-        {
-            var node = await _collectionStore.GetByIdAsync(deckId, ct);
-            if (node == null)
-            {
-                result.ErrorMessage = $"Deck '{deckId}' not found.";
-                return result;
-            }
-
-            // Targeted query — get only this deck's cards
-            var deckCards = await _collectionStore.GetDeckCardsAsync(deckId, ct);
-
-            await XmlExport.ExportToFileAsync(
-                filePath,
-                node.Name,
-                node.Id.ToString(),
-                null, // comment
-                "deck",
-                deckCards,
-                ct);
-
-            result.Success = true;
-            result.CardsExported = deckCards.Count;
-        }
-        catch (Exception ex)
-        {
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
     }
 
     // ═══════════════════════════════════════════════════════
@@ -268,12 +231,13 @@ public class DeckImportExportService : IDeckImportExportService
 
     /// <inheritdoc />
     public async Task<ImportCommitResult> CommitModernImportAsync(
-        string xmlContent,
+        string jsonContent,
         int? parentId,
         int? targetCollectionId,
+        string? deckName = null,
         CancellationToken ct = default)
     {
-        var importResult = ParseOrThrow(xmlContent);
+        var importResult = ParseJsonOrThrow(jsonContent);
 
         // Invariant: validate every card against KB BEFORE anything is created
         var cardIds = importResult.Cards.Select(c => c.Id).ToList();
@@ -293,15 +257,17 @@ public class DeckImportExportService : IDeckImportExportService
                 : new MagicCardPhysical(c.GetBase(), Location.FromId(0, "unresolved", false), true))
             .ToList();
 
+        var finalName = string.IsNullOrWhiteSpace(deckName) ? importResult.Name : deckName.Trim();
+
         return await _importResolvedCardsCommand.Handle(
-            new ImportResolvedCardsCommand(importResult.Name, parentId, targetCollectionId, physicals), ct);
+            new ImportResolvedCardsCommand(finalName, parentId, targetCollectionId, physicals), ct);
     }
 
     // ═══════════════════════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════════════════════
 
-    private static XmlImport.CardCollectionImportResult ParseOrThrow(string xmlContent)
+    private static CardCollectionImportResult ParseOrThrow(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
             throw new ArgumentException("XML content is required.", nameof(xmlContent));
@@ -312,16 +278,16 @@ public class DeckImportExportService : IDeckImportExportService
 
         return importResult;
     }
-}
 
-// ═══════════════════════════════════════════════════════
-//  Result types (export)
-// ═══════════════════════════════════════════════════════
+    private static CardCollectionImportResult ParseJsonOrThrow(string jsonContent)
+    {
+        if (string.IsNullOrWhiteSpace(jsonContent))
+            throw new ArgumentException("JSON content is required.", nameof(jsonContent));
 
-/// <summary>Result of an export operation.</summary>
-public class ExportDeckResult
-{
-    public bool Success { get; set; }
-    public int CardsExported { get; set; }
-    public string? ErrorMessage { get; set; }
+        var importResult = JsonImport.ImportFromJson(jsonContent);
+        if (!importResult.Cards.Any())
+            throw new InvalidOperationException("No cards found in the file.");
+
+        return importResult;
+    }
 }

@@ -2,6 +2,10 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
+*2026-10-01 — Нативный импорт/экспорт переведён с XML на **JSON** (нативный формат v1, `format: "magic-assistant/deck"`): обёртка format/version/name/comment/type/exportedAt; reference-ядро карты `id/name/set/count` всегда пишется (отсутствие любого = ошибка формата), опциональные поля omit-по-умолчанию (`own` только false, `price` ≠0, `comment/custom/special` непустые, `forTrade` >0); pretty, отступ 2 пробела; неизвестные поля при импорте игнорируются. `JsonImport`/`JsonExport` в Data.IO (`json/`), общий `CardCollectionImportResult`; modern-commit (`CommitModernImportAsync`) парсит JSON; нативный XML-экспорт удалён (XmlExport.cs, ExportDeckCommand + handler, ExportDeckToXmlAsync/ExportToFileAsync), legacy-парсер XmlImport остался для OldDeckImportWizard. DeckExportWizard — `.json` + `downloadFile.save` в site.js (контент аргументом, без eval-интерполяции); DeckImportWizard — accept=".json". Детали — §7.1/§7.3.*
+
+*2026-10-01 (fixes) — Нативный импорт: диалог закрывается после успешного импорта; проверка дубля имени по **всему дереву** (дубли разрешены только узлам типа Folder; Sideboard — скрытый дочерний узел, в проверку не входит), поле «Deck Name» редактируемо (дефолт — имя из файла); файл парсится сразу при выборе — невалидный JSON отклоняется на месте. Имя файла редактируется в обоих визардах, пробелы → подчёркивания (live, oninput). `CommitModernImportAsync` принимает опциональный `deckName`.*
+
 *2026-09-30 — Навигатор, контекстное меню: для deck c sideboard пункты Pin/Unpin и Clear объединены в горизонтальные пары (`.ctx-pair`, grid 1fr:2fr) — левая ячейка = операция с deck, правая = со sideboard; без SB — как раньше, одиночные кнопки. Ширина меню — по контенту (`white-space: nowrap` в парах, фиксированного min-width нет); бюджет `clamp` 320×270. Иконки пунктов — inline SVG (не эмодзи): Rename — «ab|», Clear/Clear sideboard — ластик, Import — download, Export — upload, Delete — жирный красный крестик; pin/lock сохраняют state dots. Детали — §2.1.*
 
 *2026-09-30 — Навигатор, контекстное меню: добавлены пары **Import | Import sideboard** и **Export | Export sideboard** (те же пропорции 1fr:2fr для deck c SB; без SB — одиночные Import/Export). Import передаёт CollectionId целевого узла в `DeckImportWizard` (`TargetNodeId`) — карты сливаются в существующий узел (merge), select цели скрывается; Import disabled при locked, как Clear. Export sideboard экспортирует сам SB-узел по его ID. Детали — §2.1.*
@@ -98,7 +102,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | SyncSelectedSetCards | CardsListControl empty state → `OnOpenSync(setCode)` | Sync specific set |
 | DeckImportWizard | DecksNavigator add-node menu (`+` → Import; root or folder row) | Atomic modern import — validation of all card IDs against KB, then node creation + cards in one transaction |
 | OldDeckImportWizard | Header `Legacy Import` | Staged legacy import: missing-set sync prompt → unresolved-cards table with search → commit only when 100% mapped |
-| DeckExportWizard | DecksNavigator context menu (⋯ → Export; deck/collection nodes only) | XML export + browser download of the clicked node |
+| DeckExportWizard | DecksNavigator context menu (⋯ → Export; deck/collection nodes only) | Native JSON export + browser download of the clicked node |
 | EditMagicCardPhysicalDialog | CardsListControl ✎ (deck mode) | Edit card instance (count, ownership, price, tags) |
 | SplitDialog | CardsListControl ⫯ (deck mode, count > 1) | Split stack main/sideboard |
 | CardFilterDialog | CardsListControl `Filters` button | Central filter dialog: Type/Rarity/Color/Properties + Collection section (deck mode) |
@@ -147,9 +151,9 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | EditDeckPropertiesDialog | `Components/Dialogs/EditDeckPropertiesDialog.razor` | Редактирование свойств колоды: rename (dormant — проводка отсутствует) |
 | CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Type/Rarity (MultiSelectList), Artist, color-чекбоксы + модификаторы, Properties (P/T/CMC), Collection (deck mode: ownership/count/price/tags) |
 | **Wizards** | | |
-| DeckImportWizard | `Components/Wizards/DeckImportWizard.razor` | Импорт XML в новую или существующую колоду |
+| DeckImportWizard | `Components/Wizards/DeckImportWizard.razor` | Импорт нативного JSON в новую или существующую колоду |
 | OldDeckImportWizard | `Components/Wizards/OldDeckImportWizard.razor` | Импорт legacy XML (Gatherer ID + полные имена сетов) |
-| DeckExportWizard | `Components/Wizards/DeckExportWizard.razor` | Экспорт колоды в XML с скачиванием файла |
+| DeckExportWizard | `Components/Wizards/DeckExportWizard.razor` | Экспорт колоды в нативный JSON с скачиванием файла |
 | **Shared Controls** | | |
 | MultiSelectList | `Components/Controls/MultiSelectList.razor` | Универсальный обобщённый компонент выбора: чипы, диалог-оверлей, MultiSelectViewModel |
 | SetSelectorDropdown | `Components/Controls/SetSelectorDropdown.razor` | Dropdown-селектор сетов (используется в SyncKnowledgeBase) |
@@ -780,15 +784,15 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 **File:** `Components/Wizards/DeckImportWizard.razor`
 
-**Purpose:** Import deck from Magic Assistant XML file. Triggered by the DecksNavigator add-node menu (`+` → Import) — root row or a folder's row.
+**Purpose:** Import deck from a native Magic Assistant JSON file (format v1). Triggered by the DecksNavigator add-node menu (`+` → Import) — root row or a folder's row. Legacy XML files go through OldDeckImportWizard (§7.2).
 
 **Parameters:** `IsOpen`, `ParentNodeId (int?)` (the menu's parent context; null = root), `OnImported`, `IsOpenChanged`. Injects `IDeckManagementService` + `IDeckImportExportService`.
 
-**Form fields:** Select XML File (`InputFile`, accept=".xml"). Import to: dropdown — "New deck (from file name)" or existing deck names (the list stays global). When opened from a folder's menu, a hint below the dropdown names the target: "New deck will be created inside 'X'".
+**Form fields:** Select JSON File (`InputFile`, accept=".json"). Import to: dropdown — "New deck (from file name)" or existing deck names (the list stays global). When opened from a folder's menu, a hint below the dropdown names the target: "New deck will be created inside 'X'".
 
 **Import flow (atomic commit):**
-1. `IDeckImportExportService.CommitModernImportAsync(xmlContent, ParentNodeId, targetId)` — single call:
-   - parse XML (deck name from `<name>`);
+1. `IDeckImportExportService.CommitModernImportAsync(jsonContent, ParentNodeId, targetId)` — single call:
+   - parse JSON (`JsonImport`): format marker + version gate, reference core `id/name/set/count` required per card, unknown fields ignored; deck name from `name`;
    - validate every card ID against KB (`ValidateCardIdsQuery`) — **unknown cards abort the import before anything is created**;
    - commit via `ImportResolvedCardsCommand`: "new deck" → node + sideboard + cards in one transaction under the menu's parent node (root when null); existing deck → merge (ON CONFLICT → add counts).
 
@@ -833,16 +837,16 @@ FileSelection → [Import Legacy] → Checking (CheckLegacyImportAsync)
 
 **File:** `Components/Wizards/DeckExportWizard.razor`
 
-**Purpose:** Export a deck to Magic Assistant XML format. Triggered by the DecksNavigator context menu (⋯ → Export, deck/collection nodes only) — `DeckId` is the clicked node (`MainLayout._exportTargetId`), not necessarily the displayed collection.
+**Purpose:** Export a deck to the native Magic Assistant JSON format (v1). Triggered by the DecksNavigator context menu (⋯ → Export, deck/collection nodes only) — `DeckId` is the clicked node (`MainLayout._exportTargetId`), not necessarily the displayed collection.
 
 **Parameters:** `DeckId (int?)`, `IsOpen`, `OnExported`, `IsOpenChanged`. Injects `IDeckManagementService` + `IDeckImportExportService` + `IJSRuntime`.
 
-**Form fields:** Deck name (auto-populated, read-only). Format: "Magic Assistant XML" (only option). File Name: auto-generated from deck name with spaces → underscores (read-only).
+**Form fields:** Deck name (auto-populated, read-only). Format: "Magic Assistant JSON" (only option). File Name: auto-generated from deck name with spaces → underscores (read-only).
 
 **Export flow:**
-1. `IDeckImportExportService.ExportDeckToXmlAsync(deckId)` → generates XML string.
-2. JavaScript `Blob` + `URL.createObjectURL` for browser download.
-3. File downloaded as `{DeckName}.xml`.
+1. `IDeckImportExportService.ExportDeckToJsonAsync(deckId)` → generates the JSON string (`JsonExport`: envelope format/version/name/comment/type/exportedAt + cards; reference core always written, optional fields omitted at defaults, pretty 2-space indent).
+2. JavaScript `downloadFile.save(fileName, content, "application/json")` from `wwwroot/js/site.js` — Blob + object URL; content is passed as an interop argument, never interpolated into the script.
+3. File downloaded as `{DeckName}.json`.
 
 ---
 
