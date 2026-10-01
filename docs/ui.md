@@ -4,6 +4,8 @@
 
 *2026-10-01 — Нативный импорт/экспорт переведён с XML на **JSON** (нативный формат v1, `format: "magic-assistant/deck"`): обёртка format/version/name/comment/type/exportedAt; reference-ядро карты `id/name/set/count` всегда пишется (отсутствие любого = ошибка формата), опциональные поля omit-по-умолчанию (`own` только false, `price` ≠0, `comment/custom/special` непустые, `forTrade` >0); pretty, отступ 2 пробела; неизвестные поля при импорте игнорируются. `JsonImport`/`JsonExport` в Data.IO (`json/`), общий `CardCollectionImportResult`; modern-commit (`CommitModernImportAsync`) парсит JSON; нативный XML-экспорт удалён (XmlExport.cs, ExportDeckCommand + handler, ExportDeckToXmlAsync/ExportToFileAsync), legacy-парсер XmlImport остался для OldDeckImportWizard. DeckExportWizard — `.json` + `downloadFile.save` в site.js (контент аргументом, без eval-интерполяции); DeckImportWizard — accept=".json". Детали — §7.1/§7.3.*
 
+*2026-10-01 (fixes) — DeckImportWizard: слипание контролов выбора файла устранено — нативный `InputFile` скрыт, триггерит кастомная кнопка через `label[for]` (без JS), редактируемое имя файла — отдельной строкой ниже. Импорт в сайдборд визуально отличается: заголовок «Import to Sideboard», цель — имя колоды золотым градиентом (`.target-name`) + бейдж «sideboard» (`.target-sideboard-tag`); тип цели определяется по БД (`GetByIdAsync`). Имена целей резолвятся напрямую из БД (`CollectionStore`), а не из дерева навигации (в нём только корневые узлы — вложенные колоды показывали «?»); список «add to existing» теперь включает все колоды/коллекции на любой глубине. Детали — §7.1.*
+
 *2026-10-01 (fixes) — Нативный импорт: диалог закрывается после успешного импорта; проверка дубля имени по **всему дереву** (дубли разрешены только узлам типа Folder; Sideboard — скрытый дочерний узел, в проверку не входит), поле «Deck Name» редактируемо (дефолт — имя из файла); файл парсится сразу при выборе — невалидный JSON отклоняется на месте. Имя файла редактируется в обоих визардах, пробелы → подчёркивания (live, oninput). `CommitModernImportAsync` принимает опциональный `deckName`.*
 
 *2026-09-30 — Навигатор, контекстное меню: для deck c sideboard пункты Pin/Unpin и Clear объединены в горизонтальные пары (`.ctx-pair`, grid 1fr:2fr) — левая ячейка = операция с deck, правая = со sideboard; без SB — как раньше, одиночные кнопки. Ширина меню — по контенту (`white-space: nowrap` в парах, фиксированного min-width нет); бюджет `clamp` 320×270. Иконки пунктов — inline SVG (не эмодзи): Rename — «ab|», Clear/Clear sideboard — ластик, Import — download, Export — upload, Delete — жирный красный крестик; pin/lock сохраняют state dots. Детали — §2.1.*
@@ -784,21 +786,28 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 **File:** `Components/Wizards/DeckImportWizard.razor`
 
-**Purpose:** Import deck from a native Magic Assistant JSON file (format v1). Triggered by the DecksNavigator add-node menu (`+` → Import) — root row or a folder's row. Legacy XML files go through OldDeckImportWizard (§7.2).
+**Purpose:** Import deck from a native Magic Assistant JSON file (format v1). Triggered by the DecksNavigator add-node menu (`+` → Import) — root row or a folder's row — or pre-targeted at an existing node from the ⋯ context menu (Import / Import sideboard, `TargetNodeId`). Legacy XML files go through OldDeckImportWizard (§7.2).
 
-**Parameters:** `IsOpen`, `ParentNodeId (int?)` (the menu's parent context; null = root), `OnImported`, `IsOpenChanged`. Injects `IDeckManagementService` + `IDeckImportExportService`.
+**Parameters:** `IsOpen`, `ParentNodeId (int?)` (the menu's parent context; null = root), `TargetNodeId (int?)` (fixed merge target — the ⋯ menu path; hides the select), `OnImported`, `IsOpenChanged`. Injects `IDeckImportExportService` + `ICollectionStore`.
 
-**Form fields:** Select JSON File (`InputFile`, accept=".json"). Import to: dropdown — "New deck (from file name)" or existing deck names (the list stays global). When opened from a folder's menu, a hint below the dropdown names the target: "New deck will be created inside 'X'".
+**Form fields:**
+- **JSON File** — the native `InputFile` is visually hidden; a custom button (`label[for]`, no JS) triggers it, and the editable file-name input appears on its own line below. Spaces in the name are replaced with underscores live (oninput). The file is parsed immediately on selection: invalid JSON or an empty card list is rejected in place (error line, nothing committed), and the deck's default name is taken from the file.
+- **Import to** — dropdown "New deck" + every deck/collection at any tree depth (resolved from the DB via `CollectionStore.GetAllCollectionsAsync`, not the navigation-tree dictionary, which only contains root-level nodes). With a fixed `TargetNodeId` the select is hidden and the target name renders in gold gradient (`.target-name`) — with an uppercase "sideboard" badge (`.target-sideboard-tag`) when the target is a Sideboard node (detected via `GetByIdAsync`; sideboards are hidden from the tree). The dialog title switches to **Import to Sideboard** in that case.
+- **Deck Name** — new-deck mode only; editable, defaults to the name from the file.
+
+When opened from a folder's menu, a hint below the dropdown names the target: "New deck will be created inside 'X'" (name resolved via `GetByIdAsync`).
 
 **Import flow (atomic commit):**
-1. `IDeckImportExportService.CommitModernImportAsync(jsonContent, ParentNodeId, targetId)` — single call:
+1. New-node mode: the deck name must be non-empty and **unique across the whole tree** — duplicates are allowed only for Folder nodes (Sideboards are hidden DB children, excluded from the check); a clash aborts with an error before anything is created.
+2. `IDeckImportExportService.CommitModernImportAsync(jsonContent, ParentNodeId, targetId, deckName)` — single call (`deckName` optional; overrides the file's name for new decks):
    - parse JSON (`JsonImport`): format marker + version gate, reference core `id/name/set/count` required per card, unknown fields ignored; deck name from `name`;
    - validate every card ID against KB (`ValidateCardIdsQuery`) — **unknown cards abort the import before anything is created**;
    - commit via `ImportResolvedCardsCommand`: "new deck" → node + sideboard + cards in one transaction under the menu's parent node (root when null); existing deck → merge (ON CONFLICT → add counts).
+3. On success: `OnImported`, then the dialog closes itself (`IsOpen = false` → `IsOpenChanged(false)`).
 
 **Invariant:** no deck/collection node is ever created before all cards are validated.
 
-**Validation:** Import button disabled until file selected.
+**Validation:** Import button disabled until a valid file is selected.
 
 ### 7.2 OldDeckImportWizard
 
