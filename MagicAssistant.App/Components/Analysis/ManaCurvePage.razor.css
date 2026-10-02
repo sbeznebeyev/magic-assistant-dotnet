@@ -35,6 +35,8 @@
 /* One color per series — must match the .legend-combined / .legend-main swatches */
 .bar-combined { background: linear-gradient(180deg, hsl(210, 70%, 65%), hsl(210, 50%, 45%)); }
 .bar-main { background: linear-gradient(180deg, #e8c76a, #b08d3a); }
+/* Single-series mode (no sideboard): one wider bar per CMC instead of a pair. */
+.bar-single { width: 60%; }
 .bar-column:hover .bar { filter: brightness(1.2); }
 
 .bar-label {

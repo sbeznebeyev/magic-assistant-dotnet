@@ -32,10 +32,15 @@
         {
             @* ── Bar Chart (Pure CSS) — two series: Main + Sideboard and Main only ── *@
             <div class="chart-container">
-                <div class="chart-legend">
-                    <span class="legend-item"><span class="legend-swatch legend-combined"></span>Main + Sideboard</span>
-                    <span class="legend-item"><span class="legend-swatch legend-main"></span>Main only</span>
-                </div>
+                @* Legend only when two series exist. Collection nodes have no sideboard —
+                   the single bar series speaks for itself, no legend. *@
+                @if (_hasSideboard)
+                {
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-swatch legend-combined"></span>Main + Sideboard</span>
+                        <span class="legend-item"><span class="legend-swatch legend-main"></span>Main only</span>
+                    </div>
+                }
                 <div class="chart-area">
                     @for (int i = 0; i < 8; i++)
                     {
@@ -50,18 +55,32 @@
                             {
                                 <div class="bar-tooltip">
                                     <span class="tooltip-cmc">CMC @(_labels[i])</span>
-                                    <span class="tooltip-count tooltip-combined">Main + SB: @combined card@(combined != 1 ? "s" : "") (@FormatPct(combined, _totalNonLand))</span>
-                                    <span class="tooltip-count tooltip-main">Main only: @main card@(main != 1 ? "s" : "") (@FormatPct(main, _totalMainNonLand))</span>
+                                    @if (_hasSideboard)
+                                    {
+                                        <span class="tooltip-count tooltip-combined">Main + SB: @combined card@(combined != 1 ? "s" : "") (@FormatPct(combined, _totalNonLand))</span>
+                                        <span class="tooltip-count tooltip-main">Main only: @main card@(main != 1 ? "s" : "") (@FormatPct(main, _totalMainNonLand))</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="tooltip-count tooltip-main">@main card@(main != 1 ? "s" : "") (@FormatPct(main, _totalMainNonLand))</span>
+                                    }
                                 </div>
                             }
                             <div class="bars">
-                                @if (combined > 0)
+                                @if (_hasSideboard)
                                 {
-                                    <div class="bar bar-combined" style="height:@(combinedH)px"></div>
+                                    @if (combined > 0)
+                                    {
+                                        <div class="bar bar-combined" style="height:@(combinedH)px"></div>
+                                    }
+                                    @if (main > 0)
+                                    {
+                                        <div class="bar bar-main" style="height:@(mainH)px"></div>
+                                    }
                                 }
-                                @if (main > 0)
+                                else if (main > 0)
                                 {
-                                    <div class="bar bar-main" style="height:@(mainH)px"></div>
+                                    <div class="bar bar-main bar-single" style="height:@(mainH)px"></div>
                                 }
                             </div>
                             <div class="bar-label">@_labels[i]</div>
@@ -113,6 +132,9 @@
     private int _totalMainNonLand;
     private int _maxBar;
     private string _peakCmcLabel = "—";
+    /// <summary>True when the node has sideboard cards (Deck nodes only — Collection nodes
+    /// have no sideboard child). False → single main-only series, no legend.</summary>
+    private bool _hasSideboard;
     private bool _loading;
     private string? _error;
 
@@ -150,6 +172,7 @@
                 // Every physical card carries its owning collection in Location — the deck's own
                 // cards vs. the sideboard child's. Main-only series = everything but the sideboard.
                 var mainCards = cards.Where(c => c.Location.RawId == DeckId).ToList();
+                _hasSideboard = cards.Count != mainCards.Count;
 
                 // True non-land card counts (deck-level fact — must match the Colors tab).
                 // Curve sums would undercount free cards: a {T} cost has no numeric CMC bucket.

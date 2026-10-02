@@ -26,7 +26,7 @@
         }
         else
         {
-            <div class="color-columns">
+            <div class="color-columns @(!_hasSideboard ? "single" : "")">
                 @* ── Left: main deck only (no sideboard) ── *@
                 <div class="color-column">
                     <div class="column-title deck-name-title">@(DeckName ?? "Deck")</div>
@@ -64,42 +64,45 @@
                     }
                 </div>
 
-                @* ── Right: sideboard only ── *@
-                <div class="color-column">
-                    <div class="column-title"><span class="sideboard-badge">Sideboard</span></div>
-                    @if (_side!.TotalNonLand > 0)
-                    {
-                        <div class="color-bars">
-                            @foreach (var color in _side.Items)
-                            {
-                                <div class="color-bar-row" style="--bar-color: @color.Hex;">
-                                    <div class="color-bar-header">
-                                        <span class="bar-symbol card-symbol card-symbol-@color.ManaSymbol"></span>
-                                        <span class="color-name">@color.DisplayName</span>
+                @* ── Right: sideboard only — hidden for nodes without a sideboard (Collection) ── *@
+                @if (_hasSideboard)
+                {
+                    <div class="color-column">
+                        <div class="column-title"><span class="sideboard-badge">Sideboard</span></div>
+                        @if (_side!.TotalNonLand > 0)
+                        {
+                            <div class="color-bars">
+                                @foreach (var color in _side.Items)
+                                {
+                                    <div class="color-bar-row" style="--bar-color: @color.Hex;">
+                                        <div class="color-bar-header">
+                                            <span class="bar-symbol card-symbol card-symbol-@color.ManaSymbol"></span>
+                                            <span class="color-name">@color.DisplayName</span>
+                                        </div>
+                                        <div class="color-bar-track">
+                                            @if (color.Count > 0)
+                                            {
+                                                <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
+                                                    <div class="color-bar-inner"></div>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
                                     </div>
-                                    <div class="color-bar-track">
-                                        @if (color.Count > 0)
-                                        {
-                                            <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
-                                                <div class="color-bar-inner"></div>
-                                            </div>
-                                        }
-                                    </div>
-                                    <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
-                                </div>
-                            }
-                        </div>
-                        <div class="summary-stats">
-                            <div class="stat-card"><div class="stat-value">@_side.TotalNonLand</div><div class="stat-label">Non-Land Cards</div></div>
-                            <div class="stat-card"><div class="stat-value">@_side.Items.Count</div><div class="stat-label">Colors Used</div></div>
-                            <div class="stat-card"><div class="stat-value">@_side.DominantColor</div><div class="stat-label">Dominant Color</div></div>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="column-empty">No non-land cards.</div>
-                    }
-                </div>
+                                }
+                            </div>
+                            <div class="summary-stats">
+                                <div class="stat-card"><div class="stat-value">@_side.TotalNonLand</div><div class="stat-label">Non-Land Cards</div></div>
+                                <div class="stat-card"><div class="stat-value">@_side.Items.Count</div><div class="stat-label">Colors Used</div></div>
+                                <div class="stat-card"><div class="stat-value">@_side.DominantColor</div><div class="stat-label">Dominant Color</div></div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="column-empty">No non-land cards.</div>
+                        }
+                    </div>
+                }
             </div>
         }
     </div>
@@ -108,6 +111,9 @@
 @code {
     private DeckColorData? _main;
     private DeckColorData? _side;
+    /// <summary>True when the node has sideboard cards (Deck nodes only — Collection nodes
+    /// have no sideboard child). False → right column hidden, left takes full width.</summary>
+    private bool _hasSideboard;
     private bool _loading;
     private string? _error;
 
@@ -132,6 +138,7 @@
             // cards (RawId == DeckId) vs. the sideboard child's (everything else).
             var mainCards = cards.Where(c => c.Location.RawId == DeckId).ToList();
             var sideCards = cards.Where(c => c.Location.RawId != DeckId).ToList();
+            _hasSideboard = sideCards.Count > 0;
 
             // Shared color list: union of both columns, ordered by combined count descending.
             // Every column renders every row — a color missing from one column shows a zero bar.
