@@ -368,6 +368,28 @@ public class SqliteCollectionStoreTests
     }
 
     [Test]
+    public async Task GetDeckWithSideboardAsync_PropagatesCmcNumberFromCardsTable()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            // Seed stubs have CmcNumber NULL — set a known value so the Deck→Cards join can carry it.
+            await conn.ExecuteAsync(
+                "UPDATE Cards SET CmcNumber = @Cmc, ManaCost = @Cost WHERE Id = @Id",
+                new { Cmc = 3, Cost = "{2}{R}", Id = _id_1 });
+
+            var card = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Main" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 4 };
+            await _store.AddAsync(card);
+        }
+
+        var cards = await _store.GetDeckWithSideboardAsync(deck.Id);
+
+        Assert.That(cards, Has.Count.EqualTo(1));
+        Assert.That(cards.First().Card.CmcNumber, Is.EqualTo(3), "CmcNumber must survive the Deck→Cards join (mana curve depends on it)");
+    }
+
+    [Test]
     public async Task GetDeckCardsAsync_ExcludesSideboard()
     {
         var deck = await _store.CreateDeckAsync("Test Deck");

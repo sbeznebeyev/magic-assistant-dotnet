@@ -11,33 +11,37 @@
     background: #1e1e2e; border: 1px solid #313244; border-radius: 8px; margin-bottom: 16px;
 }
 .identity-label { font-size: 12px; color: #6c7086; }
-.identity-dot {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; border-radius: 50%; font-size: 13px; font-weight: 700;
-    color: #1e1e2e; border: 2px solid rgba(255,255,255,0.1); cursor: default;
-}
-.identity-dot:hover { transform: scale(1.15); transition: transform 0.2s; }
+/* Identity symbols reuse the global .card-symbol sprite (site.css); only the size differs
+   from the previous 28px identity dots — keep that footprint. */
+.identity-symbol { width: 28px; height: 28px; cursor: default; }
+.identity-symbol:hover { transform: scale(1.15); transition: transform 0.2s; }
 
 .color-bars { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .color-bar-row { display: flex; align-items: center; gap: 10px; }
 .color-bar-header { width: 90px; display: flex; align-items: center; gap: 6px; }
-.color-symbol {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700;
-    color: #1e1e2e; background: var(--bar-color);
-}
+/* Card-color symbol sprite (reuses global .card-symbol, site.css); keeps the old circle's footprint. */
+.bar-symbol { width: 22px; height: 22px; cursor: default; }
 .color-name { font-size: 12px; color: #cdd6f4; }
 .color-bar-track {
     flex: 1; height: 24px; background: #1e1e2e; border-radius: 4px; overflow: hidden;
     border: 1px solid #313244;
 }
+/* Gold frame with gradient shimmer: the fill is the gold layer (padding = frame thickness),
+   the inner carries the matte card color. Width comes from the inline style (whole percent). */
 .color-bar-fill {
-    height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-    min-width: 2px; position: relative;
+    height: 100%; min-width: 8px; box-sizing: border-box; padding: 2px; border-radius: 4px;
+    background: linear-gradient(90deg, #b8860b 0%, #ffd700 25%, #fff6c9 50%, #ffd700 75%, #b8860b 100%);
+    background-size: 200% 100%;
+    animation: colorBarGoldShimmer 3s ease-in-out infinite alternate;
+    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.color-bar-fill::after {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+.color-bar-inner {
+    height: 100%; width: 100%; border-radius: 2px;
+    background: var(--bar-color);
+}
+@keyframes colorBarGoldShimmer {
+    from { background-position: 0% 50%; }
+    to   { background-position: 100% 50%; }
 }
 .color-bar-value { width: 80px; font-size: 11px; color: #a6adc8; text-align: right; white-space: nowrap; }
 

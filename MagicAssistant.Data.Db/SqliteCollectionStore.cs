@@ -565,7 +565,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    d.DateAdded, d.ForTradeCount,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
                    d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
@@ -584,7 +584,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    d.DateAdded, d.ForTradeCount,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
                    d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
@@ -611,7 +611,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    d.DateAdded, d.ForTradeCount,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
                    d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id");
@@ -632,7 +632,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    d.DateAdded, d.ForTradeCount,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
                    d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
@@ -711,7 +711,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    d.DateAdded, d.ForTradeCount,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
                    d.MyPrice, c.CommunityRating, c.LegalityFormats
             FROM Deck d
             LEFT JOIN Cards c ON d.CardId = c.Id
@@ -866,6 +866,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             Language = row.Language,
             CollectorNumber = row.CollectorNumber,
             Text = row.Text,
+            CmcNumber = row.CmcNumber,
             CmcText = row.CmcText,
             Side = row.Side,
             CollectorNumberId = row.CollectorNumberId,
@@ -973,6 +974,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public string? Language { get; set; }
         public string? CollectorNumber { get; set; }
         public string? Text { get; set; }
+        public int? CmcNumber { get; set; }
         public string? CmcText { get; set; }
         public string? ColorType { get; set; }
         public int Side { get; set; }

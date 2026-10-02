@@ -30,7 +30,7 @@
                 <span class="identity-label">Color Identity:</span>
                 @foreach (var color in _colorItems)
                 {
-                    <span class="identity-dot" style="background: @color.Hex;" title="@color.DisplayName">@color.Symbol</span>
+                    <span class="identity-symbol card-symbol card-symbol-@color.ManaSymbol" title="@color.DisplayName"></span>
                 }
             </div>
 
@@ -40,11 +40,13 @@
                 {
                     <div class="color-bar-row" style="--bar-color: @color.Hex;">
                         <div class="color-bar-header">
-                            <span class="color-symbol">@color.Symbol</span>
+                            <span class="bar-symbol card-symbol card-symbol-@color.ManaSymbol"></span>
                             <span class="color-name">@color.DisplayName</span>
                         </div>
                         <div class="color-bar-track">
-                            <div class="color-bar-fill" style="width: @color.Percentage%; background: linear-gradient(90deg, @color.Hex, @color.LightHex);"></div>
+                            <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
+                                <div class="color-bar-inner"></div>
+                            </div>
                         </div>
                         <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
                     </div>
@@ -110,26 +112,35 @@
 
     private void BuildChartData(DeckAnalysisResult result)
     {
-        _totalCards = result.ColorDistribution.Values.Sum();
+        // True non-land card count. ColorDistribution counts a multicolor card once PER COLOR,
+        // so summing its values overcounts — "Non-Land Cards" must match the Mana Curve tab.
+        // Bar width and % are relative to this number; on multicolor decks they can sum past 100%.
+        _totalCards = result.TotalCards - result.LandCount;
         if (_totalCards == 0) return;
 
-        var colorMap = new Dictionary<string, (string Hex, string LightHex, string DisplayName, string Symbol)>
+        // Soft matte colors matching each card color (W/U/B/R/G + colorless gray).
+        var colorMap = new Dictionary<string, (string Hex, string DisplayName)>
         {
-            ["W"] = ("#e8daef", "#f5eef8", "White", "W"),
-            ["U"] = ("#85c1e9", "#aed6f1", "Blue", "U"),
-            ["B"] = ("#5d6d7e", "#85929e", "Black", "B"),
-            ["R"] = ("#e74c3c", "#f1948a", "Red", "R"),
-            ["G"] = ("#2ecc71", "#82e0aa", "Green", "G"),
+            ["W"] = ("#d8d5cc", "White"),
+            ["U"] = ("#6f8fb3", "Blue"),
+            ["B"] = ("#3a3a44", "Black"),
+            ["R"] = ("#b06a6a", "Red"),
+            ["G"] = ("#74a578", "Green"),
         };
 
         _colorItems = result.ColorDistribution
             .Select(kv =>
             {
-                var (hex, lightHex, displayName, symbol) = colorMap.TryGetValue(kv.Key, out var val) ? val : ("#95a5a6", "#bdc3c7", kv.Key, "?");
+                var (hex, displayName) = colorMap.TryGetValue(kv.Key, out var val) ? val : ("#909099", "Colorless");
+                // Whole-percent bar width: an int renders identically in any culture (no decimal
+                // separator to break the inline style) — same approach as the Mana Curve heights.
+                var pct = kv.Value / (double)_totalCards * 100;
                 return new ColorItem
                 {
-                    Key = kv.Key, Hex = hex, LightHex = lightHex, DisplayName = displayName, Symbol = symbol,
-                    Count = kv.Value, Percentage = (double)kv.Value / _totalCards * 100
+                    Key = kv.Key, Hex = hex, DisplayName = displayName,
+                    // card-symbol sprite suffix: W/U/B/R/G, colorless → C (matches CardFilterDialog naming).
+                    ManaSymbol = kv.Key == "Colorless" ? "C" : kv.Key,
+                    Count = kv.Value, Percentage = pct, BarWidthPct = (int)Math.Round(pct)
                 };
             })
             .OrderByDescending(c => c.Count)
@@ -142,10 +153,11 @@
     {
         public string Key { get; set; } = "";
         public string Hex { get; set; } = "";
-        public string LightHex { get; set; } = "";
         public string DisplayName { get; set; } = "";
-        public string Symbol { get; set; } = "";
+        public string ManaSymbol { get; set; } = "";
         public int Count { get; set; }
         public double Percentage { get; set; }
+        /// <summary>Whole-percent bar width — culture-safe int for the inline style.</summary>
+        public int BarWidthPct { get; set; }
     }
 }

@@ -515,6 +515,17 @@ public class AnalysisServiceTests
         Assert.That(curve.Sum(), Is.EqualTo(0));
     }
 
+    // ─── IsLand ────────────────────────────────────────────
+
+    [Test]
+    public void IsLand_DetectsLandSupertypeTokens()
+    {
+        Assert.That(AnalysisService.IsLand(new MagicCard { Type = "Basic Land — Forest" }), Is.True);
+        Assert.That(AnalysisService.IsLand(new MagicCard { Type = "Land" }), Is.True);
+        Assert.That(AnalysisService.IsLand(new MagicCard { Type = "Creature - Human Soldier" }), Is.False);
+        Assert.That(AnalysisService.IsLand(new MagicCard { Type = null }), Is.False);
+    }
+
     // ─── Helper ────────────────────────────────────────────
 
     private MagicCardPhysical CreatePhysicalCard(string name, string cost, string type, int count)
