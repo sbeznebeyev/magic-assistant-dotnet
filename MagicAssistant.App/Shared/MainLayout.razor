@@ -472,7 +472,7 @@
         @switch (ActiveTab)
         {
             case "curve": <ManaCurvePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
-            case "colors": <SpellColourPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "colors": <SpellColourPage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" /> break;
             case "creatures": <CreaturePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
             case "types": <TypePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
             case "abilities": <AbilityPage DeckId="@_currentCollection.CollectionId!.Value" /> break;

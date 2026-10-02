@@ -1,11 +1,12 @@
 @*
-    SpellColourPage — Color distribution (pure CSS progress bars + color identity)
-    Mirrors Java: ui.views.analyzers.SpellColourPage + CardStoreUtils.buildSpellColorStats
-    
+    SpellColourPage — Color distribution, split into two columns.
+    Left column = main deck only (no sideboard); right column = sideboard only.
+    Each column shows MTG color-coded progress bars + summary stats for its portion.
+
     Features:
-    - MTG color-coded progress bars with hover effects
-    - Color identity detection and display
-    - Summary stats
+    - Main-deck vs sideboard color breakdown side by side
+    - Gold-framed, shimmering matte color bars
+    - Per-column summary stats (non-land count, colors used, dominant color)
 *@
 
 <div class="color-distribution-page">
@@ -19,65 +20,93 @@
         {
             <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
         }
-        else if (_loading && _colorItems.Count == 0)
+        else if (_loading || _main == null)
         {
             <div class="loading-state">Loading color distribution...</div>
         }
-        else if (_colorItems.Count > 0)
-        {
-            @* ── Color Identity Banner ── *@
-            <div class="color-identity-banner">
-                <span class="identity-label">Color Identity:</span>
-                @foreach (var color in _colorItems)
-                {
-                    <span class="identity-symbol card-symbol card-symbol-@color.ManaSymbol" title="@color.DisplayName"></span>
-                }
-            </div>
-
-            @* ── Color Progress Bars ── *@
-            <div class="color-bars">
-                @foreach (var color in _colorItems)
-                {
-                    <div class="color-bar-row" style="--bar-color: @color.Hex;">
-                        <div class="color-bar-header">
-                            <span class="bar-symbol card-symbol card-symbol-@color.ManaSymbol"></span>
-                            <span class="color-name">@color.DisplayName</span>
-                        </div>
-                        <div class="color-bar-track">
-                            <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
-                                <div class="color-bar-inner"></div>
-                            </div>
-                        </div>
-                        <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
-                    </div>
-                }
-            </div>
-
-            @* ── Summary Stats ── *@
-            <div class="summary-stats">
-                <div class="stat-card"><div class="stat-value">@_totalCards</div><div class="stat-label">Non-Land Cards</div></div>
-                <div class="stat-card"><div class="stat-value">@_colorItems.Count</div><div class="stat-label">Colors Used</div></div>
-                <div class="stat-card"><div class="stat-value">@_dominantColor</div><div class="stat-label">Dominant Color</div></div>
-            </div>
-        }
         else
         {
-            <div class="empty-state">
-                <span>No color distribution data available.</span>
-                <span>Add non-land cards to your deck to see the distribution.</span>
+            <div class="color-columns">
+                @* ── Left: main deck only (no sideboard) ── *@
+                <div class="color-column">
+                    <div class="column-title deck-name-title">@(DeckName ?? "Deck")</div>
+                    @if (_main!.TotalNonLand > 0)
+                    {
+                        <div class="color-bars">
+                            @foreach (var color in _main.Items)
+                            {
+                                <div class="color-bar-row" style="--bar-color: @color.Hex;">
+                                    <div class="color-bar-header">
+                                        <span class="bar-symbol card-symbol card-symbol-@color.ManaSymbol"></span>
+                                        <span class="color-name">@color.DisplayName</span>
+                                    </div>
+                                    <div class="color-bar-track">
+                                        <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
+                                            <div class="color-bar-inner"></div>
+                                        </div>
+                                    </div>
+                                    <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
+                                </div>
+                            }
+                        </div>
+                        <div class="summary-stats">
+                            <div class="stat-card"><div class="stat-value">@_main.TotalNonLand</div><div class="stat-label">Non-Land Cards</div></div>
+                            <div class="stat-card"><div class="stat-value">@_main.Items.Count</div><div class="stat-label">Colors Used</div></div>
+                            <div class="stat-card"><div class="stat-value">@_main.DominantColor</div><div class="stat-label">Dominant Color</div></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="column-empty">No non-land cards.</div>
+                    }
+                </div>
+
+                @* ── Right: sideboard only ── *@
+                <div class="color-column">
+                    <div class="column-title"><span class="sideboard-badge">Sideboard</span></div>
+                    @if (_side!.TotalNonLand > 0)
+                    {
+                        <div class="color-bars">
+                            @foreach (var color in _side.Items)
+                            {
+                                <div class="color-bar-row" style="--bar-color: @color.Hex;">
+                                    <div class="color-bar-header">
+                                        <span class="bar-symbol card-symbol card-symbol-@color.ManaSymbol"></span>
+                                        <span class="color-name">@color.DisplayName</span>
+                                    </div>
+                                    <div class="color-bar-track">
+                                        <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
+                                            <div class="color-bar-inner"></div>
+                                        </div>
+                                    </div>
+                                    <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
+                                </div>
+                            }
+                        </div>
+                        <div class="summary-stats">
+                            <div class="stat-card"><div class="stat-value">@_side.TotalNonLand</div><div class="stat-label">Non-Land Cards</div></div>
+                            <div class="stat-card"><div class="stat-value">@_side.Items.Count</div><div class="stat-label">Colors Used</div></div>
+                            <div class="stat-card"><div class="stat-value">@_side.DominantColor</div><div class="stat-label">Dominant Color</div></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="column-empty">No non-land cards.</div>
+                    }
+                </div>
             </div>
         }
     </div>
 </div>
 
 @code {
-    private List<ColorItem> _colorItems = new();
-    private int _totalCards;
-    private string _dominantColor = "—";
+    private DeckColorData? _main;
+    private DeckColorData? _side;
     private bool _loading;
     private string? _error;
 
     [Parameter] public int DeckId { get; set; }
+    [Parameter] public string? DeckName { get; set; }
     [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
     [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
 
@@ -89,20 +118,28 @@
 
     private async Task LoadAnalysis()
     {
-        _loading = true; _error = null; StateHasChanged();
+        _loading = true; _error = null; _main = null; _side = null; StateHasChanged();
         try
         {
             var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
-            if (cards.Count == 0)
-            {
-                _colorItems = new List<ColorItem>();
-                _totalCards = 0;
-            }
-            else
-            {
-                var result = AnalysisService.Analyze(cards);
-                BuildChartData(result);
-            }
+            // Each physical card carries its owning collection in Location: the deck's own
+            // cards (RawId == DeckId) vs. the sideboard child's (everything else).
+            var mainCards = cards.Where(c => c.Location.RawId == DeckId).ToList();
+            var sideCards = cards.Where(c => c.Location.RawId != DeckId).ToList();
+
+            // Shared color list: union of both columns, ordered by combined count descending.
+            // Every column renders every row — a color missing from one column shows a zero bar.
+            var mainResult = AnalysisService.Analyze(mainCards);
+            var sideResult = AnalysisService.Analyze(sideCards);
+            var sharedColors = mainResult.ColorDistribution.Keys
+                .Concat(sideResult.ColorDistribution.Keys)
+                .Distinct()
+                .OrderByDescending(k =>
+                    (mainResult.ColorDistribution.TryGetValue(k, out var m) ? m : 0) +
+                    (sideResult.ColorDistribution.TryGetValue(k, out var s) ? s : 0))
+                .ToList();
+            _main = BuildColumn(mainResult, sharedColors);
+            _side = BuildColumn(sideResult, sharedColors);
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
@@ -110,13 +147,13 @@
 
     private async Task Reload() => await LoadAnalysis();
 
-    private void BuildChartData(DeckAnalysisResult result)
+    private DeckColorData BuildColumn(DeckAnalysisResult result, IReadOnlyList<string> sharedColors)
     {
-        // True non-land card count. ColorDistribution counts a multicolor card once PER COLOR,
-        // so summing its values overcounts — "Non-Land Cards" must match the Mana Curve tab.
-        // Bar width and % are relative to this number; on multicolor decks they can sum past 100%.
-        _totalCards = result.TotalCards - result.LandCount;
-        if (_totalCards == 0) return;
+        var data = new DeckColorData();
+        // True non-land card count for this portion. ColorDistribution counts a multicolor
+        // card once PER COLOR, so summing its values overcounts — use the real card count.
+        var totalNonLand = result.TotalCards - result.LandCount;
+        data.TotalNonLand = totalNonLand;
 
         // Soft matte colors matching each card color (W/U/B/R/G + colorless gray).
         var colorMap = new Dictionary<string, (string Hex, string DisplayName)>
@@ -128,25 +165,35 @@
             ["G"] = ("#74a578", "Green"),
         };
 
-        _colorItems = result.ColorDistribution
-            .Select(kv =>
+        // One row per shared color, in the shared order; missing colors render a zero bar.
+        data.Items = sharedColors
+            .Select(key =>
             {
-                var (hex, displayName) = colorMap.TryGetValue(kv.Key, out var val) ? val : ("#909099", "Colorless");
+                var count = result.ColorDistribution.TryGetValue(key, out var v) ? v : 0;
+                var (hex, displayName) = colorMap.TryGetValue(key, out var val) ? val : ("#909099", "Colorless");
                 // Whole-percent bar width: an int renders identically in any culture (no decimal
                 // separator to break the inline style) — same approach as the Mana Curve heights.
-                var pct = kv.Value / (double)_totalCards * 100;
+                var pct = totalNonLand > 0 ? count / (double)totalNonLand * 100 : 0;
                 return new ColorItem
                 {
-                    Key = kv.Key, Hex = hex, DisplayName = displayName,
+                    Key = key, Hex = hex, DisplayName = displayName,
                     // card-symbol sprite suffix: W/U/B/R/G, colorless → C (matches CardFilterDialog naming).
-                    ManaSymbol = kv.Key == "Colorless" ? "C" : kv.Key,
-                    Count = kv.Value, Percentage = pct, BarWidthPct = (int)Math.Round(pct)
+                    ManaSymbol = key == "Colorless" ? "C" : key,
+                    Count = count, Percentage = pct, BarWidthPct = (int)Math.Round(pct)
                 };
             })
-            .OrderByDescending(c => c.Count)
             .ToList();
 
-        _dominantColor = _colorItems.FirstOrDefault()?.DisplayName ?? "—";
+        // Dominant color counts only cards actually present in this column.
+        data.DominantColor = data.Items.Where(c => c.Count > 0).FirstOrDefault()?.DisplayName ?? "—";
+        return data;
+    }
+
+    private class DeckColorData
+    {
+        public List<ColorItem> Items { get; set; } = new();
+        public int TotalNonLand { get; set; }
+        public string DominantColor { get; set; } = "—";
     }
 
     private class ColorItem
