@@ -116,6 +116,55 @@
 .panel-left.collapsed { width: 20px; min-width: 20px; max-width: 20px; }
 .panel-right.collapsed { width: 20px; min-width: 20px; max-width: 20px; overflow: hidden; }
 
+/* Collapsed strips: hide the content entirely — fragments used to peek through the clip.
+   CSS-only hiding keeps the components mounted, so navigator/card state survives re-expansion. */
+.panel-left.collapsed .panel-content,
+.panel-right.collapsed .panel-content {
+    display: none;
+}
+
+/* Vertical badge labels in collapsed strips — same gold-technology as the sideboard tag:
+   gradient text via background-clip, soft glow, pill border, small caps with letter-spacing.
+   writing-mode (not transform: rotate) sizes the box to the text itself, so `top` pins the
+   label's visual top edge deterministically — a center-rotation would push long labels up
+   past the panel's top edge. Tight padding keeps the border close to the glyphs and the
+   pill inside the 20px strip. */
+.panel-label {
+    display: none;  /* shown only when the panel is collapsed */
+    position: absolute;
+    top: 12px;      /* the strip has no button anymore — the badge anchors near the top edge */
+    left: 50%;
+    white-space: nowrap;
+    padding: 6px 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1;
+    background: linear-gradient(135deg, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.35));
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    border-radius: 999px;
+    cursor: pointer;  /* clicking the badge expands the panel */
+}
+
+/* Left strip: 90° counterclockwise — reads bottom-to-top (vertical-rl + 180° flip) */
+.panel-left.collapsed .panel-label {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: translateX(-50%) rotate(180deg);
+}
+
+/* Right strip: 90° clockwise — reads top-to-bottom (plain vertical-rl) */
+.panel-right.collapsed .panel-label {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: translateX(-50%);
+}
+
 /* Content wrapper — keeps its natural width while the panel shrinks, so content
    slides under the clip instead of reflowing */
 .panel-content {

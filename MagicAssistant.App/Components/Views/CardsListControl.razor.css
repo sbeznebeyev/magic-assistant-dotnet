@@ -25,6 +25,7 @@
     border-right: 1px solid #3c3c3c;
     background: rgba(20, 20, 20, 0.6);
     overflow: hidden;
+    position: relative;  /* anchor for the collapsed-strip badge label */
 }
 
 .sets-header {
@@ -73,10 +74,42 @@
     color: #fff;
 }
 
-/* Collapsed strip (28px): only the toggle button stays visible */
+/* Collapsed strip (28px): only the toggle button and the badge label stay visible */
 .sets-sidebar.collapsed {
     min-width: 28px;
     max-width: 28px;
+}
+
+/* Vertical badge label in the collapsed strip — same gold-technology as the sideboard tag:
+   gradient text via background-clip, soft glow, pill border, small caps with letter-spacing.
+   writing-mode sizes the box to the text, so `top` pins the visual top edge deterministically. */
+.sets-label {
+    display: none;  /* shown only when the sidebar is collapsed */
+    position: absolute;
+    top: 12px;      /* the strip has no button anymore — the badge anchors near the top edge */
+    left: 50%;
+    white-space: nowrap;
+    padding: 6px 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1;
+    background: linear-gradient(135deg, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.35));
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    border-radius: 999px;
+    cursor: pointer;  /* clicking the badge expands the sidebar */
+}
+
+/* 90° counterclockwise — reads bottom-to-top (vertical-rl + 180° flip) */
+.sets-sidebar.collapsed .sets-label {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: translateX(-50%) rotate(180deg);
 }
 
 .sets-sidebar.collapsed .sets-header {

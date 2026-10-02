@@ -31,11 +31,17 @@
     @* ── Main Grid ── *@
     <div class="main-grid">
         <div class="panel-left @(_leftCollapsed ? "collapsed" : "")">
-            <button class="panel-toggle left"
-                    @onclick="() => _leftCollapsed = !_leftCollapsed"
-                    title="@(_leftCollapsed ? "Expand navigation" : "Collapse navigation")">
-                @(_leftCollapsed ? ">" : "<")
-            </button>
+            @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
+            @if (!_leftCollapsed)
+            {
+                <button class="panel-toggle left"
+                        @onclick="() => _leftCollapsed = true"
+                        title="Collapse navigation">
+                    &lt;
+                </button>
+            }
+            @* Vertical badge label — visible only in the collapsed 20px strip; clicking it expands the panel *@
+            <span class="panel-label" @onclick="() => _leftCollapsed = false" title="Expand navigation">Collections &amp; Decks</span>
             <div class="panel-content">
             <div class="navigator-scroll">
                 <DecksNavigator
@@ -90,11 +96,17 @@
         </div>
 
         <div class="panel-right @(_rightCollapsed ? "collapsed" : "")">
-            <button class="panel-toggle right"
-                    @onclick="() => _rightCollapsed = !_rightCollapsed"
-                    title="@(_rightCollapsed ? "Expand card details" : "Collapse card details")">
-                @(_rightCollapsed ? "<" : ">")
-            </button>
+            @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
+            @if (!_rightCollapsed)
+            {
+                <button class="panel-toggle right"
+                        @onclick="() => _rightCollapsed = true"
+                        title="Collapse card details">
+                    &gt;
+                </button>
+            }
+            @* Vertical badge label — visible only in the collapsed 20px strip; clicking it expands the panel *@
+            <span class="panel-label" @onclick="() => _rightCollapsed = false" title="Expand card details">Card description</span>
             <div class="panel-content">
             <CardDescriptionView CardId="@_selectedCardId" ShowBack="@_selectedCardShowBack" />
             <hr class="divider" />

@@ -22,12 +22,18 @@
                 <span class="sets-title">@(IsLocationMode
                     ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
                     : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()})")</span>
-                <button class="sets-toggle"
-                        @onclick="ToggleSetsCollapsed"
-                        title="@(_setsCollapsed ? "Expand sets" : "Collapse sets")">
-                    <span class="sets-toggle-glyph">@(_setsCollapsed ? ">" : "<")</span>
-                </button>
+                @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
+                @if (!_setsCollapsed)
+                {
+                    <button class="sets-toggle"
+                            @onclick="ToggleSetsCollapsed"
+                            title="Collapse sets">
+                        <span class="sets-toggle-glyph">&lt;</span>
+                    </button>
+                }
             </div>
+            @* Vertical badge label — visible only in the collapsed 28px strip; clicking it expands the sidebar *@
+            <span class="sets-label" @onclick="ToggleSetsCollapsed" title="Expand sets">Sets</span>
             <div class="sets-search-bar">
                 <input value="@GetSetsInputValue()"
                        @oninput="OnSetsFilterInput"
