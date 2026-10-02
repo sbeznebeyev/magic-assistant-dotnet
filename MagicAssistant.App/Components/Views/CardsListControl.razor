@@ -470,13 +470,31 @@
         }
     }
 
-    /// <summary>Location mode: scopes the set list to this node's sets (writes FilteredSetCodes —
-    /// idempotent, so a scope-key change happens only when the node actually differs) and drops a
-    /// stale selection that references a set absent in the node.</summary>
+    /// <summary>Location mode: scopes the set list to this node's sets. While the scope is in auto mode it is
+    /// filled with the node's codes; an explicit user selection (Sets filter in Card Filter) survives and is
+    /// trimmed to the node's codes — if nothing survives, the scope falls back to the full node scope.</summary>
     private void ApplyLocationScope(IEnumerable<string> setCodes)
     {
         var codes = setCodes.Distinct().ToList();
-        FilterViewModel.SetFilteredSetCodes(codes);
+        if (FilterViewModel.SetScopeAuto)
+        {
+            FilterViewModel.SetNodeScope(codes);
+        }
+        else
+        {
+            var kept = FilterViewModel.FilteredSetCodes
+                .Where(c => codes.Contains(c, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (kept.Count == 0)
+            {
+                FilterViewModel.ResetSetScope();
+                FilterViewModel.SetNodeScope(codes);   // back to the full node scope
+            }
+            else if (kept.Count < FilterViewModel.FilteredSetCodes.Count)
+            {
+                FilterViewModel.SetFilteredSetCodes(kept);  // drop codes absent in this node
+            }
+        }
         if (FilterViewModel.ActiveCardSets is not null
             && !codes.Contains(FilterViewModel.ActiveCardSets[0], StringComparer.OrdinalIgnoreCase))
             FilterViewModel.SetActiveCardSets(null);
@@ -781,9 +799,10 @@
             else
             {
                 _physicalByCardId = null;
-                // KB mode: full scope — all sets in the knowledge base.
-                if (FilterViewModel.FilteredSetCodes.Count > 0)
-                    FilterViewModel.SetFilteredSetCodes(null);
+                // KB mode: drop only the stale location-mode auto-fill (node codes from a previous visit);
+                // an explicit user selection (Sets filter in Card Filter) carries over to the KB list.
+                if (FilterViewModel.SetScopeAuto && FilterViewModel.FilteredSetCodes.Count > 0)
+                    FilterViewModel.ResetSetScope();
             }
 
             // Load the scoped set list for the sidebar (lazy DB view of FilteredSetCodes),

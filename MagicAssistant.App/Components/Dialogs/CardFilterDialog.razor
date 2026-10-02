@@ -22,6 +22,40 @@
         @* ── Fields — all bound directly to shared FilterViewModel ── *@
         <div class="filter-tab-content">
                 <div class="filter-field-row">
+                    <label class="filter-label">Sets</label>
+                    <MultiSelectList ViewModel="@_setVm"
+                                    @bind-IsAddDialogOpen="_showSetPicker"
+                                    OnAddItemClicked="OnSetPickerOpening"
+                                    OnItemRemoved="OnSetRemoved">
+                        <AddDialogContent>
+                            <div class="sets-picker">
+                                <input class="sets-picker-search"
+                                       placeholder="Filter sets..."
+                                       value="@_setSearchText"
+                                       @oninput="@(e => { _setSearchText = e.Value?.ToString() ?? ""; ApplySetPickerFilter(); })" />
+                                <div class="sets-picker-list">
+                                    @foreach (var s in _filteredPickerSets)
+                                    {
+                                        <label class="set-option @(_pickerSelected.Contains(s.SetCode) ? "set-option-selected" : "")">
+                                            <input type="checkbox"
+                                                   checked="@_pickerSelected.Contains(s.SetCode)"
+                                                   @onchange="() => ToggleSetInPicker(s.SetCode)" />
+                                            <span class="set-icon set-symbol set-symbol-@s.SetCode"></span>
+                                            <span class="set-option-name">@s.Name</span>
+                                            <span class="set-option-code">@s.SetCode</span>
+                                        </label>
+                                    }
+                                </div>
+                                <div class="sets-picker-footer">
+                                    <button type="button" class="picker-btn picker-btn-apply" @onclick="OnSetPickerApply">Apply</button>
+                                    <button type="button" class="picker-btn picker-btn-cancel" @onclick="OnSetPickerCancel">Cancel</button>
+                                </div>
+                            </div>
+                        </AddDialogContent>
+                    </MultiSelectList>
+                </div>
+
+                <div class="filter-field-row">
                     <label class="filter-label">Type</label>
                     <MultiSelectList ViewModel="@_typeVm"
                                     @bind-IsAddDialogOpen="_showTypePicker"
@@ -273,6 +307,25 @@
     private bool _showTypePicker;
     private static readonly string[] _allTypes = { "artifact", "creature", "enchantment", "instant", "land", "planeswalker", "sorcery" };
 
+    // ── Sets MultiSelectList ──
+    private readonly MultiSelectViewModel<string, CardSet> _setVm = new();
+    private bool _showSetPicker;
+
+    /// <summary>Catalog of sets for the picker: all KB sets, or only the current node's sets in location mode.</summary>
+    private List<CardSet> _allPickerSets = new();
+
+    /// <summary>Catalog narrowed by the picker search text (in memory only).</summary>
+    private List<CardSet> _filteredPickerSets = new();
+    private string _setSearchText = "";
+
+    /// <summary>Staged selection inside the open picker; committed to FilterViewModel on Apply.</summary>
+    private readonly HashSet<string> _pickerSelected = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool _wasDialogOpen;
+
+    [Inject] private IDbCardStore DbStore { get; set; } = default!;
+    [Inject] private IDeckCardService DeckCardService { get; set; } = default!;
+
     // ── Layout filter options ──
     private static readonly string[] _allLayouts = Enum.GetNames(typeof(LayoutEnum));
 
@@ -301,7 +354,7 @@
     }
 
     // ── Sync rarity + type from FilterViewModel on open ──
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _rarityVm.Initialize(
             FilterViewModel.Rarity.Select(r => (Key: r, Item: r)),
@@ -310,6 +363,90 @@
         _typeVm.Initialize(
             FilterViewModel.TypeFilter.Select(t => (Key: t, Item: t)),
             t => t);
+
+        // Load the set catalog once per open and sync the chips from the current scope.
+        if (IsOpen && !_wasDialogOpen)
+        {
+            await LoadSetsForPickerAsync();
+            SyncSetChipsFromScope();
+        }
+        _wasDialogOpen = IsOpen;
+    }
+
+    // ── Sets picker: catalog, search, staged selection ──
+    private async Task LoadSetsForPickerAsync()
+    {
+        List<CardSet> sets;
+        if (FilterViewModel.CurrentCollectionId.HasValue)
+        {
+            // Location mode: only the sets present in this node's cards.
+            var physical = await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value);
+            var codes = physical.Select(p => p.Card.SetCode).OfType<string>().Distinct().ToList();
+            sets = codes.Count == 0 ? new List<CardSet>() : (await DbStore.GetCardSetsByCodesAsync(codes)).ToList();
+        }
+        else
+        {
+            sets = (await DbStore.GetCardSetsAsync()).ToList();
+        }
+
+        // Same display order as the sidebar: newest release first, then by parent set code.
+        _allPickerSets = sets
+            .OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue)
+            .ThenBy(s => s.ParentSetCode)
+            .ToList();
+    }
+
+    private void SyncSetChipsFromScope()
+    {
+        var byCode = _allPickerSets.ToDictionary(s => s.SetCode, StringComparer.OrdinalIgnoreCase);
+        _setVm.Initialize(
+            FilterViewModel.FilteredSetCodes.Select(code =>
+                (Key: code, Item: byCode.TryGetValue(code, out var set) ? set : new CardSet(Guid.NewGuid(), code, code))),
+            s => s.Name);
+    }
+
+    private void OnSetPickerOpening()
+    {
+        _pickerSelected.Clear();
+        foreach (var code in FilterViewModel.FilteredSetCodes)
+            _pickerSelected.Add(code);
+        _setSearchText = "";
+        ApplySetPickerFilter();
+    }
+
+    private void ApplySetPickerFilter()
+    {
+        if (_setSearchText.Length < 2)
+        {
+            _filteredPickerSets = _allPickerSets;
+            return;
+        }
+        var q = _setSearchText.ToLowerInvariant();
+        _filteredPickerSets = _allPickerSets
+            .Where(s => s.Name.ToLowerInvariant().Contains(q) || s.SetCode.ToLowerInvariant().Contains(q))
+            .ToList();
+    }
+
+    private void ToggleSetInPicker(string setCode)
+    {
+        if (!_pickerSelected.Remove(setCode))
+            _pickerSelected.Add(setCode);
+    }
+
+    private void OnSetPickerApply()
+    {
+        // Commit the staged selection to the scope — FilteredCardSetsCollection reloads on the next query.
+        FilterViewModel.SetFilteredSetCodes(_pickerSelected);
+        SyncSetChipsFromScope();
+        _showSetPicker = false;
+    }
+
+    private void OnSetPickerCancel() => _showSetPicker = false;
+
+    private void OnSetRemoved(MultiSelectItemBase item)
+    {
+        // Chips are live, like Type/Rarity: a removal commits the remaining codes to the scope.
+        FilterViewModel.SetFilteredSetCodes(_setVm.GetAllItems().Select(s => s.SetCode));
     }
 
     // ── Rarity MultiSelectList handlers ──

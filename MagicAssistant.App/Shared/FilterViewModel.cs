@@ -53,9 +53,14 @@ public class FilterViewModel
     // ── Filter properties ──
 
     /// <summary>Scope of the displayed set list (FilteredCardSetsCollection). Empty = all sets in the KB.
-    /// Written only by location-mode auto-fill (the node's card set codes) and by <see cref="Clear" />;
-    /// set clicks and the sidebar search text do NOT touch it. Use <see cref="SetFilteredSetCodes" />.</summary>
+    /// Written by location-mode auto-fill (the node's card set codes), by the explicit Sets filter in Card Filter,
+    /// and reset by <see cref="Clear" />. Set clicks and the sidebar search text do NOT touch it.</summary>
     public List<string> FilteredSetCodes { get; set; } = new();
+
+    /// <summary>True while <see cref="FilteredSetCodes"/> holds the location-mode auto-fill (the current node's
+    /// set codes). An explicit user choice (the Sets filter in Card Filter) switches it off until
+    /// <see cref="ResetSetScope" /> is called.</summary>
+    public bool SetScopeAuto { get; private set; } = true;
 
     /// <summary>Set selection made by clicking a set in the sidebar. Null = no selection —
     /// the card filter then falls back to <see cref="FilteredSetCodes" />.
@@ -178,14 +183,29 @@ public class FilterViewModel
 
     public bool SortAsc { get; set; } = true;
 
-    /// <summary>Replace the set-list scope with a normalized collection of codes (trimmed, distinct).
-    /// Null/empty = all sets in the KB.</summary>
+    /// <summary>Explicit user choice of the set-list scope (e.g. the Sets filter in Card Filter).
+    /// Null/empty = all sets in the KB. Disables location-mode auto-fill until <see cref="ResetSetScope" />.</summary>
     public void SetFilteredSetCodes(IEnumerable<string>? codes)
     {
-        FilteredSetCodes = codes is null
+        FilteredSetCodes = NormalizeSetCodes(codes);
+        SetScopeAuto = false;
+    }
+
+    /// <summary>Location-mode auto-fill: the current node's set codes. Keeps auto mode on.</summary>
+    public void SetNodeScope(IEnumerable<string>? codes) => FilteredSetCodes = NormalizeSetCodes(codes);
+
+    /// <summary>Back to "no explicit scope": empty list (all sets in KB / node scope in location mode)
+    /// and auto mode restored.</summary>
+    public void ResetSetScope()
+    {
+        FilteredSetCodes = new List<string>();
+        SetScopeAuto = true;
+    }
+
+    private static List<string> NormalizeSetCodes(IEnumerable<string>? codes) =>
+        codes is null
             ? new List<string>()
             : codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToList();
-    }
 
     /// <summary>Set the clicked-set selection. Null/empty clears it (back to the scope filter).</summary>
     public void SetActiveCardSets(string? setCode)
@@ -259,7 +279,7 @@ public class FilterViewModel
     public void Clear()
     {
         ClearGeneration++;
-        FilteredSetCodes = new List<string>();
+        ResetSetScope();
         ActiveCardSets = null;
         SetSearchText = string.Empty;
         Rarity = new List<string>();
