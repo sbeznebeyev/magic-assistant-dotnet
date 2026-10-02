@@ -25,6 +25,21 @@
     color: #eee;
 }
 
+/* Location name in the title — same gold-technology as the import wizard's target name:
+   gradient text via background-clip, soft glow */
+.export-deck-name {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    /* `to bottom`, not 135deg — on a wide-short inline box a diagonal gradient only shows its
+       mid-palette band across the glyph height (reads gray-beige); vertical sweeps the full range. */
+    background: linear-gradient(to bottom, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.35));
+}
+
 .form-group {
     margin-bottom: 12px;
 }
@@ -52,14 +67,6 @@
 .dialog-select:focus {
     outline: none;
     border-color: #0078d4;
-}
-
-.deck-info {
-    padding: 6px 8px;
-    background: #2d2d2d;
-    border-radius: 4px;
-    font-size: 13px;
-    color: #ccc;
 }
 
 .dialog-error {

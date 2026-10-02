@@ -8,7 +8,22 @@
 
 <div class="dialog-overlay" @onclick="OnOverlayClick">
     <div class="dialog-box" @onclick:stopPropagation="true">
-        <div class="dialog-title">@(_targetIsSideboard ? "Import to Sideboard" : "Import Deck")</div>
+        @* Fixed target (⋯ context menu): the target name lives in the title — gold, same
+           technology as the export wizard. Select mode keeps the generic title. *@
+        <div class="dialog-title">
+            @if (TargetNodeId is { })
+            {
+                <span>Import to </span><span class="target-name">@(_targetIsSideboard ? _targetDeckName : _targetName)</span>
+                @if (_targetIsSideboard)
+                {
+                    <span class="target-sideboard-tag">sideboard</span>
+                }
+            }
+            else
+            {
+                @:Import Deck
+            }
+        </div>
 
         @if (_importing)
         {
@@ -27,22 +42,12 @@
                 }
             </div>
 
-            @* ── Step 2: Target Deck ── *@
-            <div class="form-group">
-                <label>Import to</label>
-                @if (TargetNodeId is { } fixedTarget)
-                {
-                    @* ⋯ context menu — the target CollectionId is fixed, no select. *@
-                    <div class="target-name">
-                        @(_targetIsSideboard ? _targetDeckName : _targetName)
-                        @if (_targetIsSideboard)
-                        {
-                            <span class="target-sideboard-tag">sideboard</span>
-                        }
-                    </div>
-                }
-                else
-                {
+            @* ── Step 2: Target Deck — select mode only. In fixed-target mode the name is in the title, *@
+            @* so a bottom group would duplicate it. *@
+            @if (TargetNodeId is not { })
+            {
+                <div class="form-group">
+                    <label>Import to</label>
                     <select @bind="_importMode" class="dialog-select">
                         <option value="new">New deck (creates from file name)</option>
                         @foreach (var d in _existingDecks)
@@ -50,8 +55,8 @@
                             <option value="@d.Id">@d.Name (add to existing)</option>
                         }
                     </select>
-                }
-            </div>
+                </div>
+            }
 
             @if (TargetNodeId is not { } && _importMode == "new")
             {

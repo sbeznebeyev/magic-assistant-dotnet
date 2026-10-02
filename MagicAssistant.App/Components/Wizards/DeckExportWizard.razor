@@ -4,7 +4,8 @@
 
 <div class="dialog-overlay" @onclick="OnOverlayClick">
     <div class="dialog-box" @onclick:stopPropagation="true">
-        <div class="dialog-title">Export Deck</div>
+        @* Location name in gold — same gradient-clip technology as the import wizard's target name *@
+        <div class="dialog-title">Export <span class="export-deck-name">@_deckName</span></div>
 
         @if (_exporting)
         {
@@ -19,18 +20,6 @@
         }
         else
         {
-            <div class="form-group">
-                <label>Deck</label>
-                <div class="deck-info">@_deckName</div>
-            </div>
-
-            <div class="form-group">
-                <label>Format</label>
-                <select @bind="_format" class="dialog-select">
-                    <option value="json">Magic Assistant JSON</option>
-                </select>
-            </div>
-
             <div class="form-group">
                 <label>File Name</label>
                 <input type="text" @bind="FileName" @bind:event="oninput"
@@ -53,7 +42,6 @@
 </div>
 
 @code {
-    private string _format = "json";
     private string _fileName = "";
     /// <summary>Editable file name; spaces are replaced with underscores live.</summary>
     public string FileName
