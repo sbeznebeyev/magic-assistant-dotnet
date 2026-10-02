@@ -85,6 +85,14 @@ public interface IDbCardStore : ICardStore<MagicCard>
     Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusAsync(ICollection<string> setNames, CancellationToken ct = default);
 
     /// <summary>
+    /// Sync status of the given set codes in a single SQL query (CardSet + Cards counts).
+    /// Used by the native JSON import pre-check: files carry set codes, not full names.
+    /// Returns one row per requested code; SetName is null when the code is absent from CardSet
+    /// (the sync itself resolves the name from Scryfall, so such sets remain syncable).
+    /// </summary>
+    Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusByCodeAsync(ICollection<string> setCodes, CancellationToken ct = default);
+
+    /// <summary>
     /// Get distinct (Language, Id) pairs for all cards sharing the same OracleId.
     /// Used to display language toggle buttons in CardDescriptionView.
     /// </summary>

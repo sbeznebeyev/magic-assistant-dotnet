@@ -20,6 +20,7 @@ public class DeckImportExportService : IDeckImportExportService
     private readonly ICollectionStore _collectionStore;
     private readonly ICardSearchService _searchService;
     private readonly GetSetSyncStatusQueryHandler _setSyncStatusQuery;
+    private readonly GetSetSyncStatusByCodesQueryHandler _setSyncStatusByCodesQuery;
     private readonly ResolveLegacyCardsQueryHandler _resolveLegacyCardsQuery;
     private readonly ValidateCardIdsQueryHandler _validateCardIdsQuery;
     private readonly SyncKBCommandHandler _syncKbCommand;
@@ -29,6 +30,7 @@ public class DeckImportExportService : IDeckImportExportService
         ICollectionStore collectionStore,
         ICardSearchService searchService,
         GetSetSyncStatusQueryHandler setSyncStatusQuery,
+        GetSetSyncStatusByCodesQueryHandler setSyncStatusByCodesQuery,
         ResolveLegacyCardsQueryHandler resolveLegacyCardsQuery,
         ValidateCardIdsQueryHandler validateCardIdsQuery,
         SyncKBCommandHandler syncKbCommand,
@@ -37,6 +39,7 @@ public class DeckImportExportService : IDeckImportExportService
         _collectionStore = collectionStore;
         _searchService = searchService;
         _setSyncStatusQuery = setSyncStatusQuery;
+        _setSyncStatusByCodesQuery = setSyncStatusByCodesQuery;
         _resolveLegacyCardsQuery = resolveLegacyCardsQuery;
         _validateCardIdsQuery = validateCardIdsQuery;
         _syncKbCommand = syncKbCommand;
@@ -122,6 +125,57 @@ public class DeckImportExportService : IDeckImportExportService
                     status.SetCode,
                     status.SetName ?? status.Name,
                     cardsPerSetName.TryGetValue(status.Name, out var n) ? n : 0));
+            }
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<ModernImportCheckResult> CheckModernImportAsync(
+        string jsonContent, CancellationToken ct = default)
+    {
+        var importResult = ParseJsonOrThrow(jsonContent);
+
+        // Set codes from both pools — a sideboard-only file still needs its sets.
+        var allCards = importResult.Cards.Concat(importResult.Sideboard).ToList();
+
+        var setCodes = allCards
+            .Where(c => !string.IsNullOrEmpty(c.SetCode))
+            .Select(c => c.SetCode!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var statuses = await _setSyncStatusByCodesQuery.Handle(new GetSetSyncStatusByCodesQuery(setCodes), ct);
+
+        // How many file cards (copies, main + sideboard) reference each set code.
+        var cardsPerSetCode = allCards
+            .Where(c => !string.IsNullOrEmpty(c.SetCode))
+            .GroupBy(c => c.SetCode!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        // Card IDs currently unknown in KB — they become known once their sets sync,
+        // so the wizard can show "N cards will be resolved by sync".
+        var cardIds = allCards.Select(c => c.Id).ToList();
+        var (_, unknown) = await _validateCardIdsQuery.Handle(new ValidateCardIdsQuery(cardIds), ct);
+
+        var result = new ModernImportCheckResult
+        {
+            DeckName = importResult.Name,
+            TotalCards = allCards.Count,
+            UnknownCardCount = unknown.Count
+        };
+
+        foreach (var status in statuses)
+        {
+            if (status.CardCount == 0)
+            {
+                // Metadata may be absent from CardSet — the sync resolves the name from
+                // Scryfall by code, so such sets are still syncable.
+                result.MissingSets.Add(new MissingSetInfo(
+                    status.SetCode ?? status.Name,
+                    status.SetName ?? status.Name,
+                    cardsPerSetCode.TryGetValue(status.Name, out var n) ? n : 0));
             }
         }
 

@@ -7,11 +7,10 @@
 .loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
 
 /* Two side-by-side columns like the Colors tab: left = main deck, right = sideboard.
-   .single — nodes without a sideboard (Collection): the left column takes full width. */
+   .single — nodes without a sideboard (Collection): one column, same 630px cap as in pair mode. */
 .type-sections {
     display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;
 }
-.type-sections.single .type-section { max-width: none; }
 .type-section { min-width: 0; }
 .type-section:nth-child(1) { max-width: 630px; flex: 1 1 auto; }
 .type-section:nth-child(2) { max-width: 435px; flex: 1 1 auto; }
@@ -62,7 +61,9 @@
 .legend-count { color: #a6adc8; width: 68px; text-align: left; white-space: nowrap; }
 .legend-pct { color: #6c7086; text-align: left; }
 
-.summary-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+/* Full-width row below the pies + legend: flex-basis 100% forces it onto its
+   own line in the wrapped .pie-layout, spanning the container's full width. */
+.summary-stats { display: flex; gap: 12px; flex-wrap: wrap; flex: 1 1 100%; }
 .stat-card {
     flex: 1; min-width: 100px; background: #1e1e2e; border: 1px solid #313244;
     border-radius: 8px; padding: 12px; text-align: center;

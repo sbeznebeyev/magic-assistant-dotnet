@@ -39,7 +39,7 @@
                        @oninput="OnSetsFilterInput"
                        placeholder="Filter sets..."
                        class="sets-search-input" />
-                @if (FilterViewModel.SetCodes.Count > 0 || (!string.IsNullOrEmpty(_setsSearchQuery) && _setsSearchQuery.Length >= 2))
+                @if (FilterViewModel.SetCodes.Count > 0 || IsSetsSearchActive)
                 {
                     <button class="sets-clear-btn" @onclick="ClearSetsFilter" title="Clear filter">✕</button>
                 }
@@ -52,12 +52,17 @@
                     }
                     else
                     {
-                        @* "All Sets" option — in location mode the label names the displayed node type *@
-                        <div class="set-item @(FilterViewModel.SetCodes.Count == 0 ? "selected" : "")"
-                             @onclick="@(() => SelectAllSets())">
-                            <span class="set-code">ALL</span>
-                            <span class="set-name">@GetAllSetsLabel()</span>
-                        </div>
+                        @* "All Sets" option — in location mode the label names the displayed node type.
+                           Hidden while the list is narrowed by search: clearing the filter (✕ / Clear All)
+                           is the only way back to the full list. *@
+                        @if (!IsSetsSearchActive)
+                        {
+                            <div class="set-item @(FilterViewModel.SetCodes.Count == 0 ? "selected" : "")"
+                                 @onclick="@(() => SelectAllSets())">
+                                <span class="set-code">ALL</span>
+                                <span class="set-name">@GetAllSetsLabel()</span>
+                            </div>
+                        }
                         @foreach (var s in _filteredSets)
                         {
                             <div class="set-item @(FilterViewModel.SetCodes.Contains(s.Code) ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
@@ -436,11 +441,10 @@
 
     private string GetSetsInputValue()
     {
-        // Active search text takes precedence — the input is a free-text field in search mode
-        if (!string.IsNullOrEmpty(_setsSearchQuery))
-            return _setsSearchQuery;
-        // Show the selected set code (single selection)
-        return FilterViewModel.SetCodes.Count == 1 ? FilterViewModel.SetCodes[0] : string.Empty;
+        // The input is exclusively for set-list search. The selected set code is deliberately NOT shown here:
+        // a stale code rendered into the field would be appended to on the next keystroke and leak into
+        // the search filter. Selection state lives in the list highlight (and the ✕ button), not in this text.
+        return _setsSearchQuery;
     }
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
@@ -465,6 +469,10 @@
     /// same semantics as the tree's CardCount). 0 outside location mode or before the first load.</summary>
     private int GetLocationTotalCount() =>
         _physicalByCardId?.Values.Sum(p => p.Count) ?? 0;
+
+    /// <summary>True while the sidebar list is actually narrowed by the search input (2+ chars).
+    /// ALL is hidden in this state; clearing the filter (✕ / Clear All) is the only way back.</summary>
+    private bool IsSetsSearchActive => !string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2;
 
     private void ApplySetsFilter()
     {
@@ -505,9 +513,8 @@
         // Clicking the already-selected set is a no-op — always exactly one node stays selected.
         if (FilterViewModel.SetCodes.Count == 1 && FilterViewModel.SetCodes[0] == setCode) return;
 
-        // Committing an explicit selection ends text-search mode and discards the search text
-        FilterViewModel.SetSearchText = string.Empty;
-        _setsSearchQuery = "";  // input shows the set code from now on
+        // The search text is kept: the sidebar stays narrowed with the selected set highlighted,
+        // and ALL stays hidden. Clearing the filter (✕ / Clear All) is the only way back to all sets.
         FilterViewModel.SetNewSetCodeFilter(setCode);
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged

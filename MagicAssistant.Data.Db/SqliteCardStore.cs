@@ -2001,6 +2001,49 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         public int CardCount { get; set; }
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusByCodeAsync(ICollection<string> setCodes, CancellationToken ct = default)
+    {
+        var codes = setCodes
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (codes.Count == 0) return Array.Empty<SetSyncStatus>();
+
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // Same shape as GetSetSyncStatusAsync, joined on SetCode instead of Name.
+        // The requested code is echoed back in the Name column so the result keeps the
+        // one-row-per-requested-entry contract; SetName stays null for codes absent
+        // from CardSet (the sync resolves the name from Scryfall itself).
+        var selects = codes.Select((_, i) => $"SELECT @N{i} AS Name");
+        var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+        for (int i = 0; i < codes.Count; i++)
+            paramObj[$"N{i}"] = codes[i];
+
+        var sql = $@"
+            SELECT n.Name AS Name,
+                   cs.SetCode AS SetCode,
+                   cs.Name AS SetName,
+                   (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
+            FROM ({string.Join(" UNION ALL ", selects)}) AS n
+            LEFT JOIN CardSet cs ON cs.SetCode COLLATE NOCASE = n.Name
+            GROUP BY n.Name, cs.SetCode, cs.Name";
+
+        var rows = await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj);
+
+        return rows
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new SetSyncStatus(first.Name, first.SetCode, first.SetName, g.Sum(r => r.CardCount));
+            })
+            .ToList();
+    }
+
     /// <summary>
     /// Get distinct (Language, Id) pairs for all cards sharing the same OracleId.
     /// </summary>

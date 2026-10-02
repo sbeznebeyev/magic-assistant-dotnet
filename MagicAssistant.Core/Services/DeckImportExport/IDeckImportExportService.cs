@@ -31,6 +31,13 @@ public interface IDeckImportExportService
     /// </summary>
     Task<LegacyImportCheckResult> CheckLegacyImportAsync(string xmlContent, CancellationToken ct = default);
 
+    /// <summary>
+    /// Parses a native Magic Assistant JSON and reports which sets need syncing from Scryfall
+    /// before import (set codes from cards + sideboard with no card data in the knowledge base),
+    /// plus how many card IDs are currently unknown — they become known once their sets sync.
+    /// </summary>
+    Task<ModernImportCheckResult> CheckModernImportAsync(string jsonContent, CancellationToken ct = default);
+
     // ═══════════════════════════════════════════════════════
     //  Set sync (for missing sets)
     // ═══════════════════════════════════════════════════════
@@ -123,6 +130,20 @@ public interface IDeckImportExportService
 
 /// <summary>A set referenced by the file that has metadata in KB but no card data.</summary>
 public record MissingSetInfo(string Code, string Name, int CardsInFile);
+
+/// <summary>Result of the native JSON import pre-check (read-only).</summary>
+public class ModernImportCheckResult
+{
+    public string DeckName { get; init; } = string.Empty;
+    public int TotalCards { get; init; }
+
+    /// <summary>Set codes referenced by the file (cards + sideboard) with no card data in KB.
+    /// Syncable from Scryfall even when their metadata is absent from CardSet.</summary>
+    public List<MissingSetInfo> MissingSets { get; init; } = new();
+
+    /// <summary>Card IDs not found in the knowledge base — resolved by syncing their sets.</summary>
+    public int UnknownCardCount { get; init; }
+}
 
 /// <summary>Result of the legacy import pre-check (read-only).</summary>
 public class LegacyImportCheckResult

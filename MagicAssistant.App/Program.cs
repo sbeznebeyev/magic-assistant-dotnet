@@ -127,6 +127,7 @@ builder.Services.AddScoped<SyncKBCommandHandler>(); // delegates to KnowledgeBas
 builder.Services.AddScoped<GetScryfallAvailableSetsQueryHandler>();
 builder.Services.AddScoped<GetSyncProgressQueryHandler>();
 builder.Services.AddScoped<GetSetSyncStatusQueryHandler>();
+builder.Services.AddScoped<GetSetSyncStatusByCodesQueryHandler>();
 builder.Services.AddScoped<ResolveLegacyCardsQueryHandler>();
 builder.Services.AddScoped<ValidateCardIdsQueryHandler>();
 builder.Services.AddScoped<ImportResolvedCardsCommandHandler>();
@@ -169,6 +170,7 @@ builder.Services.AddScoped<IDeckImportExportService, DeckImportExportService>(sp
         sp.GetRequiredService<ICollectionStore>(),
         sp.GetRequiredService<ICardSearchService>(),
         sp.GetRequiredService<GetSetSyncStatusQueryHandler>(),
+        sp.GetRequiredService<GetSetSyncStatusByCodesQueryHandler>(),
         sp.GetRequiredService<ResolveLegacyCardsQueryHandler>(),
         sp.GetRequiredService<ValidateCardIdsQueryHandler>(),
         sp.GetRequiredService<SyncKBCommandHandler>(),
