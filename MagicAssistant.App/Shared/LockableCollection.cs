@@ -1,3 +1,5 @@
+using MagicAssistant.Data.Model.NavigatorNodes;
+
 namespace MagicAssistant.App.Shared;
 
 /// <summary>
@@ -11,4 +13,6 @@ public class LockableCollection
     public bool IsLocked { get; set; }
     /// <summary>Display name of the node (e.g. "My Deck", "MyDeck (sb)"). Null when no collection is set.</summary>
     public string? Name { get; set; }
+    /// <summary>The node's type at selection time (Folder never selects — see DecksNavigator.OnSelectDeck).</summary>
+    public NodeType? NodeType { get; set; }
 }

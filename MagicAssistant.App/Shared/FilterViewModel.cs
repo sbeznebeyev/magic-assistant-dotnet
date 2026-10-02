@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.App.Shared;
 
@@ -162,6 +163,10 @@ public class FilterViewModel
     /// <summary>Collection node Id currently displayed in the card list (deck/sideboard/collection/folder).
     /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
     public int? CurrentCollectionId { get; set; }
+
+    /// <summary>Node type of <see cref="CurrentCollectionId"/> (Collection/Deck/Sideboard — folders never select).
+    /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
+    public NodeType? CurrentCollectionNodeType { get; set; }
 
     // ── Sort properties ──
 

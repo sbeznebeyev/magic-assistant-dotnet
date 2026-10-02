@@ -3,6 +3,7 @@
 @using MagicAssistant.App.Shared
 @using MagicAssistant.Core.Commands
 @using MagicAssistant.Core.Queries
+@using MagicAssistant.Data.Model.NavigatorNodes
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject ICardSearchService CardSearch
@@ -40,11 +41,11 @@
                     }
                     else
                     {
-                        @* "All Sets" option ── *@
+                        @* "All Sets" option — in location mode the label names the displayed node type *@
                         <div class="set-item @(FilterViewModel.SetCodes.Count == 0 ? "selected" : "")"
                              @onclick="@(() => SelectAllSets())">
                             <span class="set-code">ALL</span>
-                            <span class="set-name">All Sets</span>
+                            <span class="set-name">@GetAllSetsLabel()</span>
                         </div>
                         @foreach (var s in _filteredSets)
                         {
@@ -1063,6 +1064,16 @@
     /// <summary>True when a collection/deck/sideboard is displayed (location mode) — the control
     /// then only shows KB cards filtered by membership; Sync is not available in this mode.</summary>
     private bool IsLocationMode => FilterViewModel.CurrentCollectionId.HasValue;
+
+    /// <summary>Label of the first sidebar item: "All Sets" in KB mode, "All sets of collection/deck/sideboard"
+    /// when a location is displayed (the node type arrives with the navigation state — no DB lookup).</summary>
+    private string GetAllSetsLabel() => FilterViewModel.CurrentCollectionNodeType switch
+    {
+        NodeType.Collection => "All sets of collection",
+        NodeType.Deck => "All sets of deck",
+        NodeType.Sideboard => "All sets of sideboard",
+        _ => "All Sets"
+    };
 
     /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
     private bool HasActiveFilters =>
