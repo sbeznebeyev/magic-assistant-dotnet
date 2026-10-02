@@ -41,6 +41,55 @@
     color: #ccc;
 }
 
+/* Collapse toggle — right side of sets-header (mirrors MainLayout .panel-toggle) */
+.sets-toggle {
+    margin-left: auto;  /* push to the header's right edge */
+    width: 16px;
+    height: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #3c3c3c;
+    border: 1px solid #555;
+    /* same one-sided rounding as .panel-toggle.left: rounded toward the panel content, flat at the outer edge */
+    border-radius: 3px 0 0 3px;
+    color: #ccc;
+    font-size: 13px;  /* same glyph size as .panel-toggle — keeps the < > optical center on par with it */
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* The < > glyph sits slightly below the em-box center at this size — nudge up to optical center */
+.sets-toggle .sets-toggle-glyph {
+    transform: translateY(-1px);
+}
+
+.sets-toggle:hover {
+    background-color: #0078d4;
+    border-color: #0078d4;
+    color: #fff;
+}
+
+/* Collapsed strip (28px): only the toggle button stays visible */
+.sets-sidebar.collapsed {
+    min-width: 28px;
+    max-width: 28px;
+}
+
+.sets-sidebar.collapsed .sets-header {
+    padding: 6px 5px;  /* 28px − 10px = 18px ≥ button 16px + border */
+    border-bottom: none;
+}
+
+.sets-sidebar.collapsed .sets-title,
+.sets-sidebar.collapsed .sets-search-bar,
+.sets-sidebar.collapsed .sets-list-wrapper {
+    display: none;
+}
+
 .sets-search-bar {
     position: relative;
     padding: 6px 8px;

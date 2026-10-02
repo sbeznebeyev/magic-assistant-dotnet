@@ -17,11 +17,16 @@
     @* ── Two-panel layout: Sets sidebar + Splitter + Card grid ── *@
     <div class="kb-body">
         @* ── Left: Sets Sidebar ── *@
-        <div class="sets-sidebar" style="width: @(_sidebarWidth + "px");">
+        <div class="sets-sidebar @(_setsCollapsed ? "collapsed" : "")" style="width: @(_setsCollapsed ? "28px" : _sidebarWidth + "px");">
             <div class="sets-header">
                 <span class="sets-title">@(IsLocationMode
                     ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
                     : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()})")</span>
+                <button class="sets-toggle"
+                        @onclick="ToggleSetsCollapsed"
+                        title="@(_setsCollapsed ? "Expand sets" : "Collapse sets")">
+                    <span class="sets-toggle-glyph">@(_setsCollapsed ? ">" : "<")</span>
+                </button>
             </div>
             <div class="sets-search-bar">
                 <input value="@GetSetsInputValue()"
@@ -262,6 +267,12 @@
     private const int MaxSidebarWidth = 500;
     private bool _isDragging;
 
+    /// <summary>Collapse state of the sets sidebar (toggle button in the sets-header, mirrors MainLayout panel toggles).
+    /// Persisted like the splitter position — the component remounts on every navigation (@key),
+    /// so a plain bool would reset on each deck click.</summary>
+    private bool _setsCollapsed;
+    private const string SetsCollapsedKey = "KBCardsListControl.SetsCollapsed";
+
     // View mode (list / gallery) — persisted like other UI settings
     private string _viewMode = "list";
     private const string ViewModeSettingKey = "KBCardsListControl.ViewMode";
@@ -318,6 +329,7 @@
         await LoadSplitterSettingsAsync();
         await LoadViewModeAsync();
         await LoadPageSizeAsync();
+        await LoadSetsCollapsedAsync();
         await LoadSetsFromKB();
         await LoadCounts();
         await ApplyFiltersAndPagination();
@@ -505,9 +517,45 @@
     }
 
     // ── Splitter / Resize ──────────────────────────────────────
+    /// <summary>Toggle the sets sidebar between full and collapsed (28px strip with the toggle only).
+    /// Render is automatic after the handler — no StateHasChanged.</summary>
+    private async Task ToggleSetsCollapsed()
+    {
+        _setsCollapsed = !_setsCollapsed;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(SetsCollapsedKey, _setsCollapsed ? "1" : "0"));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    private async Task LoadSetsCollapsedAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(SetsCollapsedKey));
+            _setsCollapsed = json == "1";
+        }
+        catch
+        {
+            // default: expanded
+        }
+    }
+
     private async Task OnSplitterMouseDown(MouseEventArgs e)
     {
         if (_jsModule is null) return;
+
+        // Dragging the splitter while collapsed expands the sidebar first — the drag then resizes it.
+        if (_setsCollapsed)
+            _setsCollapsed = false;
 
         _isDragging = true;
         StateHasChanged();
