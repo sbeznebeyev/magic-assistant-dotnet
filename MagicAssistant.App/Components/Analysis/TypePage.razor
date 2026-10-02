@@ -53,6 +53,31 @@
                                 </svg>
                             </div>
                         </div>
+
+                        @* "no lands" pie — only when lands are present; same legend/colors,
+                           land sector removed and the rest rescaled to fill the circle. *@
+                        @if (_main.NoLandSectors.Count > 0)
+                        {
+                            <div class="pie-container">
+                                <div class="pie-title">no lands</div>
+                                <div class="pie-chart">
+                                    <svg viewBox="0 0 180 180" role="img" aria-label="Type distribution without lands">
+                                        @foreach (var sector in _main.NoLandSectors)
+                                        {
+                                            @if (sector.IsFull)
+                                            {
+                                                <circle cx="90" cy="90" r="80" fill="@sector.Hex"></circle>
+                                            }
+                                            else
+                                            {
+                                                <path d="@sector.PathData" fill="@sector.Hex"></path>
+                                            }
+                                        }
+                                    </svg>
+                                </div>
+                            </div>
+                        }
+
                         <div class="pie-legend">
                             @foreach (var sector in _main.Sectors)
                             {
@@ -246,12 +271,29 @@
         }
 
         var totalOccurrences = counts.Values.Sum();
-        var ordered = counts.OrderByDescending(kv => kv.Value).Select(kv => kv.Key).ToList();
+        data.Sectors = BuildSectors(counts, totalOccurrences);
 
-        // Pie geometry: start at 12 o'clock, clockwise. Path coordinates are formatted with
-        // invariant culture — the OS locale (ru-RU) would emit commas and corrupt the SVG path.
+        // "no lands" pie — same legend/colors, land sector removed and the rest rescaled to
+        // fill the circle. Only meaningful when lands are actually present.
+        if (counts.TryGetValue("land", out var landCount) && landCount > 0)
+        {
+            var nonLand = counts.Where(kv => kv.Key != "land").ToDictionary(kv => kv.Key, kv => kv.Value);
+            data.NoLandSectors = BuildSectors(nonLand, nonLand.Values.Sum());
+        }
+
+        // Dominant type ignores lands — they dominate by volume, not by deck choice.
+        data.DominantType = data.Sectors.Where(s => s.Key != "land").FirstOrDefault()?.DisplayName ?? "—";
+        return data;
+    }
+
+    /// <summary>Slice sectors for the given counts: sorted by count desc, angles from 12 o'clock
+    /// clockwise. Path coordinates are formatted with invariant culture — the OS locale (ru-RU)
+    /// would emit commas and corrupt the SVG path.</summary>
+    private static List<PieSector> BuildSectors(Dictionary<string, int> counts, int totalOccurrences)
+    {
+        var ordered = counts.OrderByDescending(kv => kv.Value).Select(kv => kv.Key).ToList();
         double angle = 0;
-        data.Sectors = ordered.Select(key =>
+        return ordered.Select(key =>
         {
             var span = counts[key] / (double)totalOccurrences * 360;
             var sector = new PieSector
@@ -269,10 +311,6 @@
             angle += span;
             return sector;
         }).ToList();
-
-        // Dominant type ignores lands — they dominate by volume, not by deck choice.
-        data.DominantType = data.Sectors.Where(s => s.Key != "land").FirstOrDefault()?.DisplayName ?? "—";
-        return data;
     }
 
     /// <summary>Base supertypes of a type line — the words before the subtype separator.
@@ -316,6 +354,8 @@
     private class TypeChartData
     {
         public List<PieSector> Sectors { get; set; } = new();
+        /// <summary>Sectors of the same pie without lands (rescaled) — empty when there are no lands.</summary>
+        public List<PieSector> NoLandSectors { get; set; } = new();
         public int TotalCards { get; set; }
         public string DominantType { get; set; } = "—";
     }
