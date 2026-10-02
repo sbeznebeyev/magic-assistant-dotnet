@@ -9,7 +9,7 @@
 /* Two side-by-side columns like the Colors tab: left = main deck, right = sideboard.
    .single — nodes without a sideboard (Collection): the left column takes full width. */
 .type-sections {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;
+    display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: start;
 }
 .type-sections.single { grid-template-columns: 1fr; }
 .type-section { min-width: 0; }
@@ -35,6 +35,9 @@
 /* Pie container: centered title on top, chart below. The sideboard title is empty
    (the element stays so both charts remain vertically aligned). */
 .pie-container { display: flex; flex-direction: column; }
+/* Halves the .pie-layout gap (24px) between the main and no-lands pies only;
+   the distance from the no-lands pie to the legend stays 24px. */
+.pie-nolands { margin-left: -12px; }
 .pie-title {
     text-align: center; font-size: 12px; color: #a6adc8; min-height: 16px; margin-bottom: 4px;
 }
@@ -43,7 +46,8 @@
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
-.pie-legend { display: flex; flex-direction: column; gap: 6px; min-width: 200px; flex: 1; }
+/* Width fits content — no stretched row tails after the percentages. */
+.pie-legend { display: flex; flex-direction: column; gap: 6px; width: max-content; }
 .legend-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 /* Legend container: swatch + name. Fixed width so the values container starts
    at the same x on every row. */
