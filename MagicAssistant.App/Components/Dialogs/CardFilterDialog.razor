@@ -21,6 +21,9 @@
 
         @* ── Fields — all bound directly to shared FilterViewModel ── *@
         <div class="filter-tab-content">
+                @* Sets scope is editable only in KB mode; in collection/deck/sideboard it is driven by the node. *@
+                @if (FilterViewModel.CurrentCollectionId == null)
+                {
                 <div class="filter-field-row">
                     <label class="filter-label">Sets</label>
                     <MultiSelectList ViewModel="@_setVm"
@@ -54,6 +57,7 @@
                         </AddDialogContent>
                     </MultiSelectList>
                 </div>
+                }
 
                 <div class="filter-field-row">
                     <label class="filter-label">Type</label>

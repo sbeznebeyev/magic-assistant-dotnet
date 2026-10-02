@@ -279,7 +279,10 @@ public class FilterViewModel
     public void Clear()
     {
         ClearGeneration++;
-        ResetSetScope();
+        // In location mode (collection/deck/sideboard) the set scope is driven by the node,
+        // so Card Filter must not reset it; only the KB mode resets it back to "all sets".
+        if (CurrentCollectionId == null)
+            ResetSetScope();
         ActiveCardSets = null;
         SetSearchText = string.Empty;
         Rarity = new List<string>();
