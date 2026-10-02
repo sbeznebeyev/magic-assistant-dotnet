@@ -7,11 +7,12 @@
 .loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
 
 /* Two side-by-side columns: left = main deck only, right = sideboard only.
-   .single — nodes without a sideboard (Collection): the left column takes full width. */
+   Tracks are capped at 550px so bars stay readable on wide screens.
+   .single — nodes without a sideboard (Collection): one capped column. */
 .color-columns {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;
+    display: grid; grid-template-columns: minmax(0, 550px) minmax(0, 550px); gap: 24px; align-items: start;
 }
-.color-columns.single { grid-template-columns: 1fr; }
+.color-columns.single { grid-template-columns: minmax(0, 550px); }
 .color-column { min-width: 0; }
 .column-title { margin-bottom: 12px; min-height: 24px; display: flex; align-items: center; }
 /* Deck name in bold gold letters (matches the gold-framed bars). */
@@ -34,7 +35,7 @@
 .bar-symbol { width: 22px; height: 22px; cursor: default; }
 .color-name { font-size: 12px; color: #cdd6f4; }
 .color-bar-track {
-    flex: 1; height: 24px; background: #1e1e2e; border-radius: 4px; overflow: hidden;
+    flex: 1; height: 11px; background: #1e1e2e; border-radius: 3px; overflow: hidden;
     border: 1px solid #313244;
 }
 /* Thin elegant gold frame with gradient shimmer: the fill is the gold layer

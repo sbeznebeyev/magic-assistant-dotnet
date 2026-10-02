@@ -1,4 +1,4 @@
-.mana-curve-page { padding: 12px; }
+.mana-curve-page { padding: 12px; max-width: 550px; }
 
 .section-header {
     display: flex; align-items: center; justify-content: space-between;

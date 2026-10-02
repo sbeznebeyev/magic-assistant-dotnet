@@ -6,9 +6,10 @@
 }
 .loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
 
-/* Two stacked charts: top = main deck, bottom = sideboard (hidden without one). */
-.creature-sections { display: flex; flex-direction: column; gap: 24px; }
-.creature-section { min-width: 0; }
+/* Two charts: side by side when the panel is wide enough for both, stacked otherwise.
+   Each section caps at 400px so bars stay readable on wide screens. */
+.creature-sections { display: flex; flex-wrap: wrap; gap: 24px; }
+.creature-section { min-width: 0; max-width: 400px; flex: 1 1 300px; }
 .section-title-row {
     display: flex; align-items: center; gap: 12px; margin-bottom: 10px; min-height: 24px;
 }
@@ -26,11 +27,18 @@
 .section-stats { font-size: 12px; color: #a6adc8; margin-left: auto; white-space: nowrap; }
 .section-empty { padding: 16px; text-align: center; color: #6c7086; font-size: 13px; }
 
-.h-bar-chart { display: flex; flex-direction: column; gap: 6px; }
-.h-bar-row { display: flex; align-items: center; gap: 8px; }
+/* Grid so the label column sizes to the widest label in this chart — bars start
+   right after it instead of a fixed 140px gap. Rows dissolve into grid cells.
+   The value column is shared (sized to the widest "N (M%)"), so every track has
+   the same width and all bars shrink in sync; left-aligned values keep a constant
+   8px gap from the bar end without right-padding air. */
+.h-bar-chart { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; row-gap: 6px; align-items: center; }
+.h-bar-row { display: contents; }
 .h-bar-label {
-    width: 140px; min-width: 140px; font-size: 12px; color: #cdd6f4;
-    text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; color: #cdd6f4;
+    /* Left-aligned with a small indent — rows anchor to the section's left edge. */
+    text-align: left; padding-left: 8px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .h-bar-track {
     flex: 1; height: 11px; background: #1e1e2e; border-radius: 3px; overflow: hidden;
@@ -45,7 +53,7 @@
 /* The "all" total row — bold, bright label (relabeled parser dash). */
 .h-bar-label.all { font-weight: 700; color: #e8c76a; }
 .h-bar-value {
-    width: 70px; font-size: 11px; color: #a6adc8; text-align: right; white-space: nowrap;
+    font-size: 11px; color: #a6adc8; text-align: left; white-space: nowrap;
 }
 
 .loading-state, .empty-state, .error-state {

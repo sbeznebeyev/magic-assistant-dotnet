@@ -9,10 +9,12 @@
 /* Two side-by-side columns like the Colors tab: left = main deck, right = sideboard.
    .single — nodes without a sideboard (Collection): the left column takes full width. */
 .type-sections {
-    display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: start;
+    display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;
 }
-.type-sections.single { grid-template-columns: 1fr; }
+.type-sections.single .type-section { max-width: none; }
 .type-section { min-width: 0; }
+.type-section:nth-child(1) { max-width: 630px; flex: 1 1 auto; }
+.type-section:nth-child(2) { max-width: 435px; flex: 1 1 auto; }
 .section-title-row {
     display: flex; align-items: center; gap: 12px; margin-bottom: 10px; min-height: 24px;
 }
