@@ -3,7 +3,11 @@
 @inject KbRefreshService KbRefresh
 @inject IDeckCardService DeckCardService
 @inject IDeckManagementService DeckManagement
+@inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
+@inject GetUserSettingQueryHandler? GetSettingQueryHandler
 @using MagicAssistant.App.Services
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
 @using MagicAssistant.Data.Model.NavigatorNodes
 
 <div class="app-layout">
@@ -35,13 +39,13 @@
             @if (!_leftCollapsed)
             {
                 <button class="panel-toggle left"
-                        @onclick="() => _leftCollapsed = true"
+                        @onclick="() => SetLeftCollapsed(true)"
                         title="Collapse navigation">
                     &lt;
                 </button>
             }
             @* Vertical badge label — visible only in the collapsed 20px strip; clicking it expands the panel *@
-            <span class="panel-label" @onclick="() => _leftCollapsed = false" title="Expand navigation">Collections &amp; Decks</span>
+            <span class="panel-label" @onclick="() => SetLeftCollapsed(false)" title="Expand navigation">Collections &amp; Decks</span>
             <div class="panel-content">
             <div class="navigator-scroll">
                 <DecksNavigator
@@ -100,13 +104,13 @@
             @if (!_rightCollapsed)
             {
                 <button class="panel-toggle right"
-                        @onclick="() => _rightCollapsed = true"
+                        @onclick="() => SetRightCollapsed(true)"
                         title="Collapse card details">
                     &gt;
                 </button>
             }
             @* Vertical badge label — visible only in the collapsed 20px strip; clicking it expands the panel *@
-            <span class="panel-label" @onclick="() => _rightCollapsed = false" title="Expand card details">Card description</span>
+            <span class="panel-label" @onclick="() => SetRightCollapsed(false)" title="Expand card details">Card description</span>
             <div class="panel-content">
             <CardDescriptionView CardId="@_selectedCardId" ShowBack="@_selectedCardShowBack" />
             <hr class="divider" />
@@ -124,8 +128,12 @@
     private LockableCollection _currentCollection = new();
 
     // ── Panel collapse state (toggle buttons in the top corners of the side panels) ──
+    /// <summary>Persisted like the sets sidebar in CardsListControl — the layout remounts on
+    /// navigation, so a plain bool would reset on each deck click.</summary>
     private bool _leftCollapsed;
     private bool _rightCollapsed;
+    private const string LeftPanelKey = "MainLayout.LeftCollapsed";
+    private const string RightPanelKey = "MainLayout.RightCollapsed";
 
     /// <summary>Pinned operation target: LastActions and KB-mode card adds work against it.
     /// Changed exclusively by the navigator's Pin buttons (plus a defensive clear
@@ -314,9 +322,68 @@
     private void OpenSplit(MagicCardPhysical card) { _splitCardTarget = card; _showSplitDialog = true; }
 
     // ── Lifecycle (Microsoft Learn: subscribe in OnInitialized, unsubscribe in Dispose) ──
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         KbRefresh.Subscribe(OnKbRefresh);
+        await LoadPanelStatesAsync();
+    }
+
+    /// <summary>Collapse/expand the left panel and persist the choice. Render is automatic after
+    /// the handler — no StateHasChanged.</summary>
+    private async Task SetLeftCollapsed(bool collapsed)
+    {
+        _leftCollapsed = collapsed;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(LeftPanelKey, collapsed ? "1" : "0"));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    /// <summary>Collapse/expand the right panel and persist the choice.</summary>
+    private async Task SetRightCollapsed(bool collapsed)
+    {
+        _rightCollapsed = collapsed;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(RightPanelKey, collapsed ? "1" : "0"));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    private async Task LoadPanelStatesAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var left = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(LeftPanelKey));
+            _leftCollapsed = left == "1";
+        }
+        catch
+        {
+            // default: expanded
+        }
+
+        try
+        {
+            var right = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(RightPanelKey));
+            _rightCollapsed = right == "1";
+        }
+        catch
+        {
+            // default: expanded
+        }
     }
 
     /// <summary>
