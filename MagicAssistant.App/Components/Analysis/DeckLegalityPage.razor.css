@@ -47,21 +47,56 @@
 .badge-legal { background: rgba(166, 227, 161, 0.15); color: #a6e3a1; }
 .badge-illegal { background: rgba(243, 139, 168, 0.15); color: #f38ba8; }
 
-.toggle-btn {
-    background: none; border: none; color: #a6adc8; font-size: 11px; cursor: pointer;
-    padding: 4px 0; width: 100%; text-align: left;
+.format-card { cursor: pointer; user-select: none; }
+.format-card.selected {
+    border-color: #f9e2af; box-shadow: 0 0 0 1px #f9e2af, 0 0 14px rgba(249, 226, 175, 0.25);
 }
-.toggle-btn:hover { color: #cdd6f4; }
+.tile-summary {
+    font-size: 11px; color: #a6adc8; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.description-panel {
+    background: #1e1e2e; border: 1px solid #313244; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 16px;
+}
+.description-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #313244;
+}
+.description-title { font-size: 14px; font-weight: 700; color: #cdd6f4; }
+.description-body { max-height: 260px; overflow-y: auto; padding-right: 4px; }
+.description-body::-webkit-scrollbar { width: 8px; }
+.description-body::-webkit-scrollbar-thumb { background: #45475a; border-radius: 4px; }
+.description-body::-webkit-scrollbar-track { background: transparent; }
+.description-hint { font-size: 12px; color: #6c7086; text-align: center; padding: 10px 0; }
+
+.desc-section { margin-bottom: 12px; }
+.desc-section:last-child { margin-bottom: 0; }
+.desc-section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #a6adc8; margin-bottom: 6px;
+}
+.desc-count { font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
+.desc-count-red { background: rgba(243, 139, 168, 0.15); color: #f38ba8; }
+
+.more-chip {
+    font-size: 10px; padding: 2px 8px; border-radius: 3px;
+    background: rgba(137, 180, 250, 0.1); color: #89b4fa;
+    border: 1px dashed rgba(137, 180, 250, 0.4);
+}
+
+.legal-clear { max-height: none; }
+.clear-message { font-size: 13px; color: #a6e3a1; }
+.clear-sub { font-size: 11px; color: #6c7086; margin-top: 4px; }
 
 .illegal-cards-list {
-    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 6px;
-    border-top: 1px solid #313244;
+    display: flex; flex-wrap: wrap; gap: 4px;
 }
 .illegal-card-tag {
     font-size: 10px; padding: 2px 6px; background: rgba(243, 139, 168, 0.1);
     color: #f38ba8; border-radius: 3px; border: 1px solid rgba(243, 139, 168, 0.2);
 }
-
 .total-illegal {
     display: flex; justify-content: space-between; align-items: center;
     padding: 10px 14px; background: #1e1e2e; border: 1px solid #313244; border-radius: 8px;

@@ -80,7 +80,7 @@
 
             @if (_currentCollection.CollectionId != null)
             {
-                <TabBar ActiveTab="@ActiveTab" OnTabSelected="@(tab => ActiveTab = tab)" />
+                <TabBar ActiveTab="@ActiveTab" NodeKind="@_currentCollection.NodeType" OnTabSelected="@(tab => ActiveTab = tab)" />
             }
 
             <div class="content-area" @key="_currentCollection.CollectionId">
