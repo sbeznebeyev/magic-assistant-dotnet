@@ -41,9 +41,12 @@
                                         <span class="color-name">@color.DisplayName</span>
                                     </div>
                                     <div class="color-bar-track">
-                                        <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
-                                            <div class="color-bar-inner"></div>
-                                        </div>
+                                        @if (color.Count > 0)
+                                        {
+                                            <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
+                                                <div class="color-bar-inner"></div>
+                                            </div>
+                                        }
                                     </div>
                                     <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
                                 </div>
@@ -75,9 +78,12 @@
                                         <span class="color-name">@color.DisplayName</span>
                                     </div>
                                     <div class="color-bar-track">
-                                        <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
-                                            <div class="color-bar-inner"></div>
-                                        </div>
+                                        @if (color.Count > 0)
+                                        {
+                                            <div class="color-bar-fill" style="width:@(color.BarWidthPct)%">
+                                                <div class="color-bar-inner"></div>
+                                            </div>
+                                        }
                                     </div>
                                     <div class="color-bar-value">@color.Count (@color.Percentage.ToString("F1")%)</div>
                                 </div>
