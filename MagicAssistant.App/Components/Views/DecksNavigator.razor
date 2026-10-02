@@ -112,30 +112,13 @@
                                 title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
                                 @onclick="() => AskClear(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear</button>
                     }
-                    @* Import — cards merge into the clicked node's CollectionId (or its sideboard); gray read-only while locked, same as Clear.
-                       Export — read-only, never disabled. Deck with sideboard: paired rows 1/3 | 2/3, same as pin/clear. *@
-                    @if (_contextTarget is NavigatorNodeDeck ioDeck && ioDeck.Sideboard != null)
-                    {
-                        <div class="ctx-pair">
-                            <button disabled="@_contextTarget.Locked"
-                                    title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
-                                    @onclick="() => ImportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import</button>
-                            <button disabled="@_contextTarget.Locked"
-                                    title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
-                                    @onclick="() => ImportSideboardFromMenu(ioDeck)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import sideboard</button>
-                        </div>
-                        <div class="ctx-pair">
-                            <button @onclick="() => ExportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export</button>
-                            <button @onclick="() => ExportSideboardFromMenu(ioDeck)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export sideboard</button>
-                        </div>
-                    }
-                    else
-                    {
-                        <button disabled="@_contextTarget.Locked"
-                                title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
-                                @onclick="() => ImportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import</button>
-                        <button @onclick="() => ExportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export</button>
-                    }
+                    @* Import — cards merge into the clicked node's CollectionId (a deck import also merges the
+                       file's sideboard into the deck's sideboard child); gray read-only while locked, same as Clear.
+                       Export — read-only, never disabled; a deck export includes its sideboard in the JSON. *@
+                    <button disabled="@_contextTarget.Locked"
+                            title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
+                            @onclick="() => ImportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import</button>
+                    <button @onclick="() => ExportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export</button>
                 }
                 <hr class="context-sep" />
                 <button class="danger" @onclick="() => AskDelete(_contextTarget)">
@@ -305,8 +288,9 @@
     /// MainLayout opens DeckImportWizard with that parent context (new decks are created inside it).</summary>
     [Parameter] public EventCallback<int?> OnImportRequested { get; set; }
 
-    /// <summary>Import requested from the ⋯ context menu — the CollectionId cards are merged INTO (the clicked node,
-    /// or its sideboard's own ID). MainLayout opens DeckImportWizard pre-targeted at that existing node.</summary>
+    /// <summary>Import requested from the ⋯ context menu — the CollectionId cards are merged INTO (the clicked
+    /// deck/collection node; a deck import also merges the file's sideboard into its sideboard child).
+    /// MainLayout opens DeckImportWizard pre-targeted at that existing node.</summary>
     [Parameter] public EventCallback<int> OnImportIntoRequested { get; set; }
 
     /// <summary>Export requested from the ⋯ context menu — the clicked node (deck/collection).
@@ -813,27 +797,11 @@
         await OnImportIntoRequested.InvokeAsync(node.Id);
     }
 
-    /// <summary>Import sideboard from the ⋯ context menu (deck nodes only) — imports INTO the sideboard node's own ID.</summary>
-    private async Task ImportSideboardFromMenu(NavigatorNodeDeck deck)
-    {
-        if (deck.Sideboard == null) return;
-        CloseContextMenu();
-        await OnImportIntoRequested.InvokeAsync(deck.Sideboard.Id);
-    }
-
     /// <summary>Export from the ⋯ context menu — exports the clicked node; folders are excluded by the menu itself (they hold no cards).</summary>
     private async Task ExportFromMenu(NavigatorNodeBase node)
     {
         CloseContextMenu();
         await OnExportRequested.InvokeAsync(node.Id);
-    }
-
-    /// <summary>Export sideboard from the ⋯ context menu (deck nodes only) — exports the sideboard node's own ID.</summary>
-    private async Task ExportSideboardFromMenu(NavigatorNodeDeck deck)
-    {
-        if (deck.Sideboard == null) return;
-        CloseContextMenu();
-        await OnExportRequested.InvokeAsync(deck.Sideboard.Id);
     }
 
     // ── Add Menu Overlay (click-outside to close) ──────────

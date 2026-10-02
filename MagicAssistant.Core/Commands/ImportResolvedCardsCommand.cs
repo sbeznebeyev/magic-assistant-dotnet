@@ -1,5 +1,6 @@
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Core.Commands;
 
@@ -8,9 +9,12 @@ namespace MagicAssistant.Core.Commands;
 /// Invariant: called only after 100% of cards are resolved — before this call nothing
 /// is created or modified in the database.
 /// New mode (TargetCollectionId == null): creates the deck node + sideboard and adds
-/// the cards in ONE transaction (ICollectionStore.CreateDeckWithCardsAsync).
+/// the cards in ONE transaction (ICollectionStore.CreateDeckWithCardsAsync);
+/// <see cref="SideboardCards"/> land in the freshly created sideboard child.
 /// Existing mode (TargetCollectionId != null): stamps location and adds cards to the
-/// existing node with merge semantics.
+/// existing node with merge semantics; <see cref="SideboardCards"/> merge into the
+/// target deck's sideboard child. A non-deck target (Collection) has no sideboard home —
+/// the file's sideboard is silently ignored there, only the main cards are imported.
 /// CardOverrides — user selections from the unresolved-cards table, keyed by
 /// "OriginalName|SetCode"; applied before insertion for the matching cards.
 /// </summary>
@@ -19,7 +23,8 @@ public record ImportResolvedCardsCommand(
     int? ParentId,
     int? TargetCollectionId,
     IReadOnlyList<MagicCardPhysical> Cards,
-    IReadOnlyDictionary<string, Guid>? CardOverrides = null);
+    IReadOnlyDictionary<string, Guid>? CardOverrides = null,
+    IReadOnlyList<MagicCardPhysical>? SideboardCards = null);
 
 /// <summary>Result of an atomic import commit.</summary>
 public class ImportCommitResult
@@ -27,6 +32,9 @@ public class ImportCommitResult
     public int DeckId { get; set; }
     public string DeckName { get; set; } = string.Empty;
     public int CardsImported { get; set; }
+
+    /// <summary>Sideboard cards merged into the sideboard node (0 when the file had none).</summary>
+    public int SideboardCardsImported { get; set; }
 }
 
 public class ImportResolvedCardsCommandHandler
@@ -48,6 +56,8 @@ public class ImportResolvedCardsCommandHandler
         if (command.Cards.Count == 0)
             throw new ArgumentException("No cards to import.", nameof(command));
 
+        var sideboard = (command.SideboardCards ?? Enumerable.Empty<MagicCardPhysical>()).ToList();
+
         // Apply user overrides from the unresolved-cards table: key = "OriginalName|SetCode"
         if (command.CardOverrides is { Count: > 0 } overrides)
         {
@@ -66,18 +76,56 @@ public class ImportResolvedCardsCommandHandler
             if (deck == null)
                 throw new InvalidOperationException($"Target collection '{targetId}' not found.");
 
+            // Pre-check the sideboard home BEFORE any insert: merge mode commits main and
+            // sideboard as separate transactions, so a late failure would leave a partial import.
+            // A non-deck target (Collection) has no sideboard child — the file's sideboard is
+            // silently ignored there; only the main cards are imported.
+            int? sbId = null;
+            string? sbName = null;
+            if (sideboard.Count > 0 && deck.NodeType == NodeType.Deck)
+            {
+                sbId = await _collectionStore.GetSideboardIdAsync(targetId, ct);
+                if (sbId is not { } foundSbId)
+                    throw new InvalidOperationException($"Target deck '{deck.Name}' has no sideboard node.");
+
+                sbName = (await _collectionStore.GetByIdAsync(foundSbId, ct))?.Name ?? $"{deck.Name} (sb)";
+            }
+
             var location = Location.FromId(deck.Id, deck.Name, false);
             foreach (var card in command.Cards)
                 card.SetLocation(location);
 
             await _cardStore.AddAllAsync(command.Cards, ct);
 
-            return new ImportCommitResult { DeckId = deck.Id, DeckName = deck.Name, CardsImported = command.Cards.Count };
+            if (sideboard.Count > 0 && sbId is { } sb)
+            {
+                var sbLocation = Location.FromId(sb, sbName!, true);
+                foreach (var card in sideboard)
+                    card.SetLocation(sbLocation);
+
+                await _cardStore.AddAllAsync(sideboard, ct);
+            }
+
+            return new ImportCommitResult
+            {
+                DeckId = deck.Id,
+                DeckName = deck.Name,
+                CardsImported = command.Cards.Count,
+                SideboardCardsImported = sideboard.Count
+            };
         }
 
         // New node: single transaction (node + sideboard + cards)
-        var created = await _collectionStore.CreateDeckWithCardsAsync(command.DeckName, command.Cards, command.ParentId, ct);
+        var created = await _collectionStore.CreateDeckWithCardsAsync(
+            command.DeckName, command.Cards, command.ParentId,
+            sideboard.Count > 0 ? sideboard : null, ct);
 
-        return new ImportCommitResult { DeckId = created.Id, DeckName = created.Name, CardsImported = command.Cards.Count };
+        return new ImportCommitResult
+        {
+            DeckId = created.Id,
+            DeckName = created.Name,
+            CardsImported = command.Cards.Count,
+            SideboardCardsImported = sideboard.Count
+        };
     }
 }

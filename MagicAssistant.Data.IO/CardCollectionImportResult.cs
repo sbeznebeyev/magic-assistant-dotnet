@@ -19,4 +19,10 @@ public class CardCollectionImportResult
     public string? Type { get; set; }
 
     public List<IMagicCard> Cards { get; set; } = new();
+
+    /// <summary>
+    /// Native JSON only — the optional top-level "sideboard" array (same card schema as
+    /// <see cref="Cards"]). Legacy XML has no sideboard, so this stays empty there.
+    /// </summary>
+    public List<IMagicCard> Sideboard { get; set; } = new();
 }

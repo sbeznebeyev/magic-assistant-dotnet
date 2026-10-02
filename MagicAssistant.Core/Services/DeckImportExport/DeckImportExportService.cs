@@ -5,6 +5,7 @@ using MagicAssistant.Data.IO;
 using MagicAssistant.Data.IO.json;
 using MagicAssistant.Data.IO.xml;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 using MagicAssistant.Core.Services.CardSearch;
 
 namespace MagicAssistant.Core.Services.DeckImportExport;
@@ -55,11 +56,26 @@ public class DeckImportExportService : IDeckImportExportService
         var cards = await _collectionStore.GetDeckCardsAsync(deckId, ct);
         var deckNode = await _collectionStore.GetByIdAsync(deckId, ct);
 
+        // Optional sideboard node — only deck nodes have a sideboard child; the array is
+        // omitted entirely when it has no cards (JsonExport skips empty lists).
+        IEnumerable<IMagicCard>? sideboard = null;
+        if (deckNode?.NodeType == NodeType.Deck)
+        {
+            var sbId = await _collectionStore.GetSideboardIdAsync(deckId, ct);
+            if (sbId is { } sb)
+            {
+                var sbCards = (await _collectionStore.GetDeckCardsAsync(sb, ct)).ToList();
+                if (sbCards.Count > 0)
+                    sideboard = sbCards;
+            }
+        }
+
         return JsonExport.ExportToJson(
             name: deckNode?.Name ?? "Unknown Deck",
             comment: null,
             type: "deck",
-            cards);
+            cards,
+            sideboard);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -239,8 +255,10 @@ public class DeckImportExportService : IDeckImportExportService
     {
         var importResult = ParseJsonOrThrow(jsonContent);
 
-        // Invariant: validate every card against KB BEFORE anything is created
-        var cardIds = importResult.Cards.Select(c => c.Id).ToList();
+        // Invariant: validate every card (main + sideboard) against KB BEFORE anything is created
+        var cardIds = importResult.Cards.Select(c => c.Id)
+            .Concat(importResult.Sideboard.Select(c => c.Id))
+            .ToList();
         var (known, unknown) = await _validateCardIdsQuery.Handle(new ValidateCardIdsQuery(cardIds), ct);
 
         if (unknown.Count > 0)
@@ -257,10 +275,17 @@ public class DeckImportExportService : IDeckImportExportService
                 : new MagicCardPhysical(c.GetBase(), Location.FromId(0, "unresolved", false), true))
             .ToList();
 
+        var sideboardPhysicals = importResult.Sideboard
+            .Select(c => c is MagicCardPhysical p
+                ? p
+                : new MagicCardPhysical(c.GetBase(), Location.FromId(0, "unresolved", true), true))
+            .ToList();
+
         var finalName = string.IsNullOrWhiteSpace(deckName) ? importResult.Name : deckName.Trim();
 
         return await _importResolvedCardsCommand.Handle(
-            new ImportResolvedCardsCommand(finalName, parentId, targetCollectionId, physicals), ct);
+            new ImportResolvedCardsCommand(finalName, parentId, targetCollectionId, physicals,
+                SideboardCards: sideboardPhysicals.Count > 0 ? sideboardPhysicals : null), ct);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -285,7 +310,9 @@ public class DeckImportExportService : IDeckImportExportService
             throw new ArgumentException("JSON content is required.", nameof(jsonContent));
 
         var importResult = JsonImport.ImportFromJson(jsonContent);
-        if (!importResult.Cards.Any())
+        // A sideboard-only file is legitimate (round-trip of an empty main deck), so the
+        // emptiness check covers both pools.
+        if (!importResult.Cards.Any() && !importResult.Sideboard.Any())
             throw new InvalidOperationException("No cards found in the file.");
 
         return importResult;

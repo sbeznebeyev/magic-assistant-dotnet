@@ -153,7 +153,7 @@
     private bool _showImportDialog;
     /// <summary>Parent node the import was requested from (add-node menu context; null = root) — new decks are created inside it.</summary>
     private int? _importParentId;
-    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import / Import sideboard); null = wizard picks the target.</summary>
+    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import); null = wizard picks the target.</summary>
     private int? _importTargetId;
     private bool _showLegacyImportDialog;
     private bool _showExportDialog;
@@ -261,7 +261,8 @@
     private void OpenImportDialog(int? parentId) { _importParentId = parentId; _importTargetId = null; _showImportDialog = true; }
 
     /// <summary>Import into an existing node from the navigator ⋯ menu — the CollectionId cards are merged into
-    /// (the clicked node, or its sideboard's own ID). The wizard opens pre-targeted at that node.</summary>
+    /// (the clicked deck/collection node; a deck import also merges the file's sideboard into its sideboard child).
+    /// The wizard opens pre-targeted at that node.</summary>
     private void OpenImportIntoDialog(int collectionId) { _importParentId = null; _importTargetId = collectionId; _showImportDialog = true; }
 
     /// <summary>Export from the navigator's ⋯ context menu — targets the clicked node, not the displayed collection.</summary>

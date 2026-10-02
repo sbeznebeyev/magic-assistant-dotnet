@@ -31,7 +31,8 @@ public interface ICollectionStore
     /// Cards must already carry valid CardIds present in the knowledge base;
     /// their Location is stamped from the created node before insertion.
     /// </summary>
-    Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null, CancellationToken ct = default);
+    Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null,
+        IEnumerable<MagicCardPhysical>? sideboardCards = null, CancellationToken ct = default);
 
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
     Task<bool> RenameAsync(int id, string newName, CancellationToken ct = default);
@@ -72,6 +73,11 @@ public interface ICollectionStore
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
     Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>
+    /// ID of the deck's sideboard child (NodeType = 3), or null when the node has none.
+    /// </summary>
+    Task<int?> GetSideboardIdAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
     /// Get ALL physical cards across ALL decks (for reconciliation).

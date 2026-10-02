@@ -98,4 +98,65 @@ public class JsonExportTests
 
         Assert.Throws<Exception>(() => JsonExport.ExportToJson("Deck", null, "deck", new IMagicCard[] { card }));
     }
+
+    [Test]
+    public void ExportToJson_WritesSideboard_WhenProvided()
+    {
+        var sbId = Guid.NewGuid();
+        var sbCard = new MagicCardPhysical(
+            new MagicCard { Id = sbId, Name = "Sideboard Card", SetCode = "m19" },
+            Location.FromPath("deck-1"), true)
+        {
+            Count = 2,
+            IsOwn = false,
+        };
+
+        var json = JsonExport.ExportToJson(
+            "Deck", null, "deck",
+            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, Location.FromPath("deck-1"), true) { Count = 1 } },
+            new[] { sbCard });
+
+        Assert.That(json, Does.Contain("\"sideboard\""));
+        Assert.That(json, Does.Contain($"\"id\": \"{sbId}\""));
+        Assert.That(json, Does.Contain("\"own\": false"), "sideboard cards use the same optional-field rules");
+
+        // The sideboard array must come after the main cards array.
+        var sbIndex = json.IndexOf("\"sideboard\"");
+        var cardsIndex = json.IndexOf("\"cards\"");
+        Assert.That(sbIndex, Is.GreaterThan(cardsIndex));
+    }
+
+    [Test]
+    public void ExportToJson_OmitsSideboard_WhenNull()
+    {
+        var json = JsonExport.ExportToJson(
+            "Deck", null, "deck",
+            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, Location.FromPath("deck-1"), true) { Count = 1 } },
+            sideboardCards: null);
+
+        Assert.That(json, Does.Not.Contain("\"sideboard\""));
+    }
+
+    [Test]
+    public void ExportToJson_OmitsSideboard_WhenEmpty()
+    {
+        // An empty sideboard list must not produce an empty "sideboard": [] node — the field is optional.
+        var json = JsonExport.ExportToJson(
+            "Deck", null, "deck",
+            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, Location.FromPath("deck-1"), true) { Count = 1 } },
+            Array.Empty<IMagicCard>());
+
+        Assert.That(json, Does.Not.Contain("\"sideboard\""));
+    }
+
+    [Test]
+    public void ExportToJson_ThrowsForNonPhysicalSideboardCard()
+    {
+        var baseCard = new MagicCard { Id = Guid.NewGuid(), Name = "Base SB Card" };
+
+        Assert.Throws<Exception>(() => JsonExport.ExportToJson(
+            "Deck", null, "deck",
+            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, Location.FromPath("deck-1"), true) { Count = 1 } },
+            new IMagicCard[] { baseCard }));
+    }
 }

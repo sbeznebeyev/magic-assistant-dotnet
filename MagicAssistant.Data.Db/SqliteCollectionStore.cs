@@ -137,9 +137,11 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         }
     }
 
-    public async Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null, CancellationToken ct = default)
+    public async Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null,
+        IEnumerable<MagicCardPhysical>? sideboardCards = null, CancellationToken ct = default)
     {
         var list = cards.ToList();
+        var sbList = (sideboardCards ?? Enumerable.Empty<MagicCardPhysical>()).ToList();
 
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
@@ -159,11 +161,11 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                 $"INSERT INTO Collection (Name, ParentId, NodeType) VALUES (@Name, @ParentId, {(int)NodeType.Sideboard})",
                 new { Name = $"{name} (sb)", ParentId = deckId }, tx);
 
-            // Stamp the created node into every card and insert (merge semantics on conflict)
-            var location = Location.FromId(deckId, name, false);
-            foreach (var card in list)
+            var sbId = Convert.ToInt32(await conn.ExecuteScalarAsync("SELECT last_insert_rowid()"));
+
+            // Single INSERT used for both pools — merge semantics on conflict
+            async Task InsertCardRowAsync(int collectionId, MagicCardPhysical card)
             {
-                card.SetLocation(location);
                 await conn.ExecuteAsync(@"
                     INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
                     VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
@@ -174,7 +176,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                         ForTradeCount = excluded.ForTradeCount",
                     new
                     {
-                        CollectionId = deckId,
+                        CollectionId = collectionId,
                         CardId = card.Card.Id,
                         Count = card.Count,
                         IsOwn = card.IsOwn,
@@ -183,6 +185,25 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                         ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
                         MyPrice = card.MyPrice
                     }, tx);
+            }
+
+            // Stamp the created node into every main card and insert
+            var location = Location.FromId(deckId, name, false);
+            foreach (var card in list)
+            {
+                card.SetLocation(location);
+                await InsertCardRowAsync(deckId, card);
+            }
+
+            // Sideboard pool — stamped with the sideboard node itself
+            if (sbList.Count > 0)
+            {
+                var sbLocation = Location.FromId(sbId, $"{name} (sb)", true);
+                foreach (var card in sbList)
+                {
+                    card.SetLocation(sbLocation);
+                    await InsertCardRowAsync(sbId, card);
+                }
             }
 
             tx.Commit();
@@ -648,6 +669,19 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             parameters);
 
         return rows.ToDictionary(r => (r.CollectionId, r.CardId), r => r.Count);
+    }
+
+    /// <inheritdoc />
+    public async Task<int?> GetSideboardIdAsync(int deckId, CancellationToken ct = default)
+    {
+        if (deckId <= 0) return null;
+
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+
+        return await conn.ExecuteScalarAsync<int?>(
+            "SELECT Id FROM Collection WHERE ParentId = @DeckId AND NodeType = 3",
+            new { DeckId = deckId });
     }
 
     /// <summary>

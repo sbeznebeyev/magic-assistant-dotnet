@@ -186,4 +186,81 @@ public class JsonImportTests
 
         Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
     }
+
+    [Test]
+    public void ImportFromJson_ParsesSideboardArray()
+    {
+        var mainId = Guid.NewGuid();
+        var sbId = Guid.NewGuid();
+        var json = $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""version"": 1,
+  ""name"": ""Test Deck"",
+  ""cards"": [
+    {{ ""id"": ""{mainId}"", ""name"": ""Main Card"", ""set"": ""m19"", ""count"": 4 }}
+  ],
+  ""sideboard"": [
+    {{ ""id"": ""{sbId}"", ""name"": ""SB Card"", ""set"": ""M20"", ""count"": 1, ""own"": false }}
+  ]
+}}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Cards, Has.Count.EqualTo(1));
+        Assert.That(result.Sideboard, Has.Count.EqualTo(1));
+
+        var sb = (MagicCardPhysical)result.Sideboard[0];
+        Assert.That(sb.Card.Id, Is.EqualTo(sbId));
+        Assert.That(sb.Card.SetCode, Is.EqualTo("m20"), "set code should be lowercased in the sideboard too");
+        Assert.That(sb.Count, Is.EqualTo(1));
+        Assert.That(sb.IsOwn, Is.False);
+    }
+
+    [Test]
+    public void ImportFromJson_SideboardAbsent_EmptyList()
+    {
+        var json = MakeJson("Deck", (Guid.NewGuid(), "Card", "m19", 3));
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Sideboard, Is.Empty, "absent sideboard must yield an empty list, not null");
+    }
+
+    [Test]
+    public void ImportFromJson_SideboardEmptyArray_EmptyList()
+    {
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": [] }}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Sideboard, Is.Empty);
+    }
+
+    [Test]
+    public void ImportFromJson_SideboardNull_EmptyList()
+    {
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": null }}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Sideboard, Is.Empty, "null sideboard is treated as absent");
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenSideboardIsNotArray()
+    {
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": ""oops"" }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenSideboardCardMissesCount()
+    {
+        // The reference core applies to sideboard cards with the same strictness as main cards.
+        var sbId = Guid.NewGuid();
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": [ {{ ""id"": ""{sbId}"", ""name"": ""SB"", ""set"": ""m19"" }} ] }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
 }

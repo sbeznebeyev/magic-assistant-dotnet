@@ -18,12 +18,15 @@ namespace MagicAssistant.Data.IO.json;
 ///   "comment": "",
 ///   "type": "deck",
 ///   "exportedAt": "2026-10-01T13:47:00+00:00",
-///   "cards": [ { "id", "name", "set", "count", ... } ]
+///   "cards": [ { "id", "name", "set", "count", ... } ],
+///   "sideboard": [ { "id", "name", "set", "count", ... } ]  // optional, same card schema
 /// }
 ///
 /// Reference core (id / name / set / count) is always written. Optional fields
 /// are omitted when at their defaults: own=true, price=0, empty comment/custom/special,
-/// forTrade=0. Output is pretty-printed with 2-space indent.
+/// forTrade=0. The "sideboard" array is optional and omitted entirely when the deck
+/// has no sideboard cards (forward compatibility: consumers that don't know the field
+/// simply ignore it — version stays 1). Output is pretty-printed with 2-space indent.
 ///
 /// Only <see cref="MagicCardPhysical"/> cards are supported for export.
 /// Base <see cref="MagicCard"/> cards cannot be exported directly.
@@ -39,11 +42,14 @@ public static class JsonExport
     /// <summary>
     /// Export cards to a Magic Assistant JSON string.
     /// </summary>
+    /// <param name="sideboardCards">Optional sideboard (same card schema); the "sideboard"
+    /// array is written only when the list is non-empty.</param>
     public static string ExportToJson(
         string? name,
         string? comment,
         string? type,
-        IEnumerable<IMagicCard> cards)
+        IEnumerable<IMagicCard> cards,
+        IEnumerable<IMagicCard>? sideboardCards = null)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
@@ -73,6 +79,22 @@ public static class JsonExport
                     throw new Exception("Can't export non-physical cards");
             }
             writer.WriteEndArray();
+
+            // Sideboard — optional; omitted when empty so the node stays absent by default.
+            var sideboard = sideboardCards?.ToList() ?? new List<IMagicCard>();
+            if (sideboard.Count > 0)
+            {
+                writer.WritePropertyName("sideboard");
+                writer.WriteStartArray();
+                foreach (var card in sideboard)
+                {
+                    if (card is MagicCardPhysical physical)
+                        WriteMagicCardPhysical(writer, physical);
+                    else
+                        throw new Exception("Can't export non-physical cards");
+                }
+                writer.WriteEndArray();
+            }
 
             writer.WriteEndObject();
         }

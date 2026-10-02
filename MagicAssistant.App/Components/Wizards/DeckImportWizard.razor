@@ -13,11 +13,7 @@
         <div class="dialog-title">
             @if (TargetNodeId is { })
             {
-                <span>Import to </span><span class="target-name">@(_targetIsSideboard ? _targetDeckName : _targetName)</span>
-                @if (_targetIsSideboard)
-                {
-                    <span class="target-sideboard-tag">sideboard</span>
-                }
+                <span>Import to </span><span class="target-name">@(_targetName)</span>
             }
             else
             {
@@ -33,12 +29,11 @@
         {
             @* ── Step 1: Select File ── *@
             <div class="form-group">
-                <label>JSON File</label>
                 <InputFile id="deck-import-file" OnChange="OnFileSelected" accept=".json" class="file-input-hidden" />
                 <label for="deck-import-file" class="file-btn">Choose JSON File</label>
                 @if (_fileName != null)
                 {
-                    <input type="text" @bind="FileName" @bind:event="oninput" class="dialog-input file-name-input" />
+                    <div class="file-selected">✓ @_fileName</div>
                 }
             </div>
 
@@ -88,13 +83,8 @@
 </div>
 
 @code {
+    /// <summary>Selected file name (display-only); spaces are replaced with underscores.</summary>
     private string? _fileName;
-    /// <summary>Editable file name; spaces are replaced with underscores live.</summary>
-    public string? FileName
-    {
-        get => _fileName;
-        set => _fileName = value?.Replace(' ', '_');
-    }
     private byte[]? _fileContent;
     private string _deckName = "";
     private string _importMode = "new";
@@ -105,16 +95,14 @@
     private string? _parentName;
     /// <summary>Name of the fixed import target (TargetNodeId) for the "merge into existing" line.</summary>
     private string? _targetName;
-    /// <summary>True when TargetNodeId points at a Sideboard node — the dialog must say so explicitly.</summary>
-    private bool _targetIsSideboard;
-    /// <summary>Name of the deck owning the sideboard (for the target line).</summary>
-    private string? _targetDeckName;
 
     [Parameter] public bool IsOpen { get; set; }
     /// <summary>Parent node the add-node menu was opened under (null = root) — "new deck" is created inside it.</summary>
     [Parameter] public int? ParentNodeId { get; set; }
-    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import / Import sideboard).
-    /// When set, the target select is hidden and cards are added to this node instead of a new deck.</summary>
+    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import; deck/collection nodes only).
+    /// When set, the target select is hidden and cards are added to this node instead of a new deck.
+    /// For a deck target the file's sideboard array merges into its sideboard child;
+    /// for a Collection it is silently ignored (only the main cards are imported).</summary>
     [Parameter] public int? TargetNodeId { get; set; }
     [Parameter] public EventCallback OnImported { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
@@ -133,7 +121,7 @@
             try
             {
                 // Resolve names directly from the DB: the navigation tree dictionary only
-                // contains root-level nodes, so nested decks and sideboards would show as "?".
+                // contains root-level nodes, so nested decks would show as "?".
                 var all = await CollectionStore.GetAllCollectionsAsync();
                 _existingDecks = all.Where(c => c.NodeType is NodeType.Collection or NodeType.Deck)
                                     .Select(c => (c.Id, c.Name))
@@ -143,17 +131,7 @@
                     _parentName = (await CollectionStore.GetByIdAsync(parentId))?.Name;
 
                 if (TargetNodeId is { } targetId)
-                {
-                    var target = await CollectionStore.GetByIdAsync(targetId);
-                    _targetName = target?.Name ?? "?";
-                    if (target?.NodeType == NodeType.Sideboard)
-                    {
-                        _targetIsSideboard = true;
-                        _targetDeckName = target.ParentId is { } deckId
-                            ? (await CollectionStore.GetByIdAsync(deckId))?.Name ?? "?"
-                            : "?";
-                    }
-                }
+                    _targetName = (await CollectionStore.GetByIdAsync(targetId))?.Name ?? "?";
             }
             catch { }
         }
@@ -175,7 +153,7 @@
                 throw new InvalidOperationException("No cards found in the file.");
 
             _fileContent = content;
-            FileName = file.Name;   // spaces → underscores
+            _fileName = file.Name.Replace(' ', '_');
             _deckName = parsed.Name;
         }
         catch (Exception ex) when (ex is FormatException or InvalidOperationException)

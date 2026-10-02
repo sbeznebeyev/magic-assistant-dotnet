@@ -183,4 +183,68 @@ public class JsonRoundTripTests
 
         Assert.That(imported.GetForTradeCount(), Is.EqualTo(2));
     }
+
+    [Test]
+    public void RoundTrip_Sideboard_PreservesAllFields()
+    {
+        var sbId = Guid.NewGuid();
+        var sideboardCard = new MagicCardPhysical(
+            new MagicCard { Id = sbId, Name = "Liliana, the Wicked", SetCode = "mh3" },
+            Location.FromPath("deck-1"), false)
+        {
+            Count = 2,
+            MyPrice = 0.5f,
+            Comment = "SB comment",
+            SpecialTags = "foil",
+            Custom = "sb-custom",
+        };
+
+        var mainCard = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
+            Location.FromPath("deck-1"), true)
+        {
+            Count = 4,
+        };
+
+        var json = JsonExport.ExportToJson("Test Deck", null, "deck", new[] { mainCard }, new[] { sideboardCard });
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Cards, Has.Count.EqualTo(1));
+        Assert.That(result.Sideboard, Has.Count.EqualTo(1));
+
+        var importedSb = (MagicCardPhysical)result.Sideboard[0];
+        Assert.That(importedSb.Card.Id, Is.EqualTo(sbId));
+        Assert.That(importedSb.Name, Is.EqualTo("Liliana, the Wicked"));
+        Assert.That(importedSb.SetCode, Is.EqualTo("mh3"));
+        Assert.That(importedSb.Count, Is.EqualTo(2));
+        Assert.That(importedSb.IsOwn, Is.False);
+        Assert.That(importedSb.MyPrice, Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(importedSb.Comment, Is.EqualTo("SB comment"));
+        Assert.That(importedSb.SpecialTags, Is.EqualTo("foil"));
+        Assert.That(importedSb.Custom, Is.EqualTo("sb-custom"));
+
+        // The main deck is untouched by the sideboard round-trip.
+        var importedMain = (MagicCardPhysical)result.Cards[0];
+        Assert.That(importedMain.Name, Is.EqualTo("Lightning Bolt"));
+        Assert.That(importedMain.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void RoundTrip_NoSideboard_NodeAbsent()
+    {
+        // A deck without a sideboard must round-trip WITHOUT the node — it is optional.
+        var physical = new MagicCardPhysical(
+            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+            Location.FromPath("deck-1"), true)
+        {
+            Count = 24,
+        };
+
+        var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
+
+        Assert.That(json, Does.Not.Contain("\"sideboard\""));
+
+        var result = JsonImport.ImportFromJson(json);
+        Assert.That(result.Sideboard, Is.Empty);
+    }
 }

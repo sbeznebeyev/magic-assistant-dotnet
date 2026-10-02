@@ -11,6 +11,10 @@ namespace MagicAssistant.Data.IO.json;
 /// a missing or invalid core field is a format error. Optional fields fall back
 /// to defaults when absent (own=true, price=0, empty comment/custom/special, forTrade=0).
 /// Unknown properties are ignored (forward compatibility with future versions).
+///
+/// The top-level "sideboard" array is optional and uses the exact same card schema
+/// as "cards"; it lands in <see cref="CardCollectionImportResult.Sideboard"/>.
+/// Absent or empty → an empty Sideboard list.
 /// </summary>
 public static class JsonImport
 {
@@ -61,6 +65,17 @@ public static class JsonImport
 
             foreach (var cardElement in cards.EnumerateArray())
                 result.Cards.Add(ReadMagicCardPhysical(cardElement));
+
+            // Optional sideboard — same per-card rules as the main list.
+            if (root.TryGetProperty("sideboard", out var sideboard) &&
+                sideboard.ValueKind != JsonValueKind.Null)
+            {
+                if (sideboard.ValueKind != JsonValueKind.Array)
+                    throw new FormatException("Invalid Magic Assistant JSON: 'sideboard' must be an array.");
+
+                foreach (var cardElement in sideboard.EnumerateArray())
+                    result.Sideboard.Add(ReadMagicCardPhysical(cardElement));
+            }
 
             return result;
         }

@@ -83,8 +83,11 @@
     background: #4a4a4a;
 }
 
-.file-name-input {
+/* Selected-file confirmation: green check + plain file name */
+.file-selected {
     margin-top: 6px;
+    font-size: 13px;
+    color: #4caf50;
 }
 
 /* Fixed import target (⋯ menu): gold gradient name with a soft glow */
@@ -100,22 +103,6 @@
     background-clip: text;
     color: transparent;
     filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.35));
-}
-
-/* "sideboard" badge next to the deck name */
-.target-sideboard-tag {
-    display: inline-block;
-    margin-left: 8px;
-    padding: 1px 9px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #ffd700;
-    border: 1px solid rgba(255, 215, 0, 0.5);
-    border-radius: 999px;
-    background: rgba(255, 215, 0, 0.08);
-    vertical-align: middle;
 }
 
 .file-info {
