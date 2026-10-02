@@ -8,7 +8,7 @@
 @implements IAsyncDisposable
 @inject ICardSearchService CardSearch
 @inject IDeckCardService DeckCardService
-@inject GetKBAvailableSetsQueryHandler? KBSetsQueryHandler
+@inject IDbCardStore DbStore
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
 @inject IJSRuntime JS
@@ -39,7 +39,7 @@
                        @oninput="OnSetsFilterInput"
                        placeholder="Filter sets..."
                        class="sets-search-input" />
-                @if (FilterViewModel.SetCodes.Count > 0 || IsSetsSearchActive)
+                @if (FilterViewModel.ActiveCardSets is not null || IsSetsSearchActive)
                 {
                     <button class="sets-clear-btn" @onclick="ClearSetsFilter" title="Clear filter">✕</button>
                 }
@@ -57,7 +57,7 @@
                            is the only way back to the full list. *@
                         @if (!IsSetsSearchActive)
                         {
-                            <div class="set-item @(FilterViewModel.SetCodes.Count == 0 ? "selected" : "")"
+                            <div class="set-item @(FilterViewModel.ActiveCardSets is null ? "selected" : "")"
                                  @onclick="@(() => SelectAllSets())">
                                 <span class="set-code">ALL</span>
                                 <span class="set-name">@GetAllSetsLabel()</span>
@@ -65,9 +65,9 @@
                         }
                         @foreach (var s in _filteredSets)
                         {
-                            <div class="set-item @(FilterViewModel.SetCodes.Contains(s.Code) ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
-                                 @onclick="@(() => SelectSetFilter(s.Code))">
-                                <span class="set-icon set-symbol set-symbol-@s.Code"></span>
+                            <div class="set-item @(FilterViewModel.ActiveCardSets?.Contains(s.SetCode) == true ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
+                                 @onclick="@(() => SelectSetFilter(s.SetCode))">
+                                <span class="set-icon set-symbol set-symbol-@s.SetCode"></span>
                                 <span class="set-name" title="@s.Name">@s.Name</span>
                                 <span class="set-count">@s.CardCount</span>
                             </div>
@@ -262,14 +262,16 @@
         ("sorcery", "Sorcery"),
     };
 
-    // Sets (loaded from KB via GetKBAvailableSetsQuery)
-    private List<CardSetDto> _sets = new();
-    private List<CardSetDto> _filteredSets = new();
-    private string _setsSearchQuery = "";
+    // Sets: lazy DB-backed view scoped by FilterViewModel.FilteredSetCodes (created per mount —
+    // the component remounts on every navigation @key, so a fresh collection costs at most one small query).
+    private FilteredCardSetsCollection? _setCollection;
 
-    /// <summary>Location mode: flat copies (ParentSetCode reset) of the sets present in the current node's cards.
-    /// The sidebar shows only these; the KB-mode list is always sourced from _sets, which keeps its hierarchy intact.</summary>
-    private List<CardSetDto> _locationSets = new();
+    /// <summary>Last loaded scope list from the collection — the base for the in-memory search narrowing.</summary>
+    private List<CardSet> _scopeSets = new();
+
+    /// <summary>Search text narrowing the displayed set list (in memory only — never touches FilteredSetCodes).</summary>
+    private List<CardSet> _filteredSets = new();
+    private string _setsSearchQuery = "";
 
     // Splitter / Resizable sidebar
     private ElementReference _splitterRef;
@@ -337,11 +339,11 @@
         _previousPinnedCollectionId = PinnedCollectionId;
         // Restore set search text across component remounts (@key change on navigation)
         _setsSearchQuery = FilterViewModel.SetSearchText;
+        _setCollection = new FilteredCardSetsCollection(FilterViewModel, DbStore);
         await LoadSplitterSettingsAsync();
         await LoadViewModeAsync();
         await LoadPageSizeAsync();
         await LoadSetsCollapsedAsync();
-        await LoadSetsFromKB();
         await LoadCounts();
         await ApplyFiltersAndPagination();
     }
@@ -358,7 +360,7 @@
             if (string.IsNullOrEmpty(FilterViewModel.SetSearchText) && !string.IsNullOrEmpty(_setsSearchQuery))
             {
                 _setsSearchQuery = string.Empty;
-                ApplySetsFilter();  // mode-aware base: _locationSets in location mode, _sets in KB
+                ApplySetsFilter();  // re-narrow the last loaded scope list
             }
 
             // Detect an external reset via ClearGeneration: after Clear All the debounced name buffer
@@ -397,27 +399,7 @@
         }
     }
 
-    // ── Sets Loading ──────────────────────────────────────
-    /// <summary>Loads the KB set list into _sets only.
-    /// Deliberately does NOT call ApplySetsFilter(): in location mode the base list is _locationSets,
-    /// which is still empty/stale here — filtering would wipe _filteredSets. Both callers
-    /// (OnInitializedAsync, the RefreshTrigger branch) re-apply the filter afterwards.</summary>
-    private async Task LoadSetsFromKB()
-    {
-        try
-        {
-            var sets = await KBSetsQueryHandler!.Handle(new GetKBAvailableSetsQuery());
-            _sets = sets.Select(DtoHelper.ToCardSetDto)
-                .OrderByDescending(s => s.ReleasedAt)
-                .ThenBy(s => s.ParentSetCode)
-                .ToList();
-        }
-        catch (Exception ex)
-        {
-            _sets = new List<CardSetDto>();
-            _filteredSets = new List<CardSetDto>();
-        }
-    }
+    // ── Sets: lazy DB collection + in-memory search narrowing ────────────
 
     private void OnSetsFilterInput(ChangeEventArgs e)
     {
@@ -431,7 +413,7 @@
 
     private async Task ClearSetsFilter()
     {
-        FilterViewModel.SetNewSetCodeFilter(null);
+        FilterViewModel.SetActiveCardSets(null);
         FilterViewModel.SetSearchText = string.Empty;
         _setsSearchQuery = "";
         ApplySetsFilter();
@@ -448,19 +430,16 @@
     }
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
-    private int GetDisplayedSetsCount() =>
-        IsLocationMode
-            ? _filteredSets.Count                                              // location: only the node's sets are listed
-            : (FilterViewModel.SetCodes.Count == 1 ? 1 : _sets.Count);         // KB: one set selected, or all sets
+    private int GetDisplayedSetsCount() => _filteredSets.Count;
 
     private int GetDisplayedCardsCount()
     {
         if (IsLocationMode)
-            // Unique cards in the current node, narrowed by the selected set when one is chosen.
+            // Unique cards in the current node, narrowed by the active set when one is clicked.
             return _physicalByCardId?.Values
-                .Count(p => FilterViewModel.SetCodes.Count != 1 || p.Card.SetCode == FilterViewModel.SetCodes[0]) ?? 0;
-        if (FilterViewModel.SetCodes.Count == 1)
-            return _sets.FirstOrDefault(s => s.Code == FilterViewModel.SetCodes[0])?.CardCount ?? 0;
+                .Count(p => FilterViewModel.ActiveCardSets is null || p.Card.SetCode == FilterViewModel.ActiveCardSets[0]) ?? 0;
+        if (FilterViewModel.ActiveCardSets is { Count: 1 })
+            return _filteredSets.FirstOrDefault(s => s.SetCode == FilterViewModel.ActiveCardSets![0])?.CardCount ?? 0;
         // KB, no set selected: total cards from DB
         return _totalCount;
     }
@@ -476,55 +455,49 @@
 
     private void ApplySetsFilter()
     {
-        // Base list depends on the mode: KB — all synced sets; location — only the node's sets (flat copies).
-        var baseSets = IsLocationMode ? _locationSets : _sets;
-
-        if (string.IsNullOrWhiteSpace(_setsSearchQuery) || _setsSearchQuery.Length < 2)
+        // Base list = the lazy DB collection scoped by FilteredSetCodes (all sets in KB, node's sets in location mode).
+        if (!IsSetsSearchActive)
         {
-            _filteredSets = baseSets;
+            _filteredSets = _scopeSets;
         }
         else
         {
             var q = _setsSearchQuery.ToLowerInvariant();
-            _filteredSets = baseSets
+            _filteredSets = _scopeSets
                 .Where(s => s.Name.ToLowerInvariant().Contains(q) ||
-                            s.Code.ToLowerInvariant().Contains(q))
+                            s.SetCode.ToLowerInvariant().Contains(q))
                 .ToList();
         }
     }
 
-    /// <summary>Location mode: rebuilds the sidebar set list from the current node's cards.
-    /// Takes flat copies (ParentSetCode reset) so _sets keeps its hierarchy untouched, and drops the
-    /// selection if it references a set absent in this node (no-op for an empty selection).</summary>
-    private void ApplyLocationSets(IEnumerable<string> setCodes)
+    /// <summary>Location mode: scopes the set list to this node's sets (writes FilteredSetCodes —
+    /// idempotent, so a scope-key change happens only when the node actually differs) and drops a
+    /// stale selection that references a set absent in the node.</summary>
+    private void ApplyLocationScope(IEnumerable<string> setCodes)
     {
-        var codes = new HashSet<string>(setCodes);
-        _locationSets = _sets.Where(s => codes.Contains(s.Code))
-                             .Select(s => s with { ParentSetCode = null })
-                             .ToList();
-        if (FilterViewModel.SetCodes.Any(c => !codes.Contains(c)))
-            FilterViewModel.SetNewSetCodeFilter(null);
-        ApplySetsFilter();  // narrow the node's sets by the search text, if any
+        var codes = setCodes.Distinct().ToList();
+        FilterViewModel.SetFilteredSetCodes(codes);
+        if (FilterViewModel.ActiveCardSets is not null
+            && !codes.Contains(FilterViewModel.ActiveCardSets[0], StringComparer.OrdinalIgnoreCase))
+            FilterViewModel.SetActiveCardSets(null);
     }
 
     private async Task SelectSetFilter(string setCode)
     {
-        // Single selection: click = select exactly this set (replaces any previous selection).
-        // Clicking the already-selected set is a no-op — always exactly one node stays selected.
-        if (FilterViewModel.SetCodes.Count == 1 && FilterViewModel.SetCodes[0] == setCode) return;
+        // Click = activate exactly this set for the card grid (ActiveCardSets). The set-list scope
+        // (FilteredSetCodes) is untouched — the sidebar keeps showing the full scoped list.
+        // Clicking the already-active set is a no-op; ALL / ✕ clear the selection.
+        if (FilterViewModel.ActiveCardSets is { Count: 1 } && FilterViewModel.ActiveCardSets[0] == setCode) return;
 
-        // The search text is kept: the sidebar stays narrowed with the selected set highlighted,
-        // and ALL stays hidden. Clearing the filter (✕ / Clear All) is the only way back to all sets.
-        FilterViewModel.SetNewSetCodeFilter(setCode);
+        FilterViewModel.SetActiveCardSets(setCode);
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
     }
 
     private async Task SelectAllSets()
     {
-        FilterViewModel.SetNewSetCodeFilter(null);
-        FilterViewModel.SetSearchText = string.Empty;
-        _setsSearchQuery = "";  // Clear search text too
+        // ALL resets the selection only — the scoped list stays as is.
+        FilterViewModel.SetActiveCardSets(null);
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
     }
@@ -628,9 +601,8 @@
         {
             _previousRefreshTrigger = RefreshTrigger;
             _currentPage = 1;
-            await LoadSetsFromKB();   // reload sets list after sync
-            ApplySetsFilter();         // re-apply search filter on sets
-            await LoadCounts();        // refresh total card count
+            _setCollection?.Invalidate();  // sync may have added new sets — force a DB reload
+            await LoadCounts();            // refresh total card count
             await ApplyFiltersAndPagination();
         }
 
@@ -663,9 +635,9 @@
         // keeps the callback itself inert even if a future caller invokes it there.
         if (IsLocationMode) return;
 
-        if (FilterViewModel.SetCodes.Count == 1)
+        if (FilterViewModel.ActiveCardSets is { Count: 1 })
         {
-            await OnOpenSync.InvokeAsync(FilterViewModel.SetCodes[0]);
+            await OnOpenSync.InvokeAsync(FilterViewModel.ActiveCardSets[0]);
         }
         else
         {
@@ -799,19 +771,32 @@
         try
         {
             // Location mode: load physical instances first — needed both for per-card counts/actions
-            // and to rebuild the sidebar set list from this node's distinct sets.
+            // and to scope the sidebar set list to this node's distinct sets.
             if (FilterViewModel.CurrentCollectionId.HasValue)
             {
                 var physical = await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value);
                 _physicalByCardId = physical.ToDictionary(p => p.Card.Id, p => p);
-                ApplyLocationSets(physical.Select(p => p.Card.SetCode).OfType<string>().Distinct());
+                ApplyLocationScope(physical.Select(p => p.Card.SetCode).OfType<string>());
             }
             else
             {
                 _physicalByCardId = null;
-                _locationSets = new List<CardSetDto>();  // back to KB mode — drop the node-scoped list
-                ApplySetsFilter();                        // _filteredSets = _sets, narrowed by search if any
+                // KB mode: full scope — all sets in the knowledge base.
+                if (FilterViewModel.FilteredSetCodes.Count > 0)
+                    FilterViewModel.SetFilteredSetCodes(null);
             }
+
+            // Load the scoped set list for the sidebar (lazy DB view of FilteredSetCodes),
+            // then narrow it by the search text in memory. An empty node has no sets at all —
+            // loading with an empty scope would fall back to the full KB, so short-circuit it.
+            // Display order is applied here as a guard: newest release first, then by parent set code.
+            _scopeSets = _physicalByCardId is { Count: 0 }
+                ? new List<CardSet>()
+                : (await _setCollection!.EnsureLoadedAsync())
+                    .OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue)
+                    .ThenBy(s => s.ParentSetCode)
+                    .ToList();
+            ApplySetsFilter();
 
             // FilterViewModel.SortField already matches CardListFilter.SortFields values
             var sortField = FilterViewModel.SortField;
@@ -822,7 +807,7 @@
 
             var filter = new CardListFilter
             {
-                SetCodes = FilterViewModel.SetCodes.Count > 0 ? FilterViewModel.SetCodes : null,
+                SetCodes = FilterViewModel.GetEffectiveSetCodes(),
                 Rarity = FilterViewModel.Rarity.Count > 0 ? FilterViewModel.Rarity : null,
                 SortField = sortField,
                 SortAsc = FilterViewModel.SortAsc,
@@ -1138,7 +1123,7 @@
 
     /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
     private bool HasActiveFilters =>
-        FilterViewModel.SetCodes.Count > 0
+        FilterViewModel.ActiveCardSets is not null
         || (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
         || FilterViewModel.Rarity.Count > 0
         || FilterViewModel.TypeFilter.Count > 0

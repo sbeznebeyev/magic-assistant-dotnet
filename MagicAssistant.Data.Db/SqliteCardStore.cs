@@ -860,6 +860,48 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         }).ToList();
     }
 
+    public async Task<ICollection<CardSet>> GetCardSetsByCodesAsync(ICollection<string> setCodes, CancellationToken ct = default)
+    {
+        if (setCodes.Count == 0) return new List<CardSet>();
+
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // SQLite parameter limit is 999 — beyond that fall back to the full list + in-memory filter.
+        if (setCodes.Count > 900)
+        {
+            var wanted = new HashSet<string>(setCodes, StringComparer.OrdinalIgnoreCase);
+            return (await GetCardSetsAsync(ct)).Where(s => wanted.Contains(s.SetCode)).ToList();
+        }
+
+        var codes = setCodes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var sql = $"SELECT * FROM CardSet WHERE {string.Join(" OR ", codes.Select((_, i) => $"SetCode = @c{i}"))} ORDER BY ReleaseDate";
+        var parameters = new DynamicParameters();
+        for (var i = 0; i < codes.Count; i++)
+            parameters.Add($"@c{i}", codes[i]);
+
+        var rows = await conn.QueryAsync<CardSetRow>(sql, parameters);
+        return rows.Select(r =>
+        {
+            var cardSet = new CardSet(
+                r.Id,
+                r.SetCode,
+                r.Name,
+                uri: r.Uri,
+                scryfallUri: r.ScryfallUri,
+                searchUri: r.SearchUri,
+                setType: r.SetType ?? "?",
+                cardCount: r.CardCount,
+                parentSetCode: r.ParentSetCode,
+                digital: r.Digital,
+                nonfoilOnly: r.NonfoilOnly,
+                foilOnly: r.FoilOnly,
+                iconSvgUri: r.IconSvgUri,
+                releaseDate: r.ReleaseDate);
+            return cardSet;
+        }).ToList();
+    }
+
     public async Task<int> BulkUpsertSetsAsync(CardSet[] sets, CancellationToken ct = default)
     {
         if (sets.Length == 0) return 0;

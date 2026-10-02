@@ -52,11 +52,15 @@ public class FilterViewModel
 
     // ── Filter properties ──
 
-    /// <summary>Set code filters — values combined as OR expression (set1 OR set2 OR ...).
-    /// The CardsListControl sidebar uses single selection (0 = all sets, 1 = the selected set);
-    /// other callers may replace the whole list with a collection via <see cref="SetSetCodes" />.
-    /// External components should use the setter methods instead of mutating directly.</summary>
-    public List<string> SetCodes { get; set; } = new();
+    /// <summary>Scope of the displayed set list (FilteredCardSetsCollection). Empty = all sets in the KB.
+    /// Written only by location-mode auto-fill (the node's card set codes) and by <see cref="Clear" />;
+    /// set clicks and the sidebar search text do NOT touch it. Use <see cref="SetFilteredSetCodes" />.</summary>
+    public List<string> FilteredSetCodes { get; set; } = new();
+
+    /// <summary>Set selection made by clicking a set in the sidebar. Null = no selection —
+    /// the card filter then falls back to <see cref="FilteredSetCodes" />.
+    /// A click sets exactly one code; ALL / ✕ / <see cref="Clear" /> reset it to null.</summary>
+    public List<string>? ActiveCardSets { get; set; }
 
     /// <summary>Text from the "Filter sets..." sidebar input. Narrows only the visible set list in
     /// CardsListControl's sidebar — the card grid follows the explicit single selection, not the search text.
@@ -174,28 +178,29 @@ public class FilterViewModel
 
     public bool SortAsc { get; set; } = true;
 
-    /// <summary>Peresozdaet SetCodes как новый List&lt;string&gt; с одним значением.
-    /// Если строка пустая — создаёт пустой список.
-    /// Это единственный способ изменить фильтр сетов из внешних компонентов (тулбар/сайдбар).</summary>
-    /// <param name="value">Set code string, or empty/whitespace to clear the list.</param>
-    public void SetNewSetCodeFilter(string? value)
+    /// <summary>Replace the set-list scope with a normalized collection of codes (trimmed, distinct).
+    /// Null/empty = all sets in the KB.</summary>
+    public void SetFilteredSetCodes(IEnumerable<string>? codes)
     {
-        SetCodes = string.IsNullOrWhiteSpace(value)
+        FilteredSetCodes = codes is null
             ? new List<string>()
-            : new List<string> { value.Trim() };
+            : codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToList();
     }
 
-    /// <summary>Replace SetCodes with a collection of values.</summary>
-    public void SetSetCodes(IEnumerable<string> values)
+    /// <summary>Set the clicked-set selection. Null/empty clears it (back to the scope filter).</summary>
+    public void SetActiveCardSets(string? setCode)
     {
-        SetCodes = new List<string>(values);
+        ActiveCardSets = string.IsNullOrWhiteSpace(setCode)
+            ? null
+            : new List<string> { setCode.Trim() };
     }
 
-    /// <summary>Превращает текущий список сетов в выражение "set1 OR set2 OR ...".
-    /// Используется при построении SQL-запроса через CardListFilter.SetCodes.</summary>
-    public string GetSetCodesOrExpression()
+    /// <summary>Effective card-grid set filter: the clicked selection wins over the scope.
+    /// Null = no set filtering at all.</summary>
+    public List<string>? GetEffectiveSetCodes()
     {
-        return string.Join(" OR ", SetCodes.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var codes = ActiveCardSets ?? FilteredSetCodes;
+        return codes.Count > 0 ? codes : null;
     }
 
     /// <summary>Peresozdaet TypeFilter как новый List&lt;string&gt; с одним значением.
@@ -254,7 +259,8 @@ public class FilterViewModel
     public void Clear()
     {
         ClearGeneration++;
-        SetCodes = new List<string>();
+        FilteredSetCodes = new List<string>();
+        ActiveCardSets = null;
         SetSearchText = string.Empty;
         Rarity = new List<string>();
         NameFilter = string.Empty;

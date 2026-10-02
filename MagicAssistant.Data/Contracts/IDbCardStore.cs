@@ -13,6 +13,12 @@ public interface IDbCardStore : ICardStore<MagicCard>
     Task<ICollection<CardSet>> GetCardSetsAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Get only the sets whose codes are in <paramref name="setCodes"/> (case-insensitive).
+    /// Empty input returns an empty collection. Scope for FilteredCardSetsCollection.
+    /// </summary>
+    Task<ICollection<CardSet>> GetCardSetsByCodesAsync(ICollection<string> setCodes, CancellationToken ct = default);
+
+    /// <summary>
     /// Get a single set by its abbreviation code (e.g. "M19", "mh2").
     /// Returns null if not found.
     /// </summary>
