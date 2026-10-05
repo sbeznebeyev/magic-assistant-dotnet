@@ -222,11 +222,11 @@ public class XmlImportTests
     }
 
     [Test]
-    public void ImportFromFileAsync_ThrowsForNonExistentFile()
+    public async Task ImportFromFileAsync_ThrowsForNonExistentFile()
     {
         // On Linux, non-existent path throws DirectoryNotFoundException.
         // The original test expected FileNotFoundException, but that's incorrect for this platform.
-        var ex = Assert.ThrowsAsync<DirectoryNotFoundException>(
+        var ex = await Assert.ThrowsAsync<DirectoryNotFoundException>(
             () => XmlImport.ImportFromFileAsync("/nonexistent/path/file.xml"));
         Assert.That(ex, Is.Not.Null);
     }

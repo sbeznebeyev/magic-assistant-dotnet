@@ -226,7 +226,7 @@ public class SqliteCardStoreTests
         var card = CreateTestCard(Guid.NewGuid(), "Name");
         await _store.AddAsync(card);
 
-        Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAsync(card));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAsync(card));
     }
 
     [Test]
@@ -235,7 +235,7 @@ public class SqliteCardStoreTests
         var card = CreateTestCard(Guid.NewGuid(), "Name");
         await _store.AddAsync(card);
 
-        Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAllAsync(new[] { card }));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAllAsync(new[] { card }));
     }
 
     [Test]

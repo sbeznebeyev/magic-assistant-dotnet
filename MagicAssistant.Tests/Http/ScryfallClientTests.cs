@@ -147,7 +147,7 @@ public class ScryfallClientTests
     {
         _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
 
-        Assert.ThrowsAsync<HttpRequestException>(() => _client.GetCardByIdAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetCardByIdAsync(Guid.NewGuid()));
     }
 
     /* ═══════════════════════════════════════════════════════
@@ -236,7 +236,7 @@ public class ScryfallClientTests
     {
         _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.BadGateway));
 
-        Assert.ThrowsAsync<HttpRequestException>(() => _client.GetSetsAsync());
+        await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetSetsAsync());
     }
 
     // ═══════════════════════════════════════════════════════

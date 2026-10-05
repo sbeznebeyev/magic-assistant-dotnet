@@ -291,7 +291,7 @@ public class SqliteCollectionStoreTests
         await _store.AddAsync(new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 });
         await _store.LockAsync(deck.Id);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(deck.Id, Array.Empty<Guid>()));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(deck.Id, Array.Empty<Guid>()));
         Assert.That(ex!.Message, Does.Contain("locked"));
         Assert.That(await _store.GetDeckCardsAsync(deck.Id), Has.Count.EqualTo(1), "Карты не удалены");
     }
@@ -299,7 +299,7 @@ public class SqliteCollectionStoreTests
     [Test]
     public async Task RemoveCardsAsync_NodeNotFound_Throws()
     {
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(9999, Array.Empty<Guid>()));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(9999, Array.Empty<Guid>()));
         Assert.That(ex!.Message, Does.Contain("not found"));
     }
 
