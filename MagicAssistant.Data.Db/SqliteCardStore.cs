@@ -1827,36 +1827,26 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
-        // Single query: CTE for unique KB cards per set + collected/owned cards per set.
-        // LEFT JOIN Editions to include sets with 0 cards in KB.
+        // Single query: set size from CardSet.CardCount (Scryfall checklist) +
+        // collected/owned distinct printings per set in one Deck x Cards pass.
+        // Dedup key is CollectorNumber within a set: different printings of the
+        // same OracleId+Language are separate cards, a different Language for the
+        // same printing is a duplicate (shared CollectorNumber).
         var sql = @"
-            WITH UniqueKbCards AS (
-                SELECT SetCode, COUNT(DISTINCT Name) AS TotalCards
-                FROM Cards
-                GROUP BY SetCode
-            ),
-            CollectedCards AS (
-                SELECT c.SetCode, COUNT(DISTINCT c.Name) AS CollectedCards
-                FROM Deck dc
-                INNER JOIN Cards c ON dc.CardId = c.Id
-                GROUP BY c.SetCode
-            ),
-            OwnedCards AS (
-                SELECT c.SetCode, COUNT(DISTINCT c.Name) AS OwnedCards
-                FROM Deck dc
-                INNER JOIN Cards c ON dc.CardId = c.Id
-                WHERE dc.IsOwn = 1
-                GROUP BY c.SetCode
-            )
             SELECT s.SetCode,
                    s.Name AS SetName,
-                   COALESCE(u.TotalCards, 0) AS TotalCards,
-                   COALESCE(col.CollectedCards, 0) AS CollectedCards,
-                   COALESCE(o.OwnedCards, 0) AS OwnedCards
+                   s.CardCount AS TotalCards,
+                   COALESCE(c.CollectedCards, 0) AS CollectedCards,
+                   COALESCE(c.OwnedCards, 0) AS OwnedCards
             FROM CardSet s
-            LEFT JOIN UniqueKbCards u ON u.SetCode = s.SetCode
-            LEFT JOIN CollectedCards col ON col.SetCode = s.SetCode
-            LEFT JOIN OwnedCards o ON o.SetCode = s.SetCode
+            LEFT JOIN (
+                SELECT c.SetCode,
+                       COUNT(DISTINCT c.CollectorNumber) AS CollectedCards,
+                       COUNT(DISTINCT CASE WHEN dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedCards
+                FROM Deck dc
+                INNER JOIN Cards c ON dc.CardId = c.Id
+                GROUP BY c.SetCode
+            ) c ON c.SetCode = s.SetCode
             ORDER BY s.Name";
 
         // Use dynamic to avoid Dapper type caching issues with empty result sets

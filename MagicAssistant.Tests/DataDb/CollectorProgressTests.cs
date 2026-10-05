@@ -53,8 +53,8 @@ public class CollectorProgressTests
     [Test]
     public async Task CollectorProgress_EmptyDatabase_ReturnsEditionsWithZeroCounts()
     {
-        // Add edition only, no cards
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        // Add set only, no cards — CardCount 0 → Total 0
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core"));
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -65,21 +65,20 @@ public class CollectorProgressTests
     }
 
     [Test]
-    public async Task CollectorProgress_CardsInKB_CountsDistinctNames()
+    public async Task CollectorProgress_Total_ComesFromSetCardCount()
     {
-        // Add 2 printings of the same card name + 1 different card
+        // Total is the Scryfall checklist size stored on the set, not a KB aggregate
         await _cardStore.AddAllAsync(new[]
         {
-            CreateCard(Guid.NewGuid(), "Lightning Bolt", "m19"),
-            CreateCard(Guid.NewGuid(), "Lightning Bolt", "m20"), // Same name, different set — counts as 1 in M19
-            CreateCard(Guid.NewGuid(), "Mountain", "m19"),
+            CreateCard(Guid.NewGuid(), "Lightning Bolt", "m19", "1"),
+            CreateCard(Guid.NewGuid(), "Mountain", "m19", "2"),
         });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 300));
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
         var m19 = progress.First(p => p.SetAbbreviation == "m19");
-        Assert.That(m19.TotalCards, Is.EqualTo(2L)); // Lightning Bolt + Mountain (distinct names)
+        Assert.That(m19.TotalCards, Is.EqualTo(300L)); // CardSet.CardCount as-is
     }
 
     [Test]
@@ -90,10 +89,10 @@ public class CollectorProgressTests
 
         await _cardStore.AddAllAsync(new[]
         {
-            CreateCard(cardId1, "Lightning Bolt", "m19"),
-            CreateCard(cardId2, "Mountain", "m19"),
+            CreateCard(cardId1, "Lightning Bolt", "m19", "1"),
+            CreateCard(cardId2, "Mountain", "m19", "2"),
         });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
 
         // Create deck with 1 owned + 1 borrowed card
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
@@ -113,7 +112,7 @@ public class CollectorProgressTests
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
         var m19 = progress.First(p => p.SetAbbreviation == "m19");
-        Assert.That(m19.TotalCards, Is.EqualTo(2L)); // Both in KB
+        Assert.That(m19.TotalCards, Is.EqualTo(2L)); // Set checklist size
         Assert.That(m19.OwnedCards, Is.EqualTo(1L));  // Only Lightning Bolt is owned
     }
 
@@ -122,12 +121,12 @@ public class CollectorProgressTests
     {
         await _cardStore.AddAllAsync(new[]
         {
-            CreateCard(Guid.NewGuid(), "Lightning Bolt", "m19"),
-            CreateCard(Guid.NewGuid(), "Mountain", "m19"),
-            CreateCard(Guid.NewGuid(), "Forest", "m20"),
+            CreateCard(Guid.NewGuid(), "Lightning Bolt", "m19", "1"),
+            CreateCard(Guid.NewGuid(), "Mountain", "m19", "2"),
+            CreateCard(Guid.NewGuid(), "Forest", "m20", "1"),
         });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
-        await _cardStore.AddSetAsync(new CardSet("m20", "Magic 2020", null, "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m20", "Magic 2020", setType: "core", cardCount: 1));
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -145,9 +144,9 @@ public class CollectorProgressTests
 
         await _cardStore.AddAllAsync(new[]
         {
-            CreateCard(cardId, "Lightning Bolt", "m19"),
+            CreateCard(cardId, "Lightning Bolt", "m19", "1"),
         });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 1));
 
         // Create two decks with the same card
         var deck1 = await _collectionStore.CreateDeckAsync("Deck 1");
@@ -170,17 +169,20 @@ public class CollectorProgressTests
     }
 
     [Test]
-    public async Task CollectorProgress_DifferentPrintingsSameName_CountedOnce()
+    public async Task CollectorProgress_DifferentPrintingsSameOracleAndLanguage_CountedSeparately()
     {
+        // Same OracleId + Language, different Id/CollectorNumber → two separate cards
+        var oracleId = Guid.NewGuid();
         var cardId1 = Guid.NewGuid();
         var cardId2 = Guid.NewGuid();
 
-        await _cardStore.AddAllAsync(new[]
-        {
-            CreateCard(cardId1, "Lightning Bolt", "m19"),
-            CreateCard(cardId2, "Lightning Bolt", "m19"), // Different printing, same name
-        });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        var card1 = CreateCard(cardId1, "Lightning Bolt", "m19", "108a");
+        card1.OracleId = oracleId;
+        var card2 = CreateCard(cardId2, "Lightning Bolt", "m19", "108b"); // alt art, same language
+        card2.OracleId = oracleId;
+
+        await _cardStore.AddAllAsync(new[] { card1, card2 });
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 
@@ -198,8 +200,43 @@ public class CollectorProgressTests
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
         var m19 = progress.First(p => p.SetAbbreviation == "m19");
-        Assert.That(m19.TotalCards, Is.EqualTo(1L));   // Distinct name = 1
-        Assert.That(m19.OwnedCards, Is.EqualTo(1L));    // Distinct owned name = 1
+        Assert.That(m19.OwnedCards, Is.EqualTo(2L)); // Different CollectorNumbers = different cards
+    }
+
+    [Test]
+    public async Task CollectorProgress_SamePrintingOtherLanguage_CountedOnce()
+    {
+        // Same OracleId + CollectorNumber, different Language → one card (language duplicate)
+        var oracleId = Guid.NewGuid();
+        var cardIdEn = Guid.NewGuid();
+        var cardIdRu = Guid.NewGuid();
+
+        var cardEn = CreateCard(cardIdEn, "Lightning Bolt", "m19", "108");
+        cardEn.OracleId = oracleId;
+        var cardRu = CreateCard(cardIdRu, "Lightning Bolt", "m19", "108"); // ru duplicate
+        cardRu.OracleId = oracleId;
+        cardRu.Language = "ru";
+
+        await _cardStore.AddAllAsync(new[] { cardEn, cardRu });
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 1));
+
+        var deck = await _collectionStore.CreateDeckAsync("Test Deck");
+
+        // Own both language variants of the same printing
+        await _collectionStore.AddAsync(
+            new MagicCardPhysical(
+                new MagicCard { Id = cardIdEn, Name = "Lightning Bolt" },
+                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+
+        await _collectionStore.AddAsync(
+            new MagicCardPhysical(
+                new MagicCard { Id = cardIdRu, Name = "Lightning Bolt" },
+                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+
+        var progress = await _cardStore.GetCollectorProgressRawAsync();
+
+        var m19 = progress.First(p => p.SetAbbreviation == "m19");
+        Assert.That(m19.OwnedCards, Is.EqualTo(1L)); // Shared CollectorNumber = one card
     }
 
     [Test]
@@ -208,9 +245,9 @@ public class CollectorProgressTests
         var cardId = Guid.NewGuid();
         await _cardStore.AddAllAsync(new[]
         {
-            CreateCard(cardId, "Lightning Bolt", "m19"),
+            CreateCard(cardId, "Lightning Bolt", "m19", "1"),
         });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 1));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 
@@ -259,10 +296,10 @@ public class CollectorProgressTests
 
         await _cardStore.AddAllAsync(new[]
         {
-            CreateCard(cardId1, "Lightning Bolt", "m19"),
-            CreateCard(cardId2, "Mountain", "m19"),
+            CreateCard(cardId1, "Lightning Bolt", "m19", "1"),
+            CreateCard(cardId2, "Mountain", "m19", "2"),
         });
-        await _cardStore.AddSetAsync(new CardSet("m19", "Magic 2019", null, "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 
@@ -282,7 +319,6 @@ public class CollectorProgressTests
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
         var m19 = progress.First(p => p.SetAbbreviation == "m19");
-        Assert.That(m19.TotalCards, Is.EqualTo(2L));
         Assert.That(m19.OwnedCards, Is.EqualTo(1L)); // Borrowed not counted
     }
 
@@ -296,7 +332,7 @@ public class CollectorProgressTests
         return sbRows[0];
     }
 
-    private static MagicCard CreateCard(Guid cardId, string name, string setCode)
+    private static MagicCard CreateCard(Guid cardId, string name, string setCode, string? collectorNumber = null)
     {
         return new MagicCard
         {
@@ -304,6 +340,7 @@ public class CollectorProgressTests
             Name = name,
             SetCode = setCode,
             Rarity = "Common",
+            CollectorNumber = collectorNumber ?? "1",
         };
     }
 }

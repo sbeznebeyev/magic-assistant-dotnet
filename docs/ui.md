@@ -451,15 +451,17 @@ Grouped view of cards rendered by CardsListControl in tree mode.
 
 **Purpose:** Track collection progress across sets.
 
-**Data source:** `IDeckAnalysisService.GetCollectorProgressAsync()` — single SQL query via CTEs (direct DI, no HTTP).
+**Data source:** `IDeckAnalysisService.GetCollectorProgressAsync()` — single SQL query (direct DI, no HTTP).
+
+**Counting rules:** Total — set checklist size from `CardSet.CardCount` (Scryfall). Collected/Owned — distinct printings across all user decks, deduplicated by `CollectorNumber` within the set: different printings of the same OracleId+Language are separate cards, a different Language for the same printing (shared CollectorNumber) is one card.
 
 **Table columns:**
 
 | Column | Content |
 |--------|---------|
 | Set | Set name |
-| Collected | Unique owned card names in user's decks for this set |
-| Total | Unique card names in KB for this set |
+| Collected | Distinct printings in user's decks for this set (CollectorNumber dedup, language duplicates collapse) |
+| Total | Set checklist size (`CardSet.CardCount`, from Scryfall) |
 | Progress | Visual progress bar (width = percent%) + percentage label |
 | 4x | Reserved for future (currently "—") |
 

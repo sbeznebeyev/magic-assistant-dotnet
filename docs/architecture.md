@@ -140,7 +140,7 @@ MagicAssistant.slnx (net10.0)
 │   │   ├── GetCardInstancesQuery.cs         ← физические экземпляры карты
 │   │   ├── GetCardSetQuery.cs               ← метаданные сета
 │   │   ├── GetDeckAnalysisQuery.cs          ← анализ колоды
-│   │   ├── GetCollectorProgressQuery.cs     ← прогресс коллекционера по сетам (CTE)
+│   │   ├── GetCollectorProgressQuery.cs     ← прогресс коллекционера по сетам (Total из CardSet.CardCount, Collected/Owned — distinct CollectorNumber)
 │   │   ├── GetUserSettingQuery.cs           ← чтение пользовательских настроек
 │   │   ├── GetSetSyncStatusQuery.cs         ← статус синка полных имён сетов одним SQL (в CardSet? сколько карт?)
 │   │   ├── ResolveLegacyCardsQuery.cs       ← батч-резолв legacy-карт: стрип face-суффикса, name→code, (name,set)→UUID по всем полям имени (Name/PrintedName + CardFaces); {Resolved, Unresolved}
@@ -443,7 +443,7 @@ UI не требует заранее скачанных картинок: ес�
 | `GetCardInstancesQuery` | Физические экземпляры карты по всем коллекциям |
 | `GetCardSetQuery` | Метаданные сета (полное имя, дата релиза) |
 | `GetDeckAnalysisQuery` | Однопроходный анализ колоды через `IAnalysisService` |
-| `GetCollectorProgressQuery` | Прогресс коллекционера по сетам (CTE: собрано/всего) |
+| `GetCollectorProgressQuery` | Прогресс коллекционера по сетам (Total — `CardSet.CardCount`; Collected/Owned — distinct `CollectorNumber`, языковые дубли схлопнуты) |
 | `GetUserSettingQuery` | Чтение пользовательских настроек (UI-параметры) |
 | `GetSetSyncStatusQuery` | Статус синка полных имён сетов одним SQL: в CardSet? сколько карт в Cards — детект «сет без карт» для legacy-предпроверки |
 | `ResolveLegacyCardsQuery` | Батч-резолв legacy-карт (read-only): стрип `(Face)` после `//`, имена сетов → коды, (Name, Set) → Scryfall UUID — точное совпадение по всем полям имени (Cards/CardsFaces: Name + PrintedName), локальные имена работают; результат {Resolved: physicals с реальными ID, Unresolved: строки для ручного сопоставления} |
