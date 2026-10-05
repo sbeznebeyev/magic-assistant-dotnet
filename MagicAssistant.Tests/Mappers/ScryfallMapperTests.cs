@@ -147,7 +147,7 @@ public class ScryfallMapperTests
 
         Assert.That(edition.SetCode, Is.EqualTo("m19"));
         Assert.That(edition.Name, Is.EqualTo("Magic 2019"));
-        Assert.That(edition.SetType, Is.EqualTo("core"));
+        Assert.That(edition.SetType, Is.EqualTo(CardSetType.core));
         Assert.That(edition.CardCount, Is.EqualTo(269));
         Assert.That(edition.Id, Is.EqualTo(cardId));
     }

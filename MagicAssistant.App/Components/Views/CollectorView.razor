@@ -1,69 +1,181 @@
 @*
-    CollectorView — Трекер коллекции по сетам
-    Аналог Java: ui.views.collector.CollectorView, ProgressColumn, Progress4Column
-    
-    Показывает прогресс сбора каждого сета: собрано X из Y карт
-    с визуальным прогресс-баром
+    CollectorView — set collection tracker (Showcase mode)
+
+    Two-panel layout: left — two set nodes (in-collection / not-started),
+    right — fixed 360px reserved panel.
+    Each node has a collapsible header; its list flows set elements
+    left-to-right, top-to-bottom. A set element = 32×32 set symbol
+    (.set-symbol-<setCode>) with an optional progress bar below
+    (in-collection node only).
 *@
 
-<div class="section-header">Collector's Progress</div>
-
-<div style="padding: 4px;">
-    @if (_progress != null && _progress.Any())
-    {
-        <table class="card-table">
-            <thead>
-                <tr>
-                    <th>Set</th>
-                    <th>Collected</th>
-                    <th>Total</th>
-                    <th>Progress</th>
-                    <th>4x</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in _progress)
-                {
-                    <tr>
-                        <td>@item.SetName</td>
-                        <td>@item.OwnedCards</td>
-                        <td>@item.TotalCards</td>
-                        <td>
-                            <div style="background:#333; height:12px; border-radius:2px; overflow:hidden;">
-                                <div style="background:#0078d4; height:100%; width:@(item.ProgressPercent)%"></div>
-                            </div>
-                            @item.ProgressPercent.ToString("F0")%
-                        </td>
-                        <td>—</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-    else
-    {
-        <div style="color:#666; text-align:center; padding:20px 0;">
-            No collector data loaded.<br/>
-            Sync sets from Scryfall to track progress.
+<div class="collector-view">
+    <div class="collector-main">
+        @* ── Sort mode toggle above both lists ── *@
+        <div class="sort-bar">
+            <button class="sort-btn @(_sortMode == SortMode.NewestFirst ? "active" : "")" @onclick="() => SetSortMode(SortMode.NewestFirst)">Newest to oldest</button>
+            <button class="sort-btn @(_sortMode == SortMode.ProgressionDesc ? "active" : "")" @onclick="() => SetSortMode(SortMode.ProgressionDesc)">Progression Desc</button>
         </div>
-    }
+
+        @* ── Top node: sets with at least one owned card ── *@
+        <div class="set-node">
+            <div class="node-header" @onclick="ToggleCollectedNode">
+                <span class="node-toggle-glyph">@(_collectedCollapsed ? "▸" : "▾")</span>
+                <span class="node-title">In collection (@_collected.Count)</span>
+            </div>
+            @if (!_collectedCollapsed)
+            {
+                <div class="node-body">
+                    <div class="set-list">
+                        @foreach (var item in _collected)
+                        {
+                            <div class="set-item" title="@item.SetName — @item.OwnedCards / @item.TotalCards">
+                                <span class="set-symbol set-symbol-@item.SetAbbreviation"></span>
+                                <div class="item-progress">
+                                    <div class="progress-fill" style="width: @(item.ProgressPercent)%"></div>
+                                    <span class="progress-label">@item.ProgressPercent.ToString("F1") %</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Bottom node: sets with no cards at all (symbols only) ── *@
+        <div class="set-node">
+            <div class="node-header" @onclick="ToggleRemainingNode">
+                <span class="node-toggle-glyph">@(_remainingCollapsed ? "▸" : "▾")</span>
+                <span class="node-title">Not started (@_remaining.Count)</span>
+            </div>
+            @if (!_remainingCollapsed)
+            {
+                <div class="node-body">
+                    <div class="set-list">
+                        @foreach (var item in _remaining)
+                        {
+                            <div class="set-item" title="@item.SetName">
+                                <span class="set-symbol set-symbol-@item.SetAbbreviation"></span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ── Right panel: fixed 360px, reserved ── *@
+    <div class="collector-side"></div>
 </div>
 
 @using MagicAssistant.Core.Services.DeckAnalysis
 @inject IDeckAnalysisService DeckAnalysisService
 
 @code {
+    /// <summary>NewestFirst — each list by release date desc; equal dates: parent set first, children after.
+    /// ProgressionDesc — only parent sets sorted (progress desc, ties by release date desc); children always follow their parent.</summary>
+    private enum SortMode { NewestFirst, ProgressionDesc }
+
     private ICollection<CollectorProgressEntry>? _progress = null;
+    private List<CollectorProgressEntry> _collected = new();
+    private List<CollectorProgressEntry> _remaining = new();
+    private SortMode _sortMode = SortMode.NewestFirst;
+
+    private bool _collectedCollapsed;
+    private bool _remainingCollapsed;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _progress = await DeckAnalysisService.GetCollectorProgressAsync();
+            ApplySort();
         }
         catch
         {
             _progress = null;
         }
     }
+
+    private void SetSortMode(SortMode mode)
+    {
+        if (_sortMode == mode) return;
+        _sortMode = mode;
+        ApplySort();
+    }
+
+    /// <summary>Splits the loaded progress into the two node lists and applies the active sort to each.</summary>
+    private void ApplySort()
+    {
+        if (_progress == null) return;
+        _collected = SortSets(_progress.Where(p => p.OwnedCards >= 1).ToList(), _sortMode);
+        _remaining = SortSets(_progress.Where(p => p.OwnedCards == 0).ToList(), _sortMode);
+    }
+
+    private static List<CollectorProgressEntry> SortSets(List<CollectorProgressEntry> sets, SortMode mode)
+    {
+        if (mode == SortMode.NewestFirst)
+        {
+            // Release date desc; on equal dates the parent set goes first, children after it.
+            // Scryfall has nested chains (root → child → grandchild), so tie-break by chain
+            // depth — that makes "parent before child" hold transitively within each family.
+            var depths = ComputeDepths(sets);
+            return sets
+                .OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue)
+                .ThenBy(s => depths[s.SetAbbreviation])
+                .ToList();
+        }
+
+        // ProgressionDesc: only root (parent) sets are ranked — progress desc, ties by release date desc.
+        // A child always follows its parent; nested families flatten whole under the root.
+        // A child whose parent is absent from this list becomes a root of its own group.
+        var byCode = sets.ToDictionary(s => s.SetAbbreviation);
+        var childrenOf = new Dictionary<string, List<CollectorProgressEntry>>();
+        foreach (var s in sets.Where(s => !string.IsNullOrEmpty(s.ParentSetCode) && byCode.ContainsKey(s.ParentSetCode!)))
+        {
+            if (!childrenOf.TryGetValue(s.ParentSetCode!, out var kids))
+                childrenOf[s.ParentSetCode!] = kids = new List<CollectorProgressEntry>();
+            kids.Add(s);
+        }
+
+        var roots = sets.Where(s => string.IsNullOrEmpty(s.ParentSetCode) || !byCode.ContainsKey(s.ParentSetCode!)).ToList();
+        var result = new List<CollectorProgressEntry>();
+        var visited = new HashSet<string>();
+        foreach (var root in roots.OrderByDescending(s => s.ProgressPercent)
+                                 .ThenByDescending(s => s.ReleaseDate ?? DateTime.MinValue))
+            AddFamily(root);
+        return result;
+
+        void AddFamily(CollectorProgressEntry set)
+        {
+            if (!visited.Add(set.SetAbbreviation)) return;  // cycle guard for broken data
+            result.Add(set);
+            if (childrenOf.TryGetValue(set.SetAbbreviation, out var kids))
+                foreach (var kid in kids)
+                    AddFamily(kid);
+        }
+    }
+
+    /// <summary>Chain depth per set code: root = 0, child = 1, grandchild = 2… (cycle-safe).</summary>
+    private static Dictionary<string, int> ComputeDepths(List<CollectorProgressEntry> sets)
+    {
+        var parentOf = sets.ToDictionary(s => s.SetAbbreviation, s => s.ParentSetCode);
+        var depth = new Dictionary<string, int>();
+        foreach (var code in parentOf.Keys)
+            DepthOf(code);
+        return depth;
+
+        int DepthOf(string code)
+        {
+            if (depth.TryGetValue(code, out var d)) return d;
+            depth[code] = 0;  // cycle guard — a broken chain truncates at 0
+            var parent = parentOf[code];
+            int v = !string.IsNullOrEmpty(parent) && parentOf.ContainsKey(parent) ? DepthOf(parent!) + 1 : 0;
+            depth[code] = v;
+            return v;
+        }
+    }
+
+    private void ToggleCollectedNode() => _collectedCollapsed = !_collectedCollapsed;
+    private void ToggleRemainingNode() => _remainingCollapsed = !_remainingCollapsed;
 }

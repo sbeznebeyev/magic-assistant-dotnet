@@ -793,7 +793,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 cardSet.Uri,
                 cardSet.ScryfallUri,
                 cardSet.SearchUri,
-                cardSet.SetType,
+                SetType = cardSet.SetType.ToString(),
                 cardSet.CardCount,
                 cardSet.ParentSetCode,
                 cardSet.Digital,
@@ -823,7 +823,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             uri: row.Uri,
             scryfallUri: row.ScryfallUri,
             searchUri: row.SearchUri,
-            setType: row.SetType ?? "?",
+            setType: CardSetTypes.FromDb(row.SetType),
             cardCount: row.CardCount,
             parentSetCode: row.ParentSetCode,
             digital: row.Digital,
@@ -848,7 +848,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 uri: r.Uri,
                 scryfallUri: r.ScryfallUri,
                 searchUri: r.SearchUri,
-                setType: r.SetType ?? "?",
+                setType: CardSetTypes.FromDb(r.SetType),
                 cardCount: r.CardCount,
                 parentSetCode: r.ParentSetCode,
                 digital: r.Digital,
@@ -890,7 +890,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 uri: r.Uri,
                 scryfallUri: r.ScryfallUri,
                 searchUri: r.SearchUri,
-                setType: r.SetType ?? "?",
+                setType: CardSetTypes.FromDb(r.SetType),
                 cardCount: r.CardCount,
                 parentSetCode: r.ParentSetCode,
                 digital: r.Digital,
@@ -919,7 +919,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 s.Uri,
                 s.ScryfallUri,
                 s.SearchUri,
-                s.SetType,
+                SetType = s.SetType.ToString(),
                 s.CardCount,
                 s.ParentSetCode,
                 s.Digital,
@@ -966,7 +966,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 s.Uri,
                 s.ScryfallUri,
                 s.SearchUri,
-                s.SetType,
+                SetType = s.SetType.ToString(),
                 s.CardCount,
                 s.ParentSetCode,
                 s.Digital,
@@ -1012,7 +1012,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 s.Uri,
                 s.ScryfallUri,
                 s.SearchUri,
-                s.SetType,
+                SetType = s.SetType.ToString(),
                 s.CardCount,
                 s.ParentSetCode,
                 s.Digital,
@@ -1837,7 +1837,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                    s.Name AS SetName,
                    s.CardCount AS TotalCards,
                    COALESCE(c.CollectedCards, 0) AS CollectedCards,
-                   COALESCE(c.OwnedCards, 0) AS OwnedCards
+                   COALESCE(c.OwnedCards, 0) AS OwnedCards,
+                   s.ReleaseDate,
+                   s.ParentSetCode
             FROM CardSet s
             LEFT JOIN (
                 SELECT c.SetCode,
@@ -1856,7 +1858,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             (string?)r.SetName,
             Convert.ToInt64(r.TotalCards),
             Convert.ToInt64(r.CollectedCards),
-            Convert.ToInt64(r.OwnedCards))).ToList();
+            Convert.ToInt64(r.OwnedCards),
+            ReleaseDate: r.ReleaseDate is DateTime rd ? (DateTime?)rd : null,
+            ParentSetCode: r.ParentSetCode is string ps ? ps : null)).ToList();
         return rows;
     }
 

@@ -152,9 +152,6 @@ builder.Services.AddScoped<GetCardSetQueryHandler>();
 builder.Services.AddScoped<SyncCardSetsCommandHandler>();
 // On-demand per-card image download (lazy loading) — reuses the set-sync image pipeline
 builder.Services.AddScoped<DownloadCardImagesCommandHandler>();
-// GetCollectorProgressQueryHandler — uses IDbCardStore.GetCollectorProgressRawAsync (single SQL, no ICollectionStore needed)
-builder.Services.AddScoped<GetCollectorProgressQueryHandler>();
-
 // User Settings commands & queries
 builder.Services.AddScoped<SaveUserSettingCommandHandler>();
 builder.Services.AddScoped<GetUserSettingQueryHandler>();

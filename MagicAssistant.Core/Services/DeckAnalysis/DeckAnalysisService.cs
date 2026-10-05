@@ -47,7 +47,9 @@ public class DeckAnalysisService : IDeckAnalysisService
             SetName: r.SetName ?? r.SetAbbreviation,
             OwnedCards: (int)r.OwnedCards,
             TotalCards: (int)r.TotalCards,
-            ProgressPercent: r.TotalCards > 0 ? (double)r.CollectedCards / r.TotalCards * 100 : 0)).ToList();
+            ProgressPercent: r.TotalCards > 0 ? (double)r.OwnedCards / r.TotalCards * 100 : 0,
+            ReleaseDate: r.ReleaseDate,
+            ParentSetCode: r.ParentSetCode)).ToList();
     }
 
     /// <inheritdoc />
@@ -65,6 +67,8 @@ public class DeckAnalysisService : IDeckAnalysisService
             SetName: row.SetName ?? setAbbreviation,
             OwnedCards: (int)row.OwnedCards,
             TotalCards: (int)row.TotalCards,
-            ProgressPercent: row.TotalCards > 0 ? (double)row.CollectedCards / row.TotalCards * 100 : 0) : null;
+            ProgressPercent: row.TotalCards > 0 ? (double)row.OwnedCards / row.TotalCards * 100 : 0,
+            ReleaseDate: row.ReleaseDate,
+            ParentSetCode: row.ParentSetCode) : null;
     }
 }

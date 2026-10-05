@@ -54,7 +54,7 @@ public class CollectorProgressTests
     public async Task CollectorProgress_EmptyDatabase_ReturnsEditionsWithZeroCounts()
     {
         // Add set only, no cards — CardCount 0 → Total 0
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core"));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core));
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -73,7 +73,7 @@ public class CollectorProgressTests
             CreateCard(Guid.NewGuid(), "Lightning Bolt", "m19", "1"),
             CreateCard(Guid.NewGuid(), "Mountain", "m19", "2"),
         });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 300));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 300));
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -92,7 +92,7 @@ public class CollectorProgressTests
             CreateCard(cardId1, "Lightning Bolt", "m19", "1"),
             CreateCard(cardId2, "Mountain", "m19", "2"),
         });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 2));
 
         // Create deck with 1 owned + 1 borrowed card
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
@@ -125,8 +125,8 @@ public class CollectorProgressTests
             CreateCard(Guid.NewGuid(), "Mountain", "m19", "2"),
             CreateCard(Guid.NewGuid(), "Forest", "m20", "1"),
         });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m20", "Magic 2020", setType: "core", cardCount: 1));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 2));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m20", "Magic 2020", setType: CardSetType.core, cardCount: 1));
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -146,7 +146,7 @@ public class CollectorProgressTests
         {
             CreateCard(cardId, "Lightning Bolt", "m19", "1"),
         });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 1));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 1));
 
         // Create two decks with the same card
         var deck1 = await _collectionStore.CreateDeckAsync("Deck 1");
@@ -182,7 +182,7 @@ public class CollectorProgressTests
         card2.OracleId = oracleId;
 
         await _cardStore.AddAllAsync(new[] { card1, card2 });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 2));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 
@@ -218,7 +218,7 @@ public class CollectorProgressTests
         cardRu.Language = "ru";
 
         await _cardStore.AddAllAsync(new[] { cardEn, cardRu });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 1));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 1));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 
@@ -247,7 +247,7 @@ public class CollectorProgressTests
         {
             CreateCard(cardId, "Lightning Bolt", "m19", "1"),
         });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 1));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 1));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 
@@ -299,7 +299,7 @@ public class CollectorProgressTests
             CreateCard(cardId1, "Lightning Bolt", "m19", "1"),
             CreateCard(cardId2, "Mountain", "m19", "2"),
         });
-        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: "core", cardCount: 2));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 2));
 
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
 

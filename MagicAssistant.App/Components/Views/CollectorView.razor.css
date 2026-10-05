@@ -1,0 +1,153 @@
+/* CollectorView — Showcase mode layout */
+
+/* Root: two panels side by side, filling the whole area */
+.collector-view {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Left panel — the two set nodes stacked vertically */
+.collector-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px;
+}
+
+/* Right panel — fixed 360px, reserved for future content */
+.collector-side {
+    width: 360px;
+    flex-shrink: 0;
+    border-left: 1px solid #3c3c3c;
+}
+
+/* Sort mode toggle above both lists */
+.sort-bar {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.sort-btn {
+    background-color: #2d2d30;
+    border: 1px solid #3c3c3c;
+    border-radius: 3px;
+    color: #ccc;
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sort-btn:hover {
+    background-color: #37373d;
+}
+
+.sort-btn.active {
+    background-color: #0078d4;
+    border-color: #0078d4;
+    color: #fff;
+    font-weight: 500;
+}
+
+/* Big node: collapsible header + scrollable body */
+.set-node {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+}
+
+/* Collapse root — click to toggle the body */
+.node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+    background-color: #2d2d30;
+    border-radius: 4px 4px 0 0;
+}
+
+.node-header:hover {
+    background-color: #37373d;
+}
+
+.node-toggle-glyph {
+    color: #888;
+    font-size: 11px;
+    width: 12px;
+    text-align: center;
+}
+
+.node-title {
+    color: #ccc;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Body scrolls independently when the list overflows */
+.node-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+/* Set elements flow left-to-right, top-to-bottom as space allows */
+.set-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 6px;
+}
+
+/* One set element: symbol on top, optional progress bar below */
+.set-item {
+    width: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+/* 32×32 set symbol — gold gradient + mask come from global .set-symbol / .set-symbol-<code> in site.css */
+.set-item .set-symbol {
+    width: 32px;
+    height: 32px;
+    display: block;
+}
+
+/* Progress bar with centered label (in-collection node only) */
+.item-progress {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    background-color: #333;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #0078d4;
+}
+
+.progress-label {
+    position: relative; /* stays above the fill */
+    display: block;
+    text-align: center;
+    line-height: 14px;
+    font-size: 9px;
+    color: #fff;
+}

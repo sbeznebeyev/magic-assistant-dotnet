@@ -149,7 +149,7 @@ public static class ScryfallMapper
             uri: dto.Uri,
             scryfallUri: dto.ScryfallUri,
             searchUri: dto.SearchUri,
-            setType: dto.SetType,
+            setType: CardSetTypes.Parse(dto.SetType),
             cardCount: dto.CardCount,
             parentSetCode: dto.ParentSetCode,
             digital: dto.Digital,

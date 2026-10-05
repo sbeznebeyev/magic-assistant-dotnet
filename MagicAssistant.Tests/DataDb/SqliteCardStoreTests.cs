@@ -287,7 +287,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task AddEditionAsync_AddsEdition()
     {
-        var edition = new CardSet("m19", "Magic 2019", "Core", "Core Set");
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core);
 
         await _store.AddSetAsync(edition);
 
@@ -299,8 +299,8 @@ public class SqliteCardStoreTests
     [Test]
     public async Task GetEditionsAsync_ReturnsAllEditions()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Magic 2019", "1", "core"));
-        await _store.AddSetAsync(new CardSet("m20", "Magic 2020", "1", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m20", "Magic 2020", setType: CardSetType.core));
 
         var editions = await _store.GetCardSetsAsync();
 
@@ -423,7 +423,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_ReturnsEmpty_WhenNoInput()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Magic 2019", "1", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(Array.Empty<string>());
 
@@ -433,7 +433,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_ResolvesSingleFullSetName()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(new[] { "Core Set 2019" });
 
@@ -444,9 +444,9 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_ResolvesMultipleFullNames()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
-        await _store.AddSetAsync(new CardSet("WOT", "War of the Spark", "Ravnica", "expansion"));
-        await _store.AddSetAsync(new CardSet("rna", "Ravnica Allegiance", "Ravnica", "expansion"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "WOT", "War of the Spark", setType: CardSetType.expansion));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "rna", "Ravnica Allegiance", setType: CardSetType.expansion));
 
         var result = await _store.ResolveSetNamesAsync(new[]
         {
@@ -464,7 +464,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_PartialMatch_OnlyKnownSetsReturned()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(new[]
         {
@@ -480,7 +480,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_CaseInsensitiveMatch()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(new[] { "core set 2019" });
 
@@ -702,6 +702,19 @@ public class SqliteCardStoreTests
 
         Assert.That(ftsResult.TotalCount, Is.EqualTo(1));
         Assert.That(ftsResult.Cards.Single().Name, Is.EqualTo("Lightning Bolt"));
+    }
+
+    [Test]
+    public async Task AddSetAsync_PersistsSetTypeAsWireString()
+    {
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "msh", "Murders at Karlov Manor", setType: CardSetType.from_the_vault));
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var raw = await conn.ExecuteScalarAsync<string>("SELECT SetType FROM CardSet WHERE SetCode = 'msh'");
+
+        Assert.That(raw, Is.EqualTo("from_the_vault"),
+            "SetType must be persisted as the wire string in the TEXT column, not an enum ordinal.");
     }
 
     private MagicCard CreateTestCard(Guid cardId, string name)

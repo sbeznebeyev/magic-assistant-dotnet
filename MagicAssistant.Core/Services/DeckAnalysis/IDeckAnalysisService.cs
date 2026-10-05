@@ -8,7 +8,7 @@ namespace MagicAssistant.Core.Services.DeckAnalysis;
 /// Computes mana curve, color distribution, creature stats, ability stats, legality checks.
 /// Also provides collector progress tracking across sets.
 /// 
-/// Wraps IAnalysisService and existing queries (GetDeckAnalysisQuery, GetCollectorProgressQuery).
+/// Wraps IAnalysisService and the deck-analysis / collector-progress query paths.
 /// </summary>
 public interface IDeckAnalysisService
 {
@@ -40,4 +40,6 @@ public record CollectorProgressEntry(
     string SetName,
     int OwnedCards,
     int TotalCards,
-    double ProgressPercent);
+    double ProgressPercent,          // owned-only: OwnedCards / TotalCards * 100
+    DateTime? ReleaseDate = null,   // set release date (Scryfall)
+    string? ParentSetCode = null);  // parent set for child sets (promos, digital, etc.)

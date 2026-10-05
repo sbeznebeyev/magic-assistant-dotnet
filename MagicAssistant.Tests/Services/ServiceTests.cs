@@ -233,14 +233,16 @@ public class ServiceTests
         db.Setup(s => s.GetCollectorProgressRawAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<CollectorProgressRaw>
             {
-                new("m19", null, 269, 135, 80),
+                // Total=200, Collected=150 (75%), Owned=80 (40%) — owned-only semantics must win.
+                new("m19", null, 200, 150, 80),
                 new("NEW", null, 0, 0, 0),
             });
 
         var service = new DeckAnalysisService(coll.Object, db.Object, new Mock<IAnalysisService>().Object);
         var result = await service.GetCollectorProgressAsync();
 
-        Assert.That(result.First(p => p.SetAbbreviation == "m19").ProgressPercent, Is.GreaterThan(50));
+        Assert.That(result.First(p => p.SetAbbreviation == "m19").ProgressPercent, Is.EqualTo(40),
+            "ProgressPercent must be owned-only (80/200), not collected (150/200 = 75).");
         Assert.That(result.First(p => p.SetAbbreviation == "NEW").ProgressPercent, Is.EqualTo(0));
     }
 

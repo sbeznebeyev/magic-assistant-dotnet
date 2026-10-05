@@ -3,7 +3,6 @@ namespace MagicAssistant.Data.Model;
 public class CardSet : IEquatable<CardSet>
 {
     private static readonly CardSet Unknown = new(Guid.NewGuid(), "???", "Unknown Set");
-    private static int _idCounter;
 
     // ── Primary constructor (from Scryfall data) ──────────────
 
@@ -14,7 +13,7 @@ public class CardSet : IEquatable<CardSet>
         string? uri = null,
         string? scryfallUri = null,
         string? searchUri = null,
-        string? setType = null,
+        CardSetType? setType = null,
         int cardCount = 0,
         string? parentSetCode = null,
         bool digital = false,
@@ -29,7 +28,7 @@ public class CardSet : IEquatable<CardSet>
         Uri = uri;
         ScryfallUri = scryfallUri;
         SearchUri = searchUri;
-        SetType = setType ?? "?";
+        SetType = setType ?? CardSetType.unknown;
         CardCount = cardCount;
         ParentSetCode = parentSetCode;
         Digital = digital;
@@ -37,13 +36,6 @@ public class CardSet : IEquatable<CardSet>
         FoilOnly = foilOnly;
         IconSvgUri = iconSvgUri;
         ReleaseDate = releaseDate;
-    }
-
-    // ── Legacy constructor (backward compat for tests) ───────
-    // block and type are ignored; use setType via the primary constructor instead.
-
-    public CardSet(string setCode, string name, string? block, string? type): this(Guid.NewGuid(), setCode, name, setType: type ?? "?")
-    {
     }
 
     // ── Properties ────────────────────────────────────────────
@@ -65,8 +57,8 @@ public class CardSet : IEquatable<CardSet>
     /// <summary>Search URI for cards in this set.</summary>
     public string? SearchUri { get; }
 
-    /// <summary>Raw set type from Scryfall (e.g. "promo", "core", "expansion").</summary>
-    public string SetType { get; private set; } = "?";
+    /// <summary>Set type; persisted to the TEXT column via its wire-string name (e.g. "promo", "core", "expansion").</summary>
+    public CardSetType SetType { get; private set; }
 
     /// <summary>Total number of cards in this set.</summary>
     public int CardCount { get; }
@@ -95,10 +87,6 @@ public class CardSet : IEquatable<CardSet>
     // ── Computed helpers ──────────────────────────────────────
 
     public bool IsUnknown => this == Unknown || SetCode == "???";
-
-    /// <summary>Alias for IsHidden — kept for backward compatibility.</summary>
-    [System.Obsolete("Use the SetType-based hidden check instead")]
-    public bool IsHidden => SetType.StartsWith("--");
 
     // ── Methods ───────────────────────────────────────────────
 

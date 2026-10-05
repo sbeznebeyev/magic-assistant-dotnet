@@ -8,4 +8,6 @@ public record CollectorProgressRaw(
     string? SetName,
     long TotalCards,           // unique card names in KB for this set
     long CollectedCards,       // unique card names in any deck (owned + borrowed)
-    long OwnedCards);          // unique card names the user owns across all decks
+    long OwnedCards,           // unique card names the user owns across all decks
+    DateTime? ReleaseDate = null,   // set release date (Scryfall)
+    string? ParentSetCode = null);  // parent set for child sets (promos, digital, etc.)
