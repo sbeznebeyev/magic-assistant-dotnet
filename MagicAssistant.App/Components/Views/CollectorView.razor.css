@@ -25,33 +25,100 @@
     border-left: 1px solid #3c3c3c;
 }
 
-/* Sort mode toggle above both lists */
-.sort-bar {
+/* Single toolbar row: search · reserved set-type filter · sort toggle */
+.toolbar {
     display: flex;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
 }
 
-.sort-btn {
+/* Fixed-width search field (pattern: CardsListControl sidebar) */
+.set-search-bar {
+    position: relative;
+    width: 300px;
+    flex-shrink: 0;
+}
+
+.set-search-input {
+    width: 100%;
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.set-search-input:focus {
+    outline: none;
+    border-color: #0078d4;
+}
+
+.set-clear-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #555;
+    color: #ccc;
+    border: none;
+    cursor: pointer;
+    font-size: 9px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.set-clear-btn:hover {
+    background: #0078d4;
+    color: #fff;
+}
+
+/* Reserved: set type filter — slot only, visually inert until it gets behavior */
+.set-type-filter-btn {
+    background-color: #252526;
+    border: 1px dashed #3c3c3c;
+    border-radius: 3px;
+    color: #666;
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: not-allowed;
+    user-select: none;
+}
+
+.sort-label {
+    color: #888;
+    font-size: 12px;
+}
+
+/* Shown in a node body when the active search matches nothing there */
+.set-list-empty {
+    color: #888;
+    font-size: 12px;
+    padding: 4px 0;
+}
+
+/* Sort mode dropdown (persisted in user settings) */
+.sort-select {
     background-color: #2d2d30;
     border: 1px solid #3c3c3c;
     border-radius: 3px;
     color: #ccc;
     font-size: 12px;
-    padding: 4px 10px;
+    padding: 4px 8px;
     cursor: pointer;
-    user-select: none;
 }
 
-.sort-btn:hover {
-    background-color: #37373d;
-}
-
-.sort-btn.active {
-    background-color: #0078d4;
+.sort-select:focus {
+    outline: none;
     border-color: #0078d4;
-    color: #fff;
-    font-weight: 500;
 }
 
 /* Big node: collapsible header + scrollable body */
@@ -109,20 +176,35 @@
     gap: 10px 6px;
 }
 
-/* One set element: symbol on top, optional progress bar below */
+/* One set element: symbol on top, optional progress bar / name below */
 .set-item {
-    width: 56px;
+    width: 72px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 3px;
 }
 
-/* 32×32 set symbol — gold gradient + mask come from global .set-symbol / .set-symbol-<code> in site.css */
+/* 64×64 set symbol — gold gradient + mask come from global .set-symbol / .set-symbol-<code> in site.css;
+   mask-size: contain scales the mask cleanly at any size */
 .set-item .set-symbol {
-    width: 32px;
-    height: 32px;
+    width: 64px;
+    height: 64px;
     display: block;
+}
+
+/* Full set name under the symbol (Not started node only) — wraps to fit the 72px column,
+   centered across the full item width; no release date, the date stays in the icon tooltip.
+   margin-top pulls it up against the icon (the shared .set-item gap is kept for the progress bar). */
+.set-item .set-name {
+    display: block;
+    width: 100%;
+    margin-top: -2px;
+    font-size: 9px;
+    color: #ccc;
+    text-align: center;
+    line-height: 1.2;
+    word-break: break-word;
 }
 
 /* Progress bar with centered label (in-collection node only) */
@@ -130,7 +212,8 @@
     position: relative;
     width: 100%;
     height: 14px;
-    background-color: #333;
+    /* track must be visible against the #252526 node body — #333 was lost in contrast */
+    background-color: #454545;
     border-radius: 2px;
     overflow: hidden;
 }
@@ -141,6 +224,9 @@
     left: 0;
     height: 100%;
     background-color: #0078d4;
+    /* the top list only holds sets with owned >= 1, so percent is always > 0 —
+       a sliver stays visible even for sub-pixel percentages */
+    min-width: 2px;
 }
 
 .progress-label {

@@ -1859,10 +1859,19 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             Convert.ToInt64(r.TotalCards),
             Convert.ToInt64(r.CollectedCards),
             Convert.ToInt64(r.OwnedCards),
-            ReleaseDate: r.ReleaseDate is DateTime rd ? (DateTime?)rd : null,
+            ReleaseDate: ParseReleaseDate(r.ReleaseDate),
             ParentSetCode: r.ParentSetCode is string ps ? ps : null)).ToList();
         return rows;
     }
+
+    /// <summary>ReleaseDate is stored as TEXT ("yyyy-MM-dd HH:mm:ss") — the dynamic row returns a string,
+    /// so parse it in memory; date sorting happens in C#, never in SQL.</summary>
+    private static DateTime? ParseReleaseDate(object? value) => value switch
+    {
+        DateTime dt => dt,
+        string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, out var parsed) => parsed,
+        _ => null
+    };
 
     public ValueTask DisposeAsync()
     {

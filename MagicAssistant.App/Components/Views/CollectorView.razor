@@ -1,8 +1,12 @@
 @*
     CollectorView — set collection tracker (Showcase mode)
 
-    Two-panel layout: left — two set nodes (in-collection / not-started),
-    right — fixed 360px reserved panel.
+    Two-panel layout: left — a single toolbar row (set search, reserved
+    set-type filter, sort dropdown), then two set nodes (in-collection /
+    not-started); right — fixed 360px reserved panel. The selected sort
+    mode is persisted in user settings and restored on page entry. The search narrows both lists in memory
+    (2+ chars, name or set code) — same pattern as the CardsListControl
+    sidebar, but the data source is the DB result (_progress).
     Each node has a collapsible header; its list flows set elements
     left-to-right, top-to-bottom. A set element = 32×32 set symbol
     (.set-symbol-<setCode>) with an optional progress bar below
@@ -11,10 +15,27 @@
 
 <div class="collector-view">
     <div class="collector-main">
-        @* ── Sort mode toggle above both lists ── *@
-        <div class="sort-bar">
-            <button class="sort-btn @(_sortMode == SortMode.NewestFirst ? "active" : "")" @onclick="() => SetSortMode(SortMode.NewestFirst)">Newest to oldest</button>
-            <button class="sort-btn @(_sortMode == SortMode.ProgressionDesc ? "active" : "")" @onclick="() => SetSortMode(SortMode.ProgressionDesc)">Progression Desc</button>
+        @* ── Single toolbar row: search (300px) · reserved set-type filter · sort dropdown ── *@
+        <div class="toolbar">
+            <div class="set-search-bar">
+                <input value="@_setsSearchQuery"
+                       @oninput="OnSetSearchInput"
+                       placeholder="Filter sets..."
+                       class="set-search-input" />
+                @if (IsSetSearchActive)
+                {
+                    <button class="set-clear-btn" @onclick="ClearSetSearch" title="Clear filter">✕</button>
+                }
+            </div>
+
+            @* Reserved: set type filter — slot only, no behavior yet *@
+            <button class="set-type-filter-btn" disabled title="Reserved: set type filter">Set Type</button>
+
+            <span class="sort-label">Sort:</span>
+            <select class="sort-select" value="@_sortMode.ToString()" @onchange="OnSortModeChanged">
+                <option value="@nameof(SortMode.NewestFirst)">newest to oldest</option>
+                <option value="@nameof(SortMode.ProgressionDesc)">progression desc</option>
+            </select>
         </div>
 
         @* ── Top node: sets with at least one owned card ── *@
@@ -26,13 +47,17 @@
             @if (!_collectedCollapsed)
             {
                 <div class="node-body">
+                    @if (IsSetSearchActive && _collected.Count == 0)
+                    {
+                        <div class="set-list-empty">No sets found</div>
+                    }
                     <div class="set-list">
                         @foreach (var item in _collected)
                         {
-                            <div class="set-item" title="@item.SetName — @item.OwnedCards / @item.TotalCards">
-                                <span class="set-symbol set-symbol-@item.SetAbbreviation"></span>
+                            <div class="set-item">
+                                <span class="set-symbol set-symbol-@item.SetAbbreviation" title="@SetTooltip(item)"></span>
                                 <div class="item-progress">
-                                    <div class="progress-fill" style="width: @(item.ProgressPercent)%"></div>
+                                    <div class="progress-fill" style="width: @BarWidthPct(item.ProgressPercent)%"></div>
                                     <span class="progress-label">@item.ProgressPercent.ToString("F1") %</span>
                                 </div>
                             </div>
@@ -42,7 +67,7 @@
             }
         </div>
 
-        @* ── Bottom node: sets with no cards at all (symbols only) ── *@
+        @* ── Bottom node: sets with no cards at all (symbol + full name, no progress) ── *@
         <div class="set-node">
             <div class="node-header" @onclick="ToggleRemainingNode">
                 <span class="node-toggle-glyph">@(_remainingCollapsed ? "▸" : "▾")</span>
@@ -51,11 +76,16 @@
             @if (!_remainingCollapsed)
             {
                 <div class="node-body">
+                    @if (IsSetSearchActive && _remaining.Count == 0)
+                    {
+                        <div class="set-list-empty">No sets found</div>
+                    }
                     <div class="set-list">
                         @foreach (var item in _remaining)
                         {
-                            <div class="set-item" title="@item.SetName">
-                                <span class="set-symbol set-symbol-@item.SetAbbreviation"></span>
+                            <div class="set-item">
+                                <span class="set-symbol set-symbol-@item.SetAbbreviation" title="@SetTooltip(item)"></span>
+                                <span class="set-name">@item.SetName</span>
                             </div>
                         }
                     </div>
@@ -70,22 +100,29 @@
 
 @using MagicAssistant.Core.Services.DeckAnalysis
 @inject IDeckAnalysisService DeckAnalysisService
+@inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
+@inject GetUserSettingQueryHandler? GetSettingQueryHandler
 
 @code {
-    /// <summary>NewestFirst — each list by release date desc; equal dates: parent set first, children after.
-    /// ProgressionDesc — only parent sets sorted (progress desc, ties by release date desc); children always follow their parent.</summary>
+    /// <summary>NewestFirst — root sets by release date desc (ties by set name); a child is anchored to its
+    /// parent's position. ProgressionDesc — root sets by progress desc, ties by release date desc; a child
+    /// is anchored to its parent's position.</summary>
     private enum SortMode { NewestFirst, ProgressionDesc }
+
+    /// <summary>User-settings key for the persisted sort mode.</summary>
+    private const string SortModeSettingKey = "CollectorView.SortMode";
 
     private ICollection<CollectorProgressEntry>? _progress = null;
     private List<CollectorProgressEntry> _collected = new();
     private List<CollectorProgressEntry> _remaining = new();
-    private SortMode _sortMode = SortMode.NewestFirst;
+    private SortMode _sortMode = SortMode.NewestFirst;  // default — first dropdown value
 
     private bool _collectedCollapsed;
     private bool _remainingCollapsed;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSortModeAsync();  // restore persisted sort before the first render
         try
         {
             _progress = await DeckAnalysisService.GetCollectorProgressAsync();
@@ -97,38 +134,91 @@
         }
     }
 
-    private void SetSortMode(SortMode mode)
+    /// <summary>Restores the persisted sort mode; falls back to NewestFirst on missing/invalid value.</summary>
+    private async Task LoadSortModeAsync()
     {
-        if (_sortMode == mode) return;
+        if (GetSettingQueryHandler is null) return;
+        try
+        {
+            var stored = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(SortModeSettingKey));
+            if (!string.IsNullOrEmpty(stored) && Enum.TryParse<SortMode>(stored, out var mode))
+                _sortMode = mode;
+        }
+        catch
+        {
+            // default _sortMode = NewestFirst
+        }
+    }
+
+    private async Task OnSortModeChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<SortMode>(e.Value?.ToString(), out var mode)) return;
         _sortMode = mode;
         ApplySort();
+        await SaveSortModeAsync();
+    }
+
+    private async Task SaveSortModeAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(SortModeSettingKey, _sortMode.ToString()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
     }
 
     /// <summary>Splits the loaded progress into the two node lists and applies the active sort to each.</summary>
     private void ApplySort()
     {
         if (_progress == null) return;
-        _collected = SortSets(_progress.Where(p => p.OwnedCards >= 1).ToList(), _sortMode);
-        _remaining = SortSets(_progress.Where(p => p.OwnedCards == 0).ToList(), _sortMode);
+
+        // Search narrows the DB result in memory before the split/sort —
+        // both lists filter from the same base, so a set moves between nodes
+        // only when its ownership changes, never because of the query text.
+        IEnumerable<CollectorProgressEntry> baseSets = _progress;
+        if (IsSetSearchActive)
+        {
+            var q = _setsSearchQuery.ToLowerInvariant();
+            baseSets = _progress.Where(s => s.SetName.ToLowerInvariant().Contains(q) ||
+                                            s.SetAbbreviation.ToLowerInvariant().Contains(q));
+        }
+
+        _collected = SortSets(baseSets.Where(p => p.OwnedCards >= 1).ToList(), _sortMode);
+        _remaining = SortSets(baseSets.Where(p => p.OwnedCards == 0).ToList(), _sortMode);
+    }
+
+    // ── Set search (in-memory narrowing of the DB result) ────────────────
+
+    private string _setsSearchQuery = "";
+
+    /// <summary>True while the lists are actually narrowed by the search input (2+ chars).</summary>
+    private bool IsSetSearchActive => !string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2;
+
+    private void OnSetSearchInput(ChangeEventArgs e)
+    {
+        _setsSearchQuery = e.Value?.ToString() ?? string.Empty;
+        ApplySort();
+    }
+
+    private void ClearSetSearch()
+    {
+        _setsSearchQuery = string.Empty;
+        ApplySort();
     }
 
     private static List<CollectorProgressEntry> SortSets(List<CollectorProgressEntry> sets, SortMode mode)
     {
-        if (mode == SortMode.NewestFirst)
-        {
-            // Release date desc; on equal dates the parent set goes first, children after it.
-            // Scryfall has nested chains (root → child → grandchild), so tie-break by chain
-            // depth — that makes "parent before child" hold transitively within each family.
-            var depths = ComputeDepths(sets);
-            return sets
-                .OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue)
-                .ThenBy(s => depths[s.SetAbbreviation])
-                .ToList();
-        }
-
-        // ProgressionDesc: only root (parent) sets are ranked — progress desc, ties by release date desc.
-        // A child always follows its parent; nested families flatten whole under the root.
-        // A child whose parent is absent from this list becomes a root of its own group.
+        // Both modes anchor children to their parent — the family's position in the list is determined
+        // solely by its root (a child never outranks or undercuts its parent via its own date/progress).
+        // Only the root ranking differs:
+        //   NewestFirst     — release date desc, ties by set name;
+        //   ProgressionDesc — progress desc, ties by release date desc.
+        // Nested families flatten whole under the root; a child whose parent is absent from this list
+        // becomes a root of its own group. Siblings keep their original relative order.
         var byCode = sets.ToDictionary(s => s.SetAbbreviation);
         var childrenOf = new Dictionary<string, List<CollectorProgressEntry>>();
         foreach (var s in sets.Where(s => !string.IsNullOrEmpty(s.ParentSetCode) && byCode.ContainsKey(s.ParentSetCode!)))
@@ -139,10 +229,13 @@
         }
 
         var roots = sets.Where(s => string.IsNullOrEmpty(s.ParentSetCode) || !byCode.ContainsKey(s.ParentSetCode!)).ToList();
+        IOrderedEnumerable<CollectorProgressEntry> orderedRoots = mode == SortMode.NewestFirst
+            ? roots.OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue).ThenBy(s => s.SetName)
+            : roots.OrderByDescending(s => s.ProgressPercent).ThenByDescending(s => s.ReleaseDate ?? DateTime.MinValue);
+
         var result = new List<CollectorProgressEntry>();
         var visited = new HashSet<string>();
-        foreach (var root in roots.OrderByDescending(s => s.ProgressPercent)
-                                 .ThenByDescending(s => s.ReleaseDate ?? DateTime.MinValue))
+        foreach (var root in orderedRoots)
             AddFamily(root);
         return result;
 
@@ -156,25 +249,14 @@
         }
     }
 
-    /// <summary>Chain depth per set code: root = 0, child = 1, grandchild = 2… (cycle-safe).</summary>
-    private static Dictionary<string, int> ComputeDepths(List<CollectorProgressEntry> sets)
-    {
-        var parentOf = sets.ToDictionary(s => s.SetAbbreviation, s => s.ParentSetCode);
-        var depth = new Dictionary<string, int>();
-        foreach (var code in parentOf.Keys)
-            DepthOf(code);
-        return depth;
 
-        int DepthOf(string code)
-        {
-            if (depth.TryGetValue(code, out var d)) return d;
-            depth[code] = 0;  // cycle guard — a broken chain truncates at 0
-            var parent = parentOf[code];
-            int v = !string.IsNullOrEmpty(parent) && parentOf.ContainsKey(parent) ? DepthOf(parent!) + 1 : 0;
-            depth[code] = v;
-            return v;
-        }
-    }
+    /// <summary>Whole-percent bar width — culture-safe int for the inline style (pattern: CreaturePage.BarWidthPct).
+    /// A double would render with a culture decimal separator ("12,5") and break the CSS width.</summary>
+    private static int BarWidthPct(double percent) => (int)Math.Round(percent);
+
+    /// <summary>Icon tooltip: "Full set name (yyyy-MM-dd)"; date omitted when the set has none.</summary>
+    private static string SetTooltip(CollectorProgressEntry s)
+        => s.ReleaseDate is { } d ? $"{s.SetName} ({d:yyyy-MM-dd})" : s.SetName;
 
     private void ToggleCollectedNode() => _collectedCollapsed = !_collectedCollapsed;
     private void ToggleRemainingNode() => _remainingCollapsed = !_remainingCollapsed;

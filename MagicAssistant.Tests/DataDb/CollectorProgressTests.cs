@@ -65,6 +65,24 @@ public class CollectorProgressTests
     }
 
     [Test]
+    public async Task CollectorProgress_ReleaseDate_IsParsedFromTextStorage()
+    {
+        // Regression: ReleaseDate is stored as TEXT in SQLite; the dynamic-row mapping must parse it
+        // into DateTime, otherwise every set arrives with null and date sorting degrades to name order.
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "aaa", "Alpha Set", setType: CardSetType.core, releaseDate: new DateTime(2019, 5, 31)));
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "zzz", "Zeta Set", setType: CardSetType.core, releaseDate: new DateTime(2024, 10, 4)));
+
+        var progress = await _cardStore.GetCollectorProgressRawAsync();
+
+        var aaa = progress.First(p => p.SetAbbreviation == "aaa");
+        var zzz = progress.First(p => p.SetAbbreviation == "zzz");
+        Assert.That(aaa.ReleaseDate, Is.EqualTo(new DateTime(2019, 5, 31)),
+            "ReleaseDate must be parsed from TEXT storage, not dropped to null.");
+        Assert.That(zzz.ReleaseDate, Is.EqualTo(new DateTime(2024, 10, 4)));
+        Assert.That(aaa.ReleaseDate!.Value, Is.LessThan(zzz.ReleaseDate!.Value));
+    }
+
+    [Test]
     public async Task CollectorProgress_Total_ComesFromSetCardCount()
     {
         // Total is the Scryfall checklist size stored on the set, not a KB aggregate
