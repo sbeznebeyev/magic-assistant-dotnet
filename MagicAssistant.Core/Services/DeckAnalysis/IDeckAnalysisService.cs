@@ -1,5 +1,6 @@
 using MagicAssistant.Core.Analysis;
 using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Core.Services.DeckAnalysis;
 
@@ -30,6 +31,12 @@ public interface IDeckAnalysisService
     /// </summary>
     Task<CollectorProgressEntry?> GetCollectorProgressForSetAsync(
         string setAbbreviation, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get progress details for a single set: identity (name / release date / type) plus
+    /// owned-vs-total breakdowns by card rarity and by mana color. Null when the set is unknown.
+    /// </summary>
+    Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default);
 }
 
 /// <summary>

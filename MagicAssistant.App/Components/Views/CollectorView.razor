@@ -39,7 +39,7 @@
         </div>
 
         @* ── Top node: sets with at least one owned card ── *@
-        <div class="set-node">
+        <div class="set-node @(_collectedCollapsed ? "collapsed" : "")">
             <div class="node-header" @onclick="ToggleCollectedNode">
                 <span class="node-toggle-glyph">@(_collectedCollapsed ? "▸" : "▾")</span>
                 <span class="node-title">In collection (@_collected.Count)</span>
@@ -54,7 +54,7 @@
                     <div class="set-list">
                         @foreach (var item in _collected)
                         {
-                            <div class="set-item">
+                            <div class="set-item @(_selectedSetCode == item.SetAbbreviation ? "selected" : "")" @onclick="() => SelectSet(item.SetAbbreviation)">
                                 <span class="set-symbol set-symbol-@item.SetAbbreviation" title="@SetTooltip(item)"></span>
                                 <div class="item-progress">
                                     <div class="progress-fill" style="width: @BarWidthPct(item.ProgressPercent)%"></div>
@@ -68,7 +68,7 @@
         </div>
 
         @* ── Bottom node: sets with no cards at all (symbol + full name, no progress) ── *@
-        <div class="set-node">
+        <div class="set-node @(_remainingCollapsed ? "collapsed" : "")">
             <div class="node-header" @onclick="ToggleRemainingNode">
                 <span class="node-toggle-glyph">@(_remainingCollapsed ? "▸" : "▾")</span>
                 <span class="node-title">Not started (@_remaining.Count)</span>
@@ -83,7 +83,7 @@
                     <div class="set-list">
                         @foreach (var item in _remaining)
                         {
-                            <div class="set-item">
+                            <div class="set-item @(_selectedSetCode == item.SetAbbreviation ? "selected" : "")" @onclick="() => SelectSet(item.SetAbbreviation)">
                                 <span class="set-symbol set-symbol-@item.SetAbbreviation" title="@SetTooltip(item)"></span>
                                 <span class="set-name">@item.SetName</span>
                             </div>
@@ -94,8 +94,65 @@
         </div>
     </div>
 
-    @* ── Right panel: fixed 360px, reserved ── *@
-    <div class="collector-side"></div>
+    @* ── Right panel: details of the selected set ── *@
+    <div class="collector-side">
+        @if (_selectedSetCode is null)
+        {
+            <div class="detail-placeholder">Select a set</div>
+        }
+        else if (_details is null)
+        {
+            <div class="detail-placeholder">Loading...</div>
+        }
+        else
+        {
+            var d = _details;
+            <div class="set-detail">
+                <div class="set-symbol detail-set-icon set-symbol-@d.SetCode"></div>
+                <div class="detail-name">@d.SetName</div>
+                <div class="detail-meta">@DetailMeta(d)</div>
+
+                @* Rarity bars: 30px set icon tinted per rarity (mask from global .set-symbol-<code>);
+                   icon at the left edge, to its right — owned/total above the bar *@
+                <div class="detail-section">
+                    @foreach (var g in d.RarityGroups)
+                    {
+                        <div class="detail-bar-row">
+                            <span class="rarity-icon rarity-icon-@g.Key set-symbol-@d.SetCode"></span>
+                            <div class="detail-bar-main">
+                                <span class="detail-bar-counts">@g.Owned/@g.Total</span>
+                                <div class="detail-bar-track">
+                                    @if (g.Owned > 0)
+                                    {
+                                        <div class="detail-bar-fill" style="width: @BarWidthPct(g.Percent)%"></div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Color bars: 24px mana symbol (global .card-symbol sprite; colorless → C) *@
+                <div class="detail-section">
+                    @foreach (var g in d.ColorGroups)
+                    {
+                        <div class="detail-bar-row">
+                            <span class="card-symbol detail-color-icon card-symbol-@g.Key"></span>
+                            <div class="detail-bar-main">
+                                <span class="detail-bar-counts">@g.Owned/@g.Total</span>
+                                <div class="detail-bar-track">
+                                    @if (g.Owned > 0)
+                                    {
+                                        <div class="detail-bar-fill" style="width: @BarWidthPct(g.Percent)%"></div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 @using MagicAssistant.Core.Services.DeckAnalysis
@@ -208,6 +265,48 @@
     {
         _setsSearchQuery = string.Empty;
         ApplySort();
+    }
+
+    // ── Selection (one set at a time, shared across both lists) ──────────
+
+    /// <summary>Selected set code; null — nothing selected. Keyed by set code so the selection
+    /// survives re-sorting and search narrowing.</summary>
+    private string? _selectedSetCode;
+
+    /// <summary>Details of the selected set (side panel); null while loading or when nothing is selected.</summary>
+    private SetProgressDetails? _details;
+
+    private async Task SelectSet(string setCode)
+    {
+        var next = _selectedSetCode == setCode ? null : setCode;
+        _selectedSetCode = next;
+        if (next is null)
+        {
+            _details = null;
+            return;
+        }
+
+        _details = null;  // "Loading..." until the fetch lands
+        try
+        {
+            var details = await DeckAnalysisService.GetSetProgressDetailsAsync(next);
+            // Race guard: a faster click may have moved the selection already.
+            if (_selectedSetCode == next)
+                _details = details;
+        }
+        catch
+        {
+            // keep the loading placeholder; reselecting retries
+        }
+    }
+
+    /// <summary>Meta line under the set name: "Release Date: 2026-09-17, Type : token" — parts omitted when absent.</summary>
+    private static string DetailMeta(SetProgressDetails d)
+    {
+        var parts = new List<string>();
+        if (d.ReleaseDate is { } rel) parts.Add($"Release Date: {rel:yyyy-MM-dd}");
+        if (d.SetType != CardSetType.unknown) parts.Add($"Type : {d.SetType}");
+        return string.Join(", ", parts);
     }
 
     private static List<CollectorProgressEntry> SortSets(List<CollectorProgressEntry> sets, SortMode mode)

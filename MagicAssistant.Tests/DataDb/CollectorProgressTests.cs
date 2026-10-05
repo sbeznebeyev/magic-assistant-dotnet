@@ -83,6 +83,51 @@ public class CollectorProgressTests
     }
 
     [Test]
+    public async Task SetProgressDetails_RarityAndColorBreakdowns_MatchOwnership()
+    {
+        // Rarity is stored lowercase (Scryfall wire values); Colors is a comma list of single letters.
+        var c1 = CreateCard(Guid.NewGuid(), "Bolt", "m19", "1");
+        c1.Rarity = "common"; c1.Colors = new[] { "R" };
+        var c2 = CreateCard(Guid.NewGuid(), "Mulligan", "m19", "2");
+        c2.Rarity = "uncommon"; c2.Colors = new[] { "U", "W" };
+        var c3 = CreateCard(Guid.NewGuid(), "Legend", "m19", "3");
+        c3.Rarity = "mythic"; c3.Colors = null;   // colorless
+
+        await _cardStore.AddAllAsync(new[] { c1, c2, c3 });
+        await _cardStore.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core, cardCount: 3));
+
+        var deck = await _collectionStore.CreateDeckAsync("Test Deck");
+        // Own c1 (common R) and c3 (mythic colorless); c2 stays unowned
+        await _collectionStore.AddAsync(
+            new MagicCardPhysical(new MagicCard { Id = c1.Id, Name = "Bolt" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+        await _collectionStore.AddAsync(
+            new MagicCardPhysical(new MagicCard { Id = c3.Id, Name = "Legend" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+
+        var details = await _cardStore.GetSetProgressDetailsAsync("m19");
+
+        Assert.That(details, Is.Not.Null);
+        Assert.That(details!.SetName, Is.EqualTo("Magic 2019"));
+        Assert.That(details.SetType, Is.EqualTo(CardSetType.core));
+
+        var common = details.RarityGroups.First(g => g.Key == "common");
+        var uncommon = details.RarityGroups.First(g => g.Key == "uncommon");
+        var mythic = details.RarityGroups.First(g => g.Key == "mythic");
+        Assert.That(common, Is.EqualTo(new SetGroupProgress("common", 1, 1)));
+        Assert.That(uncommon, Is.EqualTo(new SetGroupProgress("uncommon", 0, 1)));
+        Assert.That(mythic, Is.EqualTo(new SetGroupProgress("mythic", 1, 1)));
+
+        // Multicolor counts once per color; colorless = NULL Colors
+        var w = details.ColorGroups.First(g => g.Key == "W");
+        var u = details.ColorGroups.First(g => g.Key == "U");
+        var colorless = details.ColorGroups.First(g => g.Key == "C");
+        Assert.That(w, Is.EqualTo(new SetGroupProgress("W", 0, 1)));
+        Assert.That(u, Is.EqualTo(new SetGroupProgress("U", 0, 1)));
+        Assert.That(colorless, Is.EqualTo(new SetGroupProgress("C", 1, 1)));
+
+        Assert.That(await _cardStore.GetSetProgressDetailsAsync("nope"), Is.Null);
+    }
+
+    [Test]
     public async Task CollectorProgress_Total_ComesFromSetCardCount()
     {
         // Total is the Scryfall checklist size stored on the set, not a KB aggregate

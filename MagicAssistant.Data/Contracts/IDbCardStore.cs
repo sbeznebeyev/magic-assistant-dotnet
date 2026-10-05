@@ -69,6 +69,12 @@ public interface IDbCardStore : ICardStore<MagicCard>
     Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Progress details for a single set: identity plus owned/total per rarity and per mana color.
+    /// Null when the set is unknown.
+    /// </summary>
+    Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default);
+
+    /// <summary>
     /// Batch-resolve full set names to set codes in a single SQL query.
     /// Used by ResolveLegacyCardsQuery to convert legacy set names ("Core Set 2019")
     /// to KB abbreviations ("m19").

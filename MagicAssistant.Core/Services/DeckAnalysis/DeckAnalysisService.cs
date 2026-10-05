@@ -1,5 +1,6 @@
 using MagicAssistant.Core.Analysis;
 using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Core.Services.DeckAnalysis;
 
@@ -70,5 +71,13 @@ public class DeckAnalysisService : IDeckAnalysisService
             ProgressPercent: row.TotalCards > 0 ? (double)row.OwnedCards / row.TotalCards * 100 : 0,
             ReleaseDate: row.ReleaseDate,
             ParentSetCode: row.ParentSetCode) : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(setCode))
+            throw new ArgumentNullException(nameof(setCode));
+        return await _dbStore.GetSetProgressDetailsAsync(setCode, ct);
     }
 }

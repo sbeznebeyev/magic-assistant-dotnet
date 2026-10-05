@@ -1873,6 +1873,74 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         _ => null
     };
 
+    public async Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // Single query: set identity + owned/total per rarity and per mana color.
+        // Rarity is stored lowercase (Scryfall wire values). Colors are a comma list of
+        // single letters ("B,U,W"), so LIKE '%W%' is an exact token match; colorless = NULL/''.
+        var sql = @"
+            SELECT s.Name AS SetName,
+                   s.ReleaseDate,
+                   s.SetType,
+                   COUNT(DISTINCT c.CollectorNumber) AS TotalAll,
+                   COUNT(DISTINCT CASE WHEN dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedAll,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'common' THEN c.CollectorNumber END) AS TotalCommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'common' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedCommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'uncommon' THEN c.CollectorNumber END) AS TotalUncommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'uncommon' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedUncommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'rare' THEN c.CollectorNumber END) AS TotalRare,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'rare' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedRare,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'mythic' THEN c.CollectorNumber END) AS TotalMythic,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'mythic' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedMythic,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%W%' THEN c.CollectorNumber END) AS TotalW,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%W%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedW,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%U%' THEN c.CollectorNumber END) AS TotalU,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%U%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedU,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%B%' THEN c.CollectorNumber END) AS TotalB,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%B%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedB,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%R%' THEN c.CollectorNumber END) AS TotalR,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%R%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedR,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%G%' THEN c.CollectorNumber END) AS TotalG,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%G%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedG,
+                   COUNT(DISTINCT CASE WHEN c.Colors IS NULL OR c.Colors = '' THEN c.CollectorNumber END) AS TotalColorless,
+                   COUNT(DISTINCT CASE WHEN (c.Colors IS NULL OR c.Colors = '') AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedColorless
+            FROM CardSet s
+            LEFT JOIN Cards c ON c.SetCode = s.SetCode
+            LEFT JOIN Deck dc ON dc.CardId = c.Id
+            WHERE s.SetCode = @setCode
+            GROUP BY s.Name, s.ReleaseDate, s.SetType";
+
+        var row = (await conn.QueryAsync<dynamic>(sql, new { setCode })).FirstOrDefault();
+        if (row is null) return null;
+
+        static long I64(object? v) => Convert.ToInt64(v);
+
+        return new SetProgressDetails(
+            SetCode: setCode,
+            SetName: row.SetName as string,
+            ReleaseDate: ParseReleaseDate(row.ReleaseDate),
+            SetType: CardSetTypes.FromDb(row.SetType as string),
+            RarityGroups: new[]
+            {
+                new SetGroupProgress("common", I64(row.OwnedCommon), I64(row.TotalCommon)),
+                new SetGroupProgress("uncommon", I64(row.OwnedUncommon), I64(row.TotalUncommon)),
+                new SetGroupProgress("rare", I64(row.OwnedRare), I64(row.TotalRare)),
+                new SetGroupProgress("mythic", I64(row.OwnedMythic), I64(row.TotalMythic)),
+            },
+            ColorGroups: new[]
+            {
+                new SetGroupProgress("W", I64(row.OwnedW), I64(row.TotalW)),
+                new SetGroupProgress("U", I64(row.OwnedU), I64(row.TotalU)),
+                new SetGroupProgress("B", I64(row.OwnedB), I64(row.TotalB)),
+                new SetGroupProgress("R", I64(row.OwnedR), I64(row.TotalR)),
+                new SetGroupProgress("G", I64(row.OwnedG), I64(row.TotalG)),
+                new SetGroupProgress("C", I64(row.OwnedColorless), I64(row.TotalColorless)),
+            });
+    }
+
     public ValueTask DisposeAsync()
     {
         _cache.Clear();

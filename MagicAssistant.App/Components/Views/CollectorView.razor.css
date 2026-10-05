@@ -132,6 +132,12 @@
     border-radius: 4px;
 }
 
+/* Collapsed: the whole container shrinks to its header — without this, flex: 1 keeps
+   the empty box at half height after the body is removed */
+.set-node.collapsed {
+    flex: none;
+}
+
 /* Collapse root — click to toggle the body */
 .node-header {
     display: flex;
@@ -176,13 +182,26 @@
     gap: 10px 6px;
 }
 
-/* One set element: symbol on top, optional progress bar / name below */
+/* One set element — clickable; single selection shared across both lists */
 .set-item {
     width: 72px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 3px;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.set-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.set-item.selected {
+    background-color: rgba(0, 120, 212, 0.18);
+    outline: 1px solid #0078d4;
 }
 
 /* 64×64 set symbol — gold gradient + mask come from global .set-symbol / .set-symbol-<code> in site.css;
@@ -236,4 +255,135 @@
     line-height: 14px;
     font-size: 9px;
     color: #fff;
+}
+
+/* ── Right panel: details of the selected set ── */
+
+.detail-placeholder {
+    color: #666;
+    font-size: 12px;
+    text-align: center;
+    padding-top: 40px;
+}
+
+.set-detail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 16px;   /* top offset */
+}
+
+/* 64×64 set symbol above the name — mask from global .set-symbol-<code>; centered by the parent's align-items */
+.detail-set-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+/* Full set name — bold gold serif, centered */
+.detail-name {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--gold, #ffd700);
+    text-align: center;
+    line-height: 1.25;
+}
+
+/* Small unobtrusive meta line under the name */
+.detail-meta {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #888;
+    text-align: center;
+}
+
+.detail-section {
+    margin-top: 24px;   /* offset between sections */
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 12px 0 24px;   /* breathing room: more air left of the icons than right of the bars */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Icon at the left edge, vertically centered against the right-hand block */
+.detail-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Right-hand block: owned/total above, bar below it; flex-grow stretches horizontally (row layout) */
+.detail-bar-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* owned/total counts at the left edge, above the bar */
+.detail-bar-counts {
+    font-size: 11px;
+    color: #bbb;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 30px set icon shaped by the global .set-symbol-<code> mask, tinted per rarity */
+.rarity-icon {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    display: inline-block;
+    background-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+/* black-and-white — common */
+.rarity-icon-common {
+    background-image: linear-gradient(110deg, #3f3f3f 0%, #8a8a8a 35%, #d9d9d9 50%, #8a8a8a 65%, #3f3f3f 100%);
+}
+
+/* silver-blue — uncommon */
+.rarity-icon-uncommon {
+    background-image: linear-gradient(110deg, #46617c 0%, #7fa0c0 35%, #cfe2f3 50%, #7fa0c0 65%, #46617c 100%);
+}
+
+/* gold — rare (same gradient as the global .set-symbol) */
+.rarity-icon-rare {
+    background-image: linear-gradient(110deg, var(--gold-deep) 0%, var(--gold) 25%, var(--gold-light) 33%, var(--gold) 41%, var(--gold-mid) 62%, var(--gold-deep) 100%);
+}
+
+/* orange — mythic */
+.rarity-icon-mythic {
+    background-image: linear-gradient(110deg, #7a2d0e 0%, #d9660f 35%, #ffb066 50%, #d9660f 65%, #7a2d0e 100%);
+}
+
+/* Mana color symbol (global .card-symbol sprite) at 24px */
+.detail-color-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+/* no flex-grow: in the column layout flex-basis: 0% would collapse the track
+   vertically and hide the bar; align-items: stretch already gives full width */
+.detail-bar-track {
+    height: 10px;
+    background-color: #454545;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.detail-bar-fill {
+    height: 100%;
+    background-color: #0078d4;
 }
