@@ -15,6 +15,8 @@
         <span class="title">⚔ Magic Assistant</span>
         <span class="subtitle">— Card Organizer</span>
         <span class="header-actions">
+            <span class="header-action @(_mode == LayoutMode.Showcase ? "active" : "")" @onclick="() => SetMode(LayoutMode.Showcase)" title="Show collector progress">Showcase</span>
+            <span class="header-action @(_mode == LayoutMode.Management ? "active" : "")" @onclick="() => SetMode(LayoutMode.Management)" title="Deck & collection management">Management</span>
             <span class="header-action" @onclick="OpenLegacyImportDialog" title="Import legacy deck (Gatherer ID + full set names)">Legacy Import</span>
             <span class="header-action" @onclick="OpenUpdateDbDialog" title="Update DataBase from Scryfall">Update DB</span>
         </span>
@@ -32,6 +34,9 @@
     @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
     
 
+    @* ── Management mode: everything below the header is management UI ── *@
+    @if (_mode == LayoutMode.Management)
+    {
     @* ── Main Grid ── *@
     <div class="main-grid">
         <div class="panel-left @(_leftCollapsed ? "collapsed" : "")">
@@ -120,9 +125,25 @@
             </div>
         </div>
     </div>
+    }
+    else
+    {
+        @* ── Showcase mode: collector progress only, no management UI ── *@
+        <div class="showcase-area">
+            <CollectorView />
+        </div>
+    }
 </div>
 
 @code {
+    // ── Layout Mode ──
+    /// <summary>Management — everything below the header bar (navigator, deck content, card details).
+    /// Showcase — CollectorView only. Persisted like panel collapse state.</summary>
+    private enum LayoutMode { Management, Showcase }
+
+    private LayoutMode _mode = LayoutMode.Management;
+    private const string ModeKey = "MainLayout.Mode";
+
     // ── Navigation State ──
     /// <summary>Collection node currently displayed in the center panel (CollectionId == null = Knowledge Base).</summary>
     private LockableCollection _currentCollection = new();
@@ -262,6 +283,23 @@
     }
 
     // ── Header Actions (clickable words in the app header) ──
+    /// <summary>Switch layout mode and persist the choice. Render is automatic after the handler.</summary>
+    private async Task SetMode(LayoutMode mode)
+    {
+        if (_mode == mode) return;
+        _mode = mode;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(ModeKey, mode.ToString().ToLowerInvariant()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
     private void OpenLegacyImportDialog() => _showLegacyImportDialog = true;
     private void OpenUpdateDbDialog() => _showSyncDialog = true;
 
@@ -383,6 +421,16 @@
         catch
         {
             // default: expanded
+        }
+
+        try
+        {
+            var mode = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(ModeKey));
+            if (mode == "showcase") _mode = LayoutMode.Showcase;
+        }
+        catch
+        {
+            // default: management
         }
     }
 
@@ -544,7 +592,6 @@
             case "types": <TypePage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" NodeKind="@_currentCollection.NodeType" /> break;
             case "abilities": <AbilityPage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" /> break;
             case "legality": <DeckLegalityPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
-            case "collector": <CollectorView /> break;
             default:
                 @* Location mode (collection/deck/sideboard): no sync channel — KB cards are display-only here. *@
                 <CardsListControl FilterViewModel="@_filterViewModel"
