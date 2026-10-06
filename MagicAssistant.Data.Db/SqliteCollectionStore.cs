@@ -167,13 +167,15 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             async Task InsertCardRowAsync(int collectionId, MagicCardPhysical card)
             {
                 await conn.ExecuteAsync(@"
-                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
-                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
+                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade)
+                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice, @Grade)
                     ON CONFLICT(CollectionId, CardId) DO UPDATE SET
                         Count = Count + excluded.Count,
                         IsOwn = excluded.IsOwn,
                         Comment = excluded.Comment,
-                        ForTradeCount = excluded.ForTradeCount",
+                        ForTradeCount = excluded.ForTradeCount,
+                        -- COALESCE: re-adding a card (fresh instance with NULL grade) must not wipe the stored grade
+                        Grade = COALESCE(excluded.Grade, Grade)",
                     new
                     {
                         CollectionId = collectionId,
@@ -183,7 +185,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                         Comment = card.Comment,
                         DateAdded = card.DateAdded,
                         ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
-                        MyPrice = card.MyPrice
+                        MyPrice = card.MyPrice,
+                        Grade = card.Grade is { } g ? (int?)g : null
                     }, tx);
             }
 
@@ -353,13 +356,15 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             throw new InvalidOperationException($"Cannot add cards to a locked node (Id={locationId})");
 
         await conn.ExecuteAsync(@"
-            INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
-            VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
+            INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade)
+            VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice, @Grade)
             ON CONFLICT(CollectionId, CardId) DO UPDATE SET
                 Count = Count + excluded.Count,
                 IsOwn = excluded.IsOwn,
                 Comment = excluded.Comment,
-                ForTradeCount = excluded.ForTradeCount",
+                ForTradeCount = excluded.ForTradeCount,
+                -- COALESCE: re-adding a card (fresh instance with NULL grade) must not wipe the stored grade
+                Grade = COALESCE(excluded.Grade, Grade)",
             new
             {
                 CollectionId = locationId,
@@ -369,7 +374,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                 Comment = card.Comment,
                 DateAdded = card.DateAdded,
                 ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
-                MyPrice = card.MyPrice
+                MyPrice = card.MyPrice,
+                Grade = card.Grade is { } g ? (int?)g : null
             });
 
         return true;
@@ -404,13 +410,15 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                     throw new ArgumentException($"Card '{card.Name}' has no valid location", nameof(card));
 
                 await conn.ExecuteAsync(@"
-                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice)
-                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice)
+                    INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade)
+                    VALUES (@CollectionId, @CardId, @Count, @IsOwn, @Comment, @DateAdded, @ForTradeCount, @MyPrice, @Grade)
                     ON CONFLICT(CollectionId, CardId) DO UPDATE SET
                         Count = Count + excluded.Count,
                         IsOwn = excluded.IsOwn,
                         Comment = excluded.Comment,
-                        ForTradeCount = excluded.ForTradeCount",
+                        ForTradeCount = excluded.ForTradeCount,
+                        -- COALESCE: re-adding a card (fresh instance with NULL grade) must not wipe the stored grade
+                        Grade = COALESCE(excluded.Grade, Grade)",
                     new
                     {
                         CollectionId = locationId,
@@ -420,7 +428,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                         Comment = card.Comment,
                         DateAdded = card.DateAdded,
                         ForTradeCount = card.GetForTradeCount() > 0 ? card.GetForTradeCount() : (int?)null,
-                        MyPrice = card.MyPrice
+                        MyPrice = card.MyPrice,
+                        Grade = card.Grade is { } g ? (int?)g : null
                     }, tx);
             }
 
@@ -542,6 +551,15 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                     setClauses.Add("MyPrice = @MyPrice");
                     parameters.Add("@MyPrice", CastToFloat(value));
                     break;
+                case MagicCardField.ForTradeCount:
+                    setClauses.Add("ForTradeCount = @ForTradeCount");
+                    var ftValue = CastToInt(value);
+                    parameters.Add("@ForTradeCount", ftValue > 0 ? (int?)ftValue : null);
+                    break;
+                case MagicCardField.Grade:
+                    setClauses.Add("Grade = @Grade");
+                    parameters.Add("@Grade", value is CardGrade g ? (int?)g : null);
+                    break;
             }
         }
 
@@ -562,7 +580,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         await conn.OpenAsync(ct);
         var row = await conn.QuerySingleOrDefaultAsync<FullDeckCardRow>(@"
             SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount,
+                   d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
@@ -581,7 +599,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<FullDeckCardRow>(@"
             SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount,
+                   d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
@@ -608,7 +626,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<FullDeckCardRow>(@"
             SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount,
+                   d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
@@ -629,7 +647,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<FullDeckCardRow>(@"
             SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount,
+                   d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
@@ -708,7 +726,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
 
         var rows = await conn.QueryAsync<FullDeckCardRow>(@"
             SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount,
+                   d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
@@ -904,6 +922,8 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             physical.DateAdded = dateAdded;
         if (row.ForTradeCount.HasValue && row.ForTradeCount.Value > 0)
             physical.SetForTradeCount(row.ForTradeCount.Value);
+        if (row.Grade.HasValue)
+            physical.Grade = (CardGrade)row.Grade.Value;
 
         return physical;
     }
@@ -957,6 +977,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public string? Comment { get; set; }
         public string? DateAdded { get; set; }  // SQLite stores as ISO 8601 string
         public int? ForTradeCount { get; set; }
+        public int? Grade { get; set; }
 
         // Cards columns (aliased to avoid collision)
         public Guid CardId { get; set; }

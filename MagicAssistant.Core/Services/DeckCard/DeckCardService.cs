@@ -176,6 +176,19 @@ public class DeckCardService : IDeckCardService
                 case MagicCardField.Custom when value is string custom:
                     matching.Custom = custom;
                     fieldsToUpdate.Add(field); break;
+                case MagicCardField.ForTradeCount when value is int forTrade:
+                    // 0 clears the count and any legacy "fortrade" tag fallback
+                    if (forTrade == 0)
+                        matching.RemoveSpecialTag("fortrade");
+                    matching.SetForTradeCount(forTrade);
+                    fieldsToUpdate.Add(field); break;
+                // Nullable value types are illegal in patterns (CS8116) — split into two cases.
+                case MagicCardField.Grade when value is CardGrade g:
+                    matching.Grade = g;
+                    fieldsToUpdate.Add(field); break;
+                case MagicCardField.Grade: // null — clears the column
+                    matching.Grade = null;
+                    fieldsToUpdate.Add(field); break;
             }
         }
 
@@ -288,5 +301,16 @@ public class DeckCardService : IDeckCardService
             throw new ArgumentException("At least one collection ID is required.", nameof(collectionIds));
 
         return _collectionStore.GetCardCountsAsync(collectionIds, cardIds, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> GetOwnedCountAsync(int deckId, Guid cardId, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+
+        // All physical rows of this card across the DB — filter to the given deck and owned copies only.
+        var rows = await _collectionStore.GetCardsAsync(cardId, ct);
+        return rows.Where(r => r.Location.RawId == deckId && r.IsOwn).Sum(r => r.Count);
     }
 }

@@ -88,4 +88,10 @@ public interface IDeckCardService
     /// Returns (CollectionId, CardId) → total count; absent keys mean the card is not present in that collection (treat as 0).
     /// </summary>
     Task<Dictionary<(int CollectionId, Guid CardId), int>> GetDeckCardCountsAsync(ICollection<int> collectionIds, ICollection<Guid> cardIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Total copies of the card within a single deck that are owned (IsOwn = true).
+    /// Used to bound the for-trade count in the edit dialog.
+    /// </summary>
+    Task<int> GetOwnedCountAsync(int deckId, Guid cardId, CancellationToken ct = default);
 }

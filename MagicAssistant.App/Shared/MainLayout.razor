@@ -489,6 +489,7 @@
     private async Task OnEditCardSaved(MagicCardPhysical? card)
     {
         _statusText = "Card updated";
+        _kbRefreshTrigger++;  // reload the viewed list so the saved changes are visible
         _stripRefresh++;  // count may have changed — refresh ContextStrip stats
         StateHasChanged();
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // count may have changed in the edit dialog

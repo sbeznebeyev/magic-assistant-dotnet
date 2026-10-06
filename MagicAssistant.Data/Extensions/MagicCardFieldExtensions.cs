@@ -63,6 +63,7 @@ public static class MagicCardFieldExtensions
             MagicCardField.DateAdded => GetDateAdded(card),
             MagicCardField.Custom => GetCustom(card),
             MagicCardField.ForTradeCount => GetForTradeCount(card),
+            MagicCardField.Grade => GetGrade(card),
 
             // Derived/computed
             MagicCardField.OwnCount => card.OwnCount,
@@ -208,6 +209,15 @@ public static class MagicCardFieldExtensions
             case MagicCardField.ForTradeCount:
                 physical.SetForTradeCount(CastToInt(value));
                 break;
+            case MagicCardField.Grade:
+                physical.Grade = value switch
+                {
+                    null => null,
+                    CardGrade g => g,
+                    int i => (CardGrade)i,
+                    _ => Enum.TryParse<CardGrade>(value.ToString(), out var parsed) ? parsed : null
+                };
+                break;
             case MagicCardField.MyPrice:
                 physical.MyPrice = CastToFloat(value);
                 break;
@@ -232,7 +242,7 @@ public static class MagicCardFieldExtensions
     /// </summary>
     public static bool IsPhysical(this MagicCardField field)
     {
-        return field is >= MagicCardField.Count and <= MagicCardField.ForTradeCount;
+        return field is >= MagicCardField.Count and <= MagicCardField.Grade;
     }
 
     /// <summary>
@@ -296,6 +306,7 @@ public static class MagicCardFieldExtensions
     private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.DateAdded : null;
     private static string? GetCustom(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Custom : null;
     private static int GetForTradeCount(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.GetForTradeCount() : 0;
+    private static object? GetGrade(IMagicCard card) => card is MagicCardPhysical p ? (object?)p.Grade : null;
     private static int GetCreatureCount(IMagicCard card)
     {
         if (card.Power == null || string.IsNullOrEmpty(card.Power)) return 0;

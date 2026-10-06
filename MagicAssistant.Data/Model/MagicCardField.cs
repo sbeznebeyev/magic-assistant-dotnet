@@ -50,6 +50,10 @@ public enum MagicCardField
     MyPrice,
     ForTradeCount,
 
+    // Appended after ForTradeCount so existing numeric values stay stable;
+    // the IsPhysical() range must be extended accordingly.
+    Grade,
+
     // === Derived/computed fields ===
     OwnCount,
     OwnTotal,

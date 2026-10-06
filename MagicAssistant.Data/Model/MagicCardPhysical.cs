@@ -83,6 +83,11 @@ public class MagicCardPhysical : IMagicCardPhysical
     /// Per-instance price, persisted in Deck.MyPrice (one per collection row).
     /// </summary>
     public float MyPrice { get; set; }
+
+    /// <summary>
+    /// Condition grade, persisted in Deck.Grade as a nullable integer (NULL = not graded).
+    /// </summary>
+    public CardGrade? Grade { get; set; }
     public float CommunityRating => Card.CommunityRating;
 
     // === Deep clone — mirrors Java MagicCardPhysical.clone() ===

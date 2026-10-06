@@ -142,6 +142,7 @@ public static class InitializeDb
                 DateAdded    DateTime,
                 ForTradeCount INTEGER,
                 MyPrice       REAL DEFAULT 0,
+                Grade         INTEGER,
                 PRIMARY KEY (CollectionId, CardId),
                 FOREIGN KEY (CollectionId) REFERENCES Collection(Id) ON DELETE CASCADE,
                 FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE

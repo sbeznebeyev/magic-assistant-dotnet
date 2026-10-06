@@ -68,8 +68,17 @@
 }
 
 .preview-cost {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     font-size: 12px;
     color: #888;
+}
+
+/* Mana sprite in the preview — slightly larger than the 18px table default so it reads at dialog scale */
+.preview-cost .card-symbol {
+    width: 20px;
+    height: 20px;
 }
 
 /* ── Form ──────────────────────────────────────────── */
@@ -115,6 +124,77 @@
 
 .form-input-sm {
     width: 70px;
+}
+
+/* For trade count — digits only, no native +/− spinner buttons */
+input[type="number"].no-spin::-webkit-outer-spin-button,
+input[type="number"].no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"].no-spin {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* ── Toggle buttons (Ownership / Grade / Trading) ── */
+.toggle-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.toggle-btn {
+    padding: 5px 12px;
+    border-radius: 4px;
+    background: #1e1e1e;
+    color: #999;
+    border: 1px solid #444;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.toggle-btn:hover:not(:disabled) {
+    background: #2a2a2a;
+    color: #ccc;
+}
+
+/* Pressed state — same blue as Type Filter's toggles */
+.toggle-btn.active {
+    background: #1a3a5c;
+    border-color: #0078d4;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(0, 120, 212, 0.3);
+}
+
+.toggle-btn.active:hover {
+    background: #1f4568;
+}
+
+.toggle-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Grade — six compact buttons */
+.grade-group .toggle-btn {
+    padding: 4px 8px;
+    min-width: 36px;
+    text-align: center;
+}
+
+/* Trading — toggle + count inline */
+.trading-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.field-error {
+    font-size: 10px;
+    color: #e74c3c;
 }
 
 .form-textarea {
