@@ -15,9 +15,10 @@
 
 <div class="collector-view">
     <div class="collector-main">
-        @* ── Single toolbar row: search (300px) · reserved set-type filter · sort dropdown ── *@
+        @* ── Royal toolbar: search · set-type filter · sort — gold hairline over a dark gradient ground ── *@
         <div class="toolbar">
             <div class="set-search-bar">
+                <span class="set-search-glyph" aria-hidden="true">⌕</span>
                 <input value="@_setsSearchQuery"
                        @oninput="OnSetSearchInput"
                        placeholder="Filter sets..."
@@ -33,11 +34,14 @@
                     @onclick="OpenTypeFilterDialog"
                     title="Filter sets by type">Type Filter</button>
 
-            <span class="sort-label">Sort:</span>
-            <select class="sort-select" value="@_sortMode.ToString()" @onchange="OnSortModeChanged">
-                <option value="@nameof(SortMode.NewestFirst)">newest to oldest</option>
-                <option value="@nameof(SortMode.ProgressionDesc)">progression desc</option>
-            </select>
+            <span class="sort-label">Sort</span>
+            <span class="sort-field">
+                <select class="sort-select" value="@_sortMode.ToString()" @onchange="OnSortModeChanged">
+                    <option value="@nameof(SortMode.NewestFirst)">newest to oldest</option>
+                    <option value="@nameof(SortMode.ProgressionDesc)">progression desc</option>
+                </select>
+                <span class="sort-chevron" aria-hidden="true">▾</span>
+            </span>
         </div>
 
         @* ── Top node: sets with at least one owned card ── *@
