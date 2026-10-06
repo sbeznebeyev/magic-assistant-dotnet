@@ -294,9 +294,10 @@
             if (_selectedSetCode == next)
                 _details = details;
         }
-        catch
+        catch (Exception ex)
         {
-            // keep the loading placeholder; reselecting retries
+            // keep the loading placeholder; reselecting retries — but don't swallow silently:
+            Console.WriteLine($"[CollectorView] SelectSet({setCode}) failed: {ex}");
         }
     }
 

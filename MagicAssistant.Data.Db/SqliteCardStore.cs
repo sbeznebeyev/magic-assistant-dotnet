@@ -543,9 +543,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
-        // SQLite LIKE does NOT use custom collations. Override the like() scalar function for full Unicode case-insensitive support.
-        // SQLite maps: X LIKE Y  ->  like(Y, X)
-        conn.CreateFunction("like", (string pattern, string value) =>
+        // SQLite LIKE does NOT use custom collations. Register a ma_like() scalar function for full Unicode
+        // case-insensitive support and call it explicitly (ma_like(pattern, value)) — overriding the built-in
+        // "like" name is unsafe: the UDF sticks to the pooled native connection and breaks every later
+        // `X LIKE Y` prepare with 'wrong number of arguments to function LIKE()'.
+        conn.CreateFunction("ma_like", (string pattern, string value) =>
         {
             if (pattern is null || value is null) return false;
             var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("%", ".*").Replace("_", ".") + "$";
@@ -593,7 +595,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             for (int i = 0; i < filter.TypeFilters.Count; i++)
             {
                 var param = $"TypeFilter{i}";
-                typeConditions.Add($"Type LIKE @{param}");
+                typeConditions.Add($"ma_like(@{param}, Type)");
                 parameters.Add(param, "%" + filter.TypeFilters[i] + "%");
             }
             whereParts.Add("(" + string.Join(" OR ", typeConditions) + ")");
@@ -601,7 +603,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         // Artist filter: LIKE '%value%' (case-insensitive in SQLite)
         if (!string.IsNullOrWhiteSpace(filter.Artist))
         {
-            whereParts.Add("Artist LIKE @ArtistFilter");
+            whereParts.Add("ma_like(@ArtistFilter, Artist)");
             parameters.Add("ArtistFilter", "%" + filter.Artist + "%");
         }
         // ColorType filter: exact match (case-insensitive). Legacy — superseded by ColorFilter.
@@ -624,8 +626,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         {
             var likeVal = "%" + filter.NameFilter + "%";
             whereParts.Add(@"(
-                PrintedName LIKE @NameFilter OR Name LIKE @NameFilter OR
-                Id IN (SELECT CardId FROM CardFaces WHERE (PrintedName LIKE @NameFilter OR Name LIKE @NameFilter))
+                ma_like(@NameFilter, PrintedName) OR ma_like(@NameFilter, Name) OR
+                Id IN (SELECT CardId FROM CardFaces WHERE (ma_like(@NameFilter, PrintedName) OR ma_like(@NameFilter, Name)))
             )");
             parameters.Add("NameFilter", likeVal);
         }
@@ -657,7 +659,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         // Pads with commas to avoid partial matches (e.g. "standard" != "future_standard").
         if (!string.IsNullOrWhiteSpace(filter.LegalityFilter))
         {
-            whereParts.Add("(',' || Legal || ',' LIKE @LegalityFilter)");
+            whereParts.Add("ma_like(@LegalityFilter, (',' || Legal || ','))");
             parameters.Add("LegalityFilter", "%," + filter.LegalityFilter + ",%");
         }
 
