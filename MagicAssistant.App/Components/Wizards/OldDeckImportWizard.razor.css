@@ -297,10 +297,7 @@
 
 /* ── Hover preview of a candidate card (UnresolvedTable) ── */
 .card-preview {
-    position: absolute; /* вне flex-потока оверлея — диалог не сдвигается */
-    top: 50%;
-    right: 24px;
-    transform: translateY(-50%);
+    /* Отдельное окно в flex-потоке оверлея — прилеплено к правому краю диалога (gap 12px). */
     width: 350px;
     height: 500px;
     background: #1e1e1e;
@@ -342,13 +339,3 @@
     text-align: center;
 }
 
-.card-preview-name {
-    padding: 8px 12px;
-    font-size: 12px;
-    color: #eee;
-    border-top: 1px solid #444;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}

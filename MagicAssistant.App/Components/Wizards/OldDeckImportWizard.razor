@@ -225,24 +225,28 @@
         }
     </div>
 
-    @if (_state == WizardState.UnresolvedTable && _hoverCard is not null)
+    @if (_state == WizardState.UnresolvedTable)
     {
-        <div class="card-preview" @onclick:stopPropagation="true">
-            @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageLoader.FrontExists(_hoverCard))
+        @* Preview window — flex sibling of dialog-box, docked to its right (gap 12px).
+           Space is always reserved so the centered dialog doesn't shift on hover. *@
+        <div class="card-preview" @onclick:stopPropagation="true" style="@(_hoverCard is null ? "visibility:hidden" : "")">
+            @if (_hoverCard is not null)
             {
-                <div class="card-preview-img-wrap">
-                    <img src="@imgUrl" alt="@(_hoverCard.PrintedName ?? _hoverCard.Name)" class="card-preview-img" />
-                </div>
+                @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageLoader.FrontExists(_hoverCard))
+                {
+                    <div class="card-preview-img-wrap">
+                        <img src="@imgUrl" alt="@(_hoverCard.PrintedName ?? _hoverCard.Name)" class="card-preview-img" />
+                    </div>
+                }
+                else
+                {
+                    @* Lazy: the image is downloaded on hover and pops in when the file lands. *@
+                    <div class="card-preview-empty">
+                        <span>🖼</span>
+                        <span>@(ImageLoader.Failed(_hoverCard) ? "Image not downloaded" : "Downloading image...")</span>
+                    </div>
+                }
             }
-            else
-            {
-                @* Lazy: the image is downloaded on hover and pops in when the file lands. *@
-                <div class="card-preview-empty">
-                    <span>🖼</span>
-                    <span>@(ImageLoader.Failed(_hoverCard) ? "Image not downloaded" : "Downloading image...")</span>
-                </div>
-            }
-            <div class="card-preview-name">@(_hoverCard.PrintedName ?? _hoverCard.Name)</div>
         </div>
     }
 </div>

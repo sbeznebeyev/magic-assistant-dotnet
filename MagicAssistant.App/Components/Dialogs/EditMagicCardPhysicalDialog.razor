@@ -1,8 +1,8 @@
-@using System.Text
 @using MagicAssistant.App.Components.Shared
 @using MagicAssistant.Core.Services.DeckCard
 @using MagicAssistant.Data.Model
 @inject IDeckCardService DeckCardService
+@inject ICardImageLoader ImageLoader
 
 @if (!IsOpen) return;
 
@@ -16,19 +16,6 @@
 
         @if (_card != null)
         {
-            <div class="edit-card-preview">
-                <span class="preview-name">@_card.Name</span>
-                @if (string.IsNullOrEmpty(ManaCost(_card.Card)))
-                {
-                    <span class="preview-cost">—</span>
-                }
-                else
-                {
-                    @* Mana symbols as SVG sprites — same rendering as the Cost column in CardListView *@
-                    <span class="preview-cost"><MagicText Text="@ManaCost(_card.Card)" /></span>
-                }
-            </div>
-
             @* ── Form fields ── *@
             <div class="edit-form">
                 @* Count is no longer editable here — it lives in the list's −/+ controls. *@
@@ -107,6 +94,27 @@
             </div>
         }
     </div>
+
+    @* ── Card preview — separate window docked to the right, same pattern as OldDeckImportWizard's hover preview. *@
+    @if (_card != null)
+    {
+        <div class="card-image-preview" @onclick:stopPropagation="true">
+            @if (ImageHelper.GetImageUrl(_card.Card, true) is { } imgUrl && ImageLoader.FrontExists(_card.Card))
+            {
+                <div class="card-image-wrap">
+                    <img src="@imgUrl" alt="@ActiveName" class="card-image" />
+                </div>
+            }
+            else
+            {
+                @* Lazy: the image is downloaded on open and pops in when the file lands. *@
+                <div class="card-image-empty">
+                    <span>🖼</span>
+                    <span>@(ImageLoader.Failed(_card.Card) ? "Image not downloaded" : "Downloading image...")</span>
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
@@ -119,6 +127,7 @@
     private bool _forTradeOn;
     // Total copies of this card in the deck with IsOwn = true — bounds the for-trade count.
     private int _ownedCount;
+    private bool _isDoubleSided;
     private bool _saving;
     private string? _error;
 
@@ -160,8 +169,31 @@
         _forTradeCount = card.GetForTradeCount();
         _forTradeOn = _forTradeCount > 0;
         _ownedCount = DeckId.HasValue ? await DeckCardService.GetOwnedCountAsync(DeckId.Value, card.Id) : 0;
+        _isDoubleSided = card.Card.Has2Faces;
         _error = null;
+
+        // Lazy image: the preview shows a placeholder until the front file lands on disk (wizard pattern).
+        if (!ImageLoader.FrontExists(card.Card))
+            _ = EnsureImageAsync(card.Card);
     }
+
+    private async Task EnsureImageAsync(MagicCard card)
+    {
+        await ImageLoader.EnsureAsync(card);
+        // Re-render only if this card is still the one being edited.
+        if (ReferenceEquals(_card?.Card, card))
+            StateHasChanged();
+    }
+
+    private CardFace? ActiveFace => _isDoubleSided && _card?.Card.CardFaces is { Length: >= 2 }
+        ? _card.Card.CardFaces[0] // превью показывает лицевую сторону
+        : null;
+
+    // Scryfall fills PrintedName/PrintedText/PrintedTypeLine for many double-sided cards.
+    // Fall back to base card values if face-specific fields are empty.
+    private string ActiveName => ActiveFace is { } f
+        ? (f.PrintedName ?? f.Name ?? _card?.Card.PrintedName ?? _card?.Name ?? string.Empty)
+        : (_card?.Card.PrintedName ?? _card?.Name ?? string.Empty);
 
     private async Task OnSave()
     {
@@ -225,22 +257,6 @@
     }
 
     /// <summary>Mana cost for the preview; double-sided cards show "front // back" (same rule as CardListView).</summary>
-    private static string ManaCost(MagicCard card)
-    {
-        if (!string.IsNullOrWhiteSpace(card.ManaCost))
-            return card.ManaCost;
-
-        if (card.CardFaces is null || card.CardFaces.Length == 0)
-            return string.Empty;
-
-        var sb = new StringBuilder(card.CardFaces[0].ManaCost);
-
-        if (card.CardFaces.Length > 1)
-            sb.Append($" // {card.CardFaces[1].ManaCost}");
-
-        return sb.ToString();
-    }
-
     /// <summary>Grade is single-select: clicking the active button clears it, any other selects.</summary>
     private void ToggleGrade(CardGrade grade) => _grade = _grade == grade ? null : grade;
 
