@@ -101,7 +101,7 @@
                                 @if (physical.Count > 1)
                                 {
                                     <button class="split-btn" @onclick:stopPropagation="true"
-                                            @onclick="() => SplitCard(physical)" title="Split pile">⫯</button>
+                                            @onclick="() => SplitCard(physical)" title="Split pile">✂</button>
                                 }
                             }
                         </td>
@@ -171,7 +171,7 @@
     /// Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
     [Parameter] public Dictionary<Guid, int>? PinnedCounts { get; set; }
 
-    /// <summary>The displayed collection is locked — −/+ and ✎/⫯ are hidden, count shown read-only.</summary>
+    /// <summary>The displayed collection is locked — −/+ and ✎/✂ are hidden, count shown read-only.</summary>
     [Parameter] public bool Locked { get; set; }
 
     /// <summary>The pinned collection is locked — KB (+) is hidden.</summary>
