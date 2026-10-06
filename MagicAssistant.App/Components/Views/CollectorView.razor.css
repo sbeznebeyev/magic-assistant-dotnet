@@ -84,13 +84,25 @@
 /* Reserved: set type filter — slot only, visually inert until it gets behavior */
 .set-type-filter-btn {
     background-color: #252526;
-    border: 1px dashed #3c3c3c;
+    border: 1px solid #3c3c3c;
     border-radius: 3px;
-    color: #666;
+    color: #888;
     font-size: 12px;
     padding: 4px 10px;
-    cursor: not-allowed;
+    cursor: pointer;
     user-select: none;
+}
+
+.set-type-filter-btn:hover {
+    background-color: #2d2d30;
+    border-color: #555;
+    color: #ccc;
+}
+
+/* Filter is active — at least one type pressed in the dialog */
+.set-type-filter-btn.active {
+    border-color: #0078d4;
+    color: #ddd;
 }
 
 .sort-label {

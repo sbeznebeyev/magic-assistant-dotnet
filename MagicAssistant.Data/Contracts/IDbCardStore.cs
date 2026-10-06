@@ -65,8 +65,10 @@ public interface IDbCardStore : ICardStore<MagicCard>
     /// Collector progress for all sets — single SQL query.
     /// Returns per-set: total unique cards in KB vs unique cards the user owns in any deck.
     /// Replaces N+1 queries (GetEditions + GetBySet per edition + recursive tree walk).
+    /// When <paramref name="setTypes"/> is non-empty, only sets of those types are returned
+    /// (SQL: WHERE s.SetType IN (...)).
     /// </summary>
-    Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(CancellationToken ct = default);
+    Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(IReadOnlyCollection<CardSetType>? setTypes = null, CancellationToken ct = default);
 
     /// <summary>
     /// Progress details for a single set: identity plus owned/total per rarity and per mana color.

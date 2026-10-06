@@ -22,8 +22,9 @@ public interface IDeckAnalysisService
     /// <summary>
     /// Get collector progress across all available sets.
     /// Shows how many cards from each set the user owns vs total available.
+    /// When <paramref name="setTypes"/> is non-empty, only sets of those types are returned.
     /// </summary>
-    Task<ICollection<CollectorProgressEntry>> GetCollectorProgressAsync(CancellationToken ct = default);
+    Task<ICollection<CollectorProgressEntry>> GetCollectorProgressAsync(IReadOnlyCollection<CardSetType>? setTypes = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get collector progress for a specific set.

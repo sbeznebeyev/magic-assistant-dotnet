@@ -1,10 +1,10 @@
 @*
     CollectorView — set collection tracker (Showcase mode)
 
-    Two-panel layout: left — a single toolbar row (set search, reserved
-    set-type filter, sort dropdown), then two set nodes (in-collection /
-    not-started); right — fixed 360px reserved panel. The selected sort
-    mode is persisted in user settings and restored on page entry. The search narrows both lists in memory
+    Two-panel layout: left — a single toolbar row (set search, set type filter,
+    sort dropdown), then two set nodes (in-collection / not-started);
+    right — fixed 360px reserved panel. The selected sort mode and the set
+    type filter are persisted in user settings and restored on page entry. The search narrows both lists in memory
     (2+ chars, name or set code) — same pattern as the CardsListControl
     sidebar, but the data source is the DB result (_progress).
     Each node has a collapsible header; its list flows set elements
@@ -28,8 +28,10 @@
                 }
             </div>
 
-            @* Reserved: set type filter — slot only, no behavior yet *@
-            <button class="set-type-filter-btn" disabled title="Reserved: set type filter">Set Type</button>
+            @* Set type filter — toggle dialog; pressed types narrow the DB query (WHERE SetType IN (...)) *@
+            <button class="set-type-filter-btn @(_typeFilter is { Count: > 0 } ? "active" : "")"
+                    @onclick="OpenTypeFilterDialog"
+                    title="Filter sets by type">Type Filter</button>
 
             <span class="sort-label">Sort:</span>
             <select class="sort-select" value="@_sortMode.ToString()" @onchange="OnSortModeChanged">
@@ -153,6 +155,12 @@
             </div>
         }
     </div>
+
+    @* Set type filter dialog — staged toggles commit on Apply, persist as one comma-separated row *@
+    <SetTypeFilterDialog IsOpen="@_showTypeFilterDialog"
+                         IsOpenChanged="@(v => _showTypeFilterDialog = v)"
+                         SelectedTypes="_typeFilter"
+                         OnApplied="OnTypeFilterApplied" />
 </div>
 
 @using MagicAssistant.Core.Services.DeckAnalysis
@@ -179,10 +187,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSortModeAsync();  // restore persisted sort before the first render
+        await LoadSortModeAsync();   // restore persisted sort before the first render
+        await LoadTypeFilterAsync(); // restore persisted type filter before the first query
         try
         {
-            _progress = await DeckAnalysisService.GetCollectorProgressAsync();
+            _progress = await DeckAnalysisService.GetCollectorProgressAsync(_typeFilter);
             ApplySort();
         }
         catch
@@ -221,6 +230,72 @@
         try
         {
             await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(SortModeSettingKey, _sortMode.ToString()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    // ── Set type filter (toggle dialog; persisted as one comma-separated row) ───────────────
+
+    /// <summary>User-settings key for the persisted set type filter (comma-separated CardSetType names).</summary>
+    private const string TypeFilterSettingKey = "CollectorView.SetTypeFilter";
+
+    /// <summary>Committed type filter; null/empty — no filter (all types shown).</summary>
+    private List<CardSetType>? _typeFilter;
+
+    private bool _showTypeFilterDialog;
+
+    private void OpenTypeFilterDialog() => _showTypeFilterDialog = true;
+
+    /// <summary>Restores the persisted type filter ("core,expansion") before the first query;
+    /// invalid/unknown names are dropped, an empty result leaves the filter off.</summary>
+    private async Task LoadTypeFilterAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+        try
+        {
+            var stored = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(TypeFilterSettingKey));
+            if (string.IsNullOrWhiteSpace(stored)) return;
+
+            var types = new List<CardSetType>();
+            foreach (var part in stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (Enum.TryParse<CardSetType>(part, ignoreCase: true, out var t) && t != CardSetType.unknown)
+                    types.Add(t);
+
+            if (types.Count > 0) _typeFilter = types;
+        }
+        catch
+        {
+            // no filter — settings are not critical
+        }
+    }
+
+    /// <summary>Apply: commit the staged selection, persist it as one comma-separated row, re-query.</summary>
+    private async Task OnTypeFilterApplied(IReadOnlyCollection<CardSetType> types)
+    {
+        _typeFilter = types.Count > 0 ? types.ToList() : null;
+        await SaveTypeFilterAsync();
+
+        try
+        {
+            _progress = await DeckAnalysisService.GetCollectorProgressAsync(_typeFilter);
+            ApplySort();
+        }
+        catch
+        {
+            _progress = null;
+        }
+    }
+
+    private async Task SaveTypeFilterAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            var value = _typeFilter is { Count: > 0 } ? string.Join(",", _typeFilter.Select(t => t.ToString())) : "";
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(TypeFilterSettingKey, value));
         }
         catch
         {

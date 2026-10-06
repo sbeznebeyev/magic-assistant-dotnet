@@ -1824,7 +1824,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// 
     /// Replaces: GetCardSetsAsync + N×GetBySetAsync + recursive tree walk with M×GetDeckCardsAsync.
     /// </summary>
-    public async Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(CancellationToken ct = default)
+    public async Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(
+        IReadOnlyCollection<CardSetType>? setTypes = null, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -1850,11 +1851,21 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 FROM Deck dc
                 INNER JOIN Cards c ON dc.CardId = c.Id
                 GROUP BY c.SetCode
-            ) c ON c.SetCode = s.SetCode
-            ORDER BY s.Name";
+            ) c ON c.SetCode = s.SetCode";
+
+        object? parameters = null;
+        if (setTypes is { Count: > 0 })
+        {
+            // Multiple pressed types → WHERE SetType IN ('core', 'expansion', ...) —
+            // Dapper expands the list into a parameterized IN clause.
+            sql += " WHERE s.SetType IN @SetTypes";
+            parameters = new { SetTypes = setTypes.Select(t => t.ToString()).ToList() };
+        }
+
+        sql += " ORDER BY s.Name";
 
         // Use dynamic to avoid Dapper type caching issues with empty result sets
-        var dynamicRows = await conn.QueryAsync(sql);
+        var dynamicRows = await conn.QueryAsync(sql, parameters ?? new { });
         var rows = dynamicRows.Select(r => new CollectorProgressRaw(
             (string)r.SetCode,
             (string?)r.SetName,

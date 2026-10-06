@@ -230,7 +230,7 @@ public class ServiceTests
     {
         var db = new Mock<IDbCardStore>();
         var coll = new Mock<ICollectionStore>();
-        db.Setup(s => s.GetCollectorProgressRawAsync(It.IsAny<CancellationToken>()))
+        db.Setup(s => s.GetCollectorProgressRawAsync(It.IsAny<IReadOnlyCollection<CardSetType>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<CollectorProgressRaw>
             {
                 // Total=200, Collected=150 (75%), Owned=80 (40%) — owned-only semantics must win.
