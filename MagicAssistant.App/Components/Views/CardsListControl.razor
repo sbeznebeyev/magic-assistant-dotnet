@@ -11,6 +11,7 @@
 @inject IDbCardStore DbStore
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
+@inject HasCardsQueryHandler? HasCardsHandler
 @inject IJSRuntime JS
 
 <div class="kb-browser">
@@ -201,21 +202,23 @@
             @if (!_loading && !_displayCards.Any())
             {
                 <div class="kb-empty">
-                    @if (HasActiveFilters)
+                    @if (!IsLocationMode && FilterViewModel.ActiveCardSets is { Count: > 0 } && !_selectedSetHasCards)
+                    {
+                        @* Direct DB check (HasCardsQuery) — no filter inference: the selected set
+                           has no cards in the KB, so offer to sync it. Sync is a KB-only operation —
+                           collection/deck/sideboard display never offers it. *@
+                        <span>No cards from the selected set in knowledge base yet.</span>
+                        <button class="sync-btn-inline" @onclick="OnSyncClick">
+                            Sync from Scryfall
+                        </button>
+                    }
+                    else if (HasActiveFilters)
                     {
                         <span class="empty-filters-msg">No cards match the selected filters</span>
                     }
                     else
                     {
                         <span>No cards in knowledge base yet.</span>
-                        @* Explicit guard: Sync is a KB-only operation — collection/deck/sideboard
-                           display shows KB cards only and never offers sync. *@
-                        @if (!IsLocationMode)
-                        {
-                            <button class="sync-btn-inline" @onclick="OnSyncClick">
-                                Sync from Scryfall
-                            </button>
-                        }
                     }
                 </div>
             }
@@ -228,6 +231,10 @@
 
     // Data
     private List<MagicCard> _displayCards = new();
+
+    /// <summary>Direct DB check (HasCardsQuery): does the selected set have cards in the KB?
+    /// Only meaningful when the displayed list is empty and exactly a set scope is active.</summary>
+    private bool _selectedSetHasCards;
 
     /// <summary>Physical instances of cards in the current location (deck mode). Null = KB mode.</summary>
     private Dictionary<Guid, MagicCardPhysical>? _physicalByCardId;
@@ -653,15 +660,9 @@
         // keeps the callback itself inert even if a future caller invokes it there.
         if (IsLocationMode) return;
 
-        if (FilterViewModel.ActiveCardSets is { Count: 1 })
-        {
+        // The button only renders when a set scope is active, so [0] is always the target.
+        if (FilterViewModel.ActiveCardSets is { Count: > 0 })
             await OnOpenSync.InvokeAsync(FilterViewModel.ActiveCardSets[0]);
-        }
-        else
-        {
-            // No set or multiple sets selected — open sync dialog without pre-selected set
-            await OnOpenSync.InvokeAsync(string.Empty);
-        }
     }
 
     private async Task LoadCounts()
@@ -883,7 +884,26 @@
         finally
         {
             _loading = false;
+            await RefreshSelectedSetHasCardsAsync();
         }
+    }
+
+    /// <summary>
+    /// Direct DB check for the sync button: when the displayed list is empty and a set scope is
+    /// active, asks HasCardsQuery whether that set actually has cards in the knowledge base.
+    /// No filter inference — the answer comes from the database itself.
+    /// </summary>
+    private async Task RefreshSelectedSetHasCardsAsync()
+    {
+        if (_displayCards.Count > 0
+            || FilterViewModel.CurrentCollectionId.HasValue
+            || FilterViewModel.ActiveCardSets is not { Count: > 0 })
+        {
+            _selectedSetHasCards = false;
+            return;
+        }
+
+        _selectedSetHasCards = await HasCardsHandler!.Handle(new HasCardsQuery(FilterViewModel.ActiveCardSets[0]));
     }
 
     /// <summary>Parse a numeric property filter from operator string + value string.

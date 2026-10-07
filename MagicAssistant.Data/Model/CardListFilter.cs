@@ -156,7 +156,11 @@ public sealed class NumericPropertyFilter
 
         // Cards where number value matches directly, OR cards with NULL parent number (DFC) that have at least one matching face.
         // Uses EXISTS with correlated subquery: only checks CardFaces for the current card's Id.
-        return $"({cardCondition}) OR ({cardNumberColumn} IS NULL AND EXISTS (SELECT 1 FROM CardFaces cf WHERE cf.CardId = Cards.Id AND {faceCondition}))";
+        // Outer parentheses are MANDATORY: the fragment's top level is an OR, and GetPagedAsync
+        // joins whereParts with AND — without them SQL precedence re-groups the whole WHERE as
+        // "(otherFilters AND cardCondition) OR faceSubquery", leaking the face branch past every
+        // other filter (set, rarity, name, location...).
+        return $"(({cardCondition}) OR ({cardNumberColumn} IS NULL AND EXISTS (SELECT 1 FROM CardFaces cf WHERE cf.CardId = Cards.Id AND {faceCondition})))";
     }
 
     private string BuildCondition(string col, int value)

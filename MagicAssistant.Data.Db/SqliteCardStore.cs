@@ -458,6 +458,15 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
+    public async Task<bool> HasCardsForSetAsync(string setCode, CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+        return await conn.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS(SELECT 1 FROM Cards WHERE SetCode = @SetCode)",
+            new { SetCode = setCode });
+    }
+
     public async Task<ICollection<MagicCard>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
@@ -558,8 +567,12 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         var whereParts = new List<string>();
         var parameters = new DynamicParameters();
 
-        // Set code filters: multiple values combined as OR (set1 OR set2 OR ...)
-        if (filter.SetCodes != null && filter.SetCodes.Count > 0)
+        // Set code filters: multiple values combined as OR (set1 OR set2 OR ...).
+        // A non-null EMPTY list means "no candidate sets" (e.g. the clicked-set selection
+        // intersected with a narrowed scope and overlapped nothing) → zero cards, not "all sets".
+        if (filter.SetCodes is { Count: 0 })
+            whereParts.Add("1 = 0");
+        else if (filter.SetCodes != null && filter.SetCodes.Count > 0)
         {
             var setConditions = new List<string>();
             for (int i = 0; i < filter.SetCodes.Count; i++)

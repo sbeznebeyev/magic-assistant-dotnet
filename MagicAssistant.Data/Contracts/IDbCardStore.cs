@@ -6,6 +6,12 @@ public interface IDbCardStore : ICardStore<MagicCard>
 {
     Task<ICollection<MagicCard>> SearchAsync(string query, int limit = 100, CancellationToken ct = default);
     Task<ICollection<MagicCard>> GetBySetAsync(string setCode, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if the knowledge base contains at least one card for the given set code.
+    /// Direct DB check — no filter inference. Drives the KB empty-state sync button visibility.
+    /// </summary>
+    Task<bool> HasCardsForSetAsync(string setCode, CancellationToken ct = default);
     Task<ICollection<MagicCard>> GetPrintingsAsync(string name, CancellationToken ct = default);
 
     // Edition methods

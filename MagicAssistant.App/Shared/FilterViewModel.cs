@@ -215,12 +215,24 @@ public class FilterViewModel
             : new List<string> { setCode.Trim() };
     }
 
-    /// <summary>Effective card-grid set filter: the clicked selection wins over the scope.
-    /// Null = no set filtering at all.</summary>
+    /// <summary>Effective card-grid set filter.
+    /// - ActiveCardSets null or empty → the scope (FilteredSetCodes) alone decides; null if it is empty.
+    /// - ActiveCardSets non-empty → intersected with the scope: an open scope (all sets) passes the
+    ///   clicked set through unchanged, a narrowed scope keeps only the overlap. An empty intersection
+    ///   returns an EMPTY list — "no candidate sets" — which the SQL layer resolves as zero cards,
+    ///   distinct from null ("no set filtering at all").</summary>
     public List<string>? GetEffectiveSetCodes()
     {
-        var codes = ActiveCardSets ?? FilteredSetCodes;
-        return codes.Count > 0 ? codes : null;
+        if (ActiveCardSets is not { Count: > 0 })
+            return FilteredSetCodes.Count > 0 ? FilteredSetCodes : null;
+
+        if (FilteredSetCodes.Count == 0)
+            return ActiveCardSets;
+
+        var intersection = ActiveCardSets
+            .Where(c => FilteredSetCodes.Contains(c, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        return intersection;
     }
 
     /// <summary>Peresozdaet TypeFilter как новый List&lt;string&gt; с одним значением.
