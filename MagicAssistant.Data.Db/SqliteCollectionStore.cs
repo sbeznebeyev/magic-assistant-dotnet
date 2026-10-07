@@ -38,6 +38,18 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
     }
 
+    /// <summary>
+    /// Shared column list for all Deck LEFT JOIN Cards queries.
+    /// Keep in sync with FullDeckCardRow — Dapper maps by exact column name.
+    /// </summary>
+    private const string DeckCardColumns = @"d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
+                   d.DateAdded, d.ForTradeCount, d.Grade,
+                   c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
+                   c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
+                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.PrintedName, c.PrintedText, c.PrintedTypeLine,
+                   d.MyPrice, c.CommunityRating, c.LegalityFormats";
+
     // ═══════════════════════════════════════════════════════════
     //  ICollectionStore — deck / folder CRUD
     // ═══════════════════════════════════════════════════════════
@@ -578,39 +590,28 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         // JOIN Deck + Cards to get full card info
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
-        var row = await conn.QuerySingleOrDefaultAsync<FullDeckCardRow>(@"
-            SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount, d.Grade,
-                   c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
-                   c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   d.MyPrice, c.CommunityRating, c.LegalityFormats
-            FROM Deck d
-            LEFT JOIN Cards c ON d.CardId = c.Id
-            WHERE d.CardId = @CardId LIMIT 1",
+        var row = await conn.QuerySingleOrDefaultAsync<FullDeckCardRow>(
+            $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id WHERE d.CardId = @CardId LIMIT 1",
             new { CardId = cardId });
 
-        return row != null ? MapToFullPhysical(row) : null;
+        var physical = row != null ? MapToFullPhysical(row) : null;
+        if (physical is not null)
+            await AttachFacesAsync(conn, new[] { physical }, ct);
+        return physical;
     }
 
     public async Task<ICollection<MagicCardPhysical>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
-        var rows = await conn.QueryAsync<FullDeckCardRow>(@"
-            SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount, d.Grade,
-                   c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
-                   c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   d.MyPrice, c.CommunityRating, c.LegalityFormats
-            FROM Deck d
-            LEFT JOIN Cards c ON d.CardId = c.Id
-            WHERE d.CardId = @CardId",
+        var rows = await conn.QueryAsync<FullDeckCardRow>(
+            $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id WHERE d.CardId = @CardId",
             new { CardId = cardId });
 
         var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        return rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        var physicals = rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        await AttachFacesAsync(conn, physicals, ct);
+        return physicals;
     }
 
     public async Task<int> TotalUniqueCardsAsync(CancellationToken ct = default)
@@ -624,15 +625,10 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
-        var rows = await conn.QueryAsync<FullDeckCardRow>(@"
-            SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount, d.Grade,
-                   c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
-                   c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   d.MyPrice, c.CommunityRating, c.LegalityFormats
-            FROM Deck d
-            LEFT JOIN Cards c ON d.CardId = c.Id");
+        // Reconciliation/matching path (CardResolveService) — faces are not needed here,
+        // so no AttachFacesAsync: one less batched query over every deck card.
+        var rows = await conn.QueryAsync<FullDeckCardRow>(
+            $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id");
 
         var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
         return rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
@@ -645,20 +641,14 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
-        var rows = await conn.QueryAsync<FullDeckCardRow>(@"
-            SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount, d.Grade,
-                   c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
-                   c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   d.MyPrice, c.CommunityRating, c.LegalityFormats
-            FROM Deck d
-            LEFT JOIN Cards c ON d.CardId = c.Id
-            WHERE d.CollectionId = @DeckId",
+        var rows = await conn.QueryAsync<FullDeckCardRow>(
+            $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id WHERE d.CollectionId = @DeckId",
             new { DeckId = deckId });
 
         var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        return rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        var physicals = rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        await AttachFacesAsync(conn, physicals, ct);
+        return physicals;
     }
 
     /// <inheritdoc />
@@ -724,20 +714,14 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         for (int i = 0; i < allCollectionIds.Count; i++)
             parameters.Add($"@id{i}", allCollectionIds[i]);
 
-        var rows = await conn.QueryAsync<FullDeckCardRow>(@"
-            SELECT d.CollectionId, d.CardId, d.Count, d.IsOwn, d.Comment,
-                   d.DateAdded, d.ForTradeCount, d.Grade,
-                   c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
-                   c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
-                   d.MyPrice, c.CommunityRating, c.LegalityFormats
-            FROM Deck d
-            LEFT JOIN Cards c ON d.CardId = c.Id
-            WHERE d.CollectionId IN (" + placeholders + ")",
+        var rows = await conn.QueryAsync<FullDeckCardRow>(
+            $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id WHERE d.CollectionId IN (" + placeholders + ")",
             parameters);
 
         var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        return rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        var physicals = rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        await AttachFacesAsync(conn, physicals, ct);
+        return physicals;
     }
 
     /// <summary>
@@ -834,6 +818,74 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             card.OwnUnique = stats.OwnUnique;
     }
 
+    /// <summary>
+    /// Batch-loads CardFaces for the given physicals in one query and attaches them to each card.
+    /// Double-sided cards carry per-face names/text — needed by the edit dialog preview (ActiveName).
+    /// </summary>
+    private static async Task AttachFacesAsync(
+        SqliteConnection conn, ICollection<MagicCardPhysical> physicals, CancellationToken ct = default)
+    {
+        var ids = physicals.Select(p => p.Card.Id).Distinct().ToList();
+        if (ids.Count == 0) return;
+
+        var parameters = new DynamicParameters();
+        for (var i = 0; i < ids.Count; i++)
+            parameters.Add($"@id{i}", ids[i]);
+
+        var placeholders = string.Join(", ", ids.Select((_, i) => $"@id{i}"));
+        var rows = await conn.QueryAsync<CardFaceRow>(
+            $@"SELECT Id, CardId, FaceIndex, Name, ManaCost, TypeLine, OracleText, Power, PowerNumber,
+                      Toughness, ToughnessNumber, CmcNumber, CmcText, Colors, ColorIndicator, Loyalty,
+                      Artist, IllustrationId, FlavorText, PrintedName, PrintedText, PrintedTypeLine,
+                      ColorBits, IdentityBits
+               FROM CardFaces
+               WHERE CardId IN ({placeholders})
+               ORDER BY CardId, FaceIndex",
+            parameters);
+
+        var facesMap = rows.GroupBy(r => r.CardId)
+            .ToDictionary(g => g.Key, g => g.Select(MapToCardFace).ToArray());
+
+        foreach (var physical in physicals)
+        {
+            if (facesMap.TryGetValue(physical.Card.Id, out var faces))
+                physical.Card.CardFaces = faces;
+        }
+    }
+
+    private static CardFace MapToCardFace(CardFaceRow row)
+    {
+        var face = new CardFace
+        {
+            Name = row.Name ?? string.Empty,
+            ManaCost = row.ManaCost,
+            TypeLine = row.TypeLine,
+            OracleText = row.OracleText,
+            Power = row.Power,
+            PowerNumber = row.PowerNumber,
+            Toughness = row.Toughness,
+            ToughnessNumber = row.ToughnessNumber,
+            CmcNumber = row.CmcNumber,
+            CmcText = row.CmcText,
+            Loyalty = row.Loyalty,
+            Artist = row.Artist,
+            IllustrationId = row.IllustrationId,
+            FlavorText = row.FlavorText,
+            PrintedName = row.PrintedName,
+            PrintedText = row.PrintedText,
+            PrintedTypeLine = row.PrintedTypeLine,
+            ColorBits = row.ColorBits,
+            IdentityBits = row.IdentityBits,
+        };
+
+        if (!string.IsNullOrEmpty(row.Colors))
+            face.Colors = row.Colors.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        if (!string.IsNullOrEmpty(row.ColorIndicator))
+            face.ColorIndicator = row.ColorIndicator.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+        return face;
+    }
+
     private async Task<List<Collection>> AttachCardCountsAsync(SqliteConnection conn, List<CollectionRow> rows)
     {
         if (!rows.Any()) return new List<Collection>();
@@ -884,6 +936,9 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             Language = row.Language,
             CollectorNumber = row.CollectorNumber,
             Text = row.Text,
+            PrintedName = row.PrintedName,
+            PrintedText = row.PrintedText,
+            PrintedTypeLine = row.PrintedTypeLine,
             CmcNumber = row.CmcNumber,
             CmcText = row.CmcText,
             Side = row.Side,
@@ -995,6 +1050,9 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public string? Language { get; set; }
         public string? CollectorNumber { get; set; }
         public string? Text { get; set; }
+        public string? PrintedName { get; set; }
+        public string? PrintedText { get; set; }
+        public string? PrintedTypeLine { get; set; }
         public int? CmcNumber { get; set; }
         public string? CmcText { get; set; }
         public string? ColorType { get; set; }
@@ -1011,5 +1069,34 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public int OwnCount { get; set; }
         public int TotalCount { get; set; }
         public int OwnUnique { get; set; }
+    }
+
+    /// <summary>Row from the CardFaces table (one face of a multi-faced card).</summary>
+    private class CardFaceRow
+    {
+        public int Id { get; set; }
+        public Guid CardId { get; set; }
+        public int FaceIndex { get; set; }
+        public string? Name { get; set; }
+        public string? ManaCost { get; set; }
+        public string? TypeLine { get; set; }
+        public string? OracleText { get; set; }
+        public string? Power { get; set; }
+        public int? PowerNumber { get; set; }
+        public string? Toughness { get; set; }
+        public int? ToughnessNumber { get; set; }
+        public int? CmcNumber { get; set; }
+        public string? CmcText { get; set; }
+        public string? Colors { get; set; }
+        public string? ColorIndicator { get; set; }
+        public string? Loyalty { get; set; }
+        public string? Artist { get; set; }
+        public Guid? IllustrationId { get; set; }
+        public string? FlavorText { get; set; }
+        public string? PrintedName { get; set; }
+        public string? PrintedText { get; set; }
+        public string? PrintedTypeLine { get; set; }
+        public int ColorBits { get; set; }
+        public int IdentityBits { get; set; }
     }
 }
