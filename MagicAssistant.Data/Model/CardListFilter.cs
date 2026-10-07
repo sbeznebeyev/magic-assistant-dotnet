@@ -128,18 +128,6 @@ public sealed class NumericPropertyFilter
     public bool IsActive => Value.HasValue;
 
     /// <summary>
-    /// Builds the SQL WHERE clause fragment for a given INTEGER column.
-    /// Uses the NUMBER column directly — no CAST needed.
-    /// Returns null if not active.
-    /// </summary>
-    public string? ToSqlWhere(string numberColumnName)
-    {
-        if (!IsActive) return null;
-        var intVal = (int)Math.Floor(Value!.Value);
-        return BuildCondition(numberColumnName, intVal);
-    }
-
-    /// <summary>
     /// Builds the SQL WHERE clause fragment that includes DFC support.
     /// Uses pre-computed NUMBER columns (PowerNumber, ToughnessNumber, CmcNumber) which are INTEGER.
     /// Returns a condition that matches cards where EITHER the parent card's number value matches

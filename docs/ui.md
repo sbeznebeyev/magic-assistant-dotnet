@@ -2,42 +2,6 @@
 
 *ASP.NET Core Blazor Server · .NET 10 · Blazor Web App (MapRazorComponents + InteractiveServerRenderMode)*
 
-*2026-10-01 — Нативный импорт/экспорт переведён с XML на **JSON** (нативный формат v1, `format: "magic-assistant/deck"`): обёртка format/version/name/comment/type/exportedAt; reference-ядро карты `id/name/set/count` всегда пишется (отсутствие любого = ошибка формата), опциональные поля omit-по-умолчанию (`own` только false, `price` ≠0, `comment/custom/special` непустые, `forTrade` >0); pretty, отступ 2 пробела; неизвестные поля при импорте игнорируются. `JsonImport`/`JsonExport` в Data.IO (`json/`), общий `CardCollectionImportResult`; modern-commit (`CommitModernImportAsync`) парсит JSON; нативный XML-экспорт удалён (XmlExport.cs, ExportDeckCommand + handler, ExportDeckToXmlAsync/ExportToFileAsync), legacy-парсер XmlImport остался для OldDeckImportWizard. DeckExportWizard — `.json` + `downloadFile.save` в site.js (контент аргументом, без eval-интерполяции); DeckImportWizard — accept=".json". Детали — §7.1/§7.3.*
-
-*2026-10-02 — CardsListControl: кнопка сворачивания сайдбара сетов справа на полосе sets-header (`.sets-toggle`, аналог `.panel-toggle` в MainLayout): сворачивает панель в 28px-полосу с одной кнопкой (`<`/`>`, заголовок, поиск и список сетов скрыты через `.sets-sidebar.collapsed`). Состояние персистится (`KBCardsListControl.SetsCollapsed`) — компонент перемонтируется при каждой навигации; drag сплиттера в свёрнутом состоянии сначала разворачивает панель. Детали — §3.*
-
-*2026-10-02 — CardsListControl: первый элемент сайдбара сетов в location-режиме переименован по типу узла — «All sets of collection» / «All sets of deck» / «All sets of sideboard» (KB-режим — «All Sets»). Тип приходит с навигационным состоянием: `LockableCollection.NodeType` → `FilterViewModel.CurrentCollectionNodeType` (заполняется в MainLayout.OnDeckSelected, нолится в OnShowKB и при удалении отображаемого узла) — без доп. запросов к БД. Детали — §3.*
-
-*2026-10-02 — Нативный JSON: опциональный узел `sideboard` (массив карт той же схемы; version не поднят — неизвестное поле старые потребители игнорируют). `JsonExport.ExportToJson(…, sideboardCards)` пишет массив после `cards` только при непустом списке; `JsonImport` парсит его с теми же правилами (ядро `id/name/set/count` обязательно) → `CardCollectionImportResult.Sideboard`. Экспорт: deck-узел выносит своего sideboard-ребёнка (`GetSideboardIdAsync` + `GetDeckCardsAsync(sb)`); сам SB-узел экспортируется без узла. Импорт: SB-карты валидируются против KB вместе с основными; new mode — в созданный sideboard-ребёнок (та же транзакция, что и `CreateDeckWithCardsAsync`), merge mode — в sideboard-ребёнка целевого deck (pre-check ДО insert: цель не deck или SB отсутствует → ошибка, т.к. merge — две отдельные транзакции). Файл только с сайдбордом легален (round-trip пустого основного дека) — проверка «No cards found» теперь покрывает оба пула. Детали — §7.1/§7.3.
-
-*2026-10-02 — Самостоятельные импорт/экспорт сайдбордов убраны из ⋯-меню навигатора: пары «Import | Import sideboard» / «Export | Export sideboard» заменены одиночными Import/Export (deck с SB больше не рендерит пару). Сайдборд — неотъемлемая часть колоды в нативном JSON: экспорт deck включает его (`sideboard`-узел), импорт в deck сливает `sideboard` из файла в sideboard-ребёнка; импорт в Collection — `sideboard` молча игнорируется (там некуда его слить), импортируются только основные карты. Мёртвые пути удалены: `ImportSideboardFromMenu`/`ExportSideboardFromMenu`, сайдборд-бейдж заголовка DeckImportWizard (`.target-sideboard-tag`). Детали — §2.1/§7.1.
-
-*2026-10-02 — Визарды импорта/экспорта упрощены. DeckExportWizard: формат скрыт, заголовок «Export <имя_колоды>» — имя золотым градиентом (`.export-deck-name`), группа «Deck» удалена (дублирование). DeckImportWizard: с фиксированной целью (`TargetNodeId`, ⋯-меню) заголовок «Import to <имя_колоды>» — имя золотым градиентом (`.target-name`) + бейдж «sideboard» для сайдборда; нижняя группа «Import to» с дублирующим именем удалена, select остаётся только в режиме создания новой колоды. Детали — §7.1.
-
-*2026-10-01 (fixes) — DeckImportWizard: слипание контролов выбора файла устранено — нативный `InputFile` скрыт, триггерит кастомная кнопка через `label[for]` (без JS), редактируемое имя файла — отдельной строкой ниже. Импорт в сайдборд визуально отличается: заголовок «Import to Sideboard», цель — имя колоды золотым градиентом (`.target-name`) + бейдж «sideboard» (`.target-sideboard-tag`); тип цели определяется по БД (`GetByIdAsync`). Имена целей резолвятся напрямую из БД (`CollectionStore`), а не из дерева навигации (в нём только корневые узлы — вложенные колоды показывали «?»); список «add to existing» теперь включает все колоды/коллекции на любой глубине. Детали — §7.1.*
-
-*2026-10-01 (fixes) — Нативный импорт: диалог закрывается после успешного импорта; проверка дубля имени по **всему дереву** (дубли разрешены только узлам типа Folder; Sideboard — скрытый дочерний узел, в проверку не входит), поле «Deck Name» редактируемо (дефолт — имя из файла); файл парсится сразу при выборе — невалидный JSON отклоняется на месте. Имя файла редактируется в обоих визардах, пробелы → подчёркивания (live, oninput). `CommitModernImportAsync` принимает опциональный `deckName`.*
-
-*2026-09-30 — Навигатор, контекстное меню: для deck c sideboard пункты Pin/Unpin и Clear объединены в горизонтальные пары (`.ctx-pair`, grid 1fr:2fr) — левая ячейка = операция с deck, правая = со sideboard; без SB — как раньше, одиночные кнопки. Ширина меню — по контенту (`white-space: nowrap` в парах, фиксированного min-width нет); бюджет `clamp` 320×270. Иконки пунктов — inline SVG (не эмодзи): Rename — «ab|», Clear/Clear sideboard — ластик, Import — download, Export — upload, Delete — жирный красный крестик; pin/lock сохраняют state dots. Детали — §2.1.*
-
-*2026-09-30 — Навигатор, контекстное меню: добавлены пары **Import | Import sideboard** и **Export | Export sideboard** (те же пропорции 1fr:2fr для deck c SB; без SB — одиночные Import/Export). Import передаёт CollectionId целевого узла в `DeckImportWizard` (`TargetNodeId`) — карты сливаются в существующий узел (merge), select цели скрывается; Import disabled при locked, как Clear. Export sideboard экспортирует сам SB-узел по его ID. Детали — §2.1.*
-
-*2026-09-30 — Навигатор, контекстное меню: строка Lock/Unlock перемещена между Pin и Clear (порядок: Rename → Pin → Lock → Clear → Import → Export → Delete; в парной ветке deck c SB Lock — отдельная строка между парами).*
-
-*2026-09-30 — Навигатор, контекстное меню: каждая строка теперь flex из двух панельок — иконная ячейка `.ctx-cell` фиксированной ширины 28px (иконка/state dot по центру) и текстовая (подпись слева в оставшемся месте); все подписи начинаются с одного x, иконки выстроены вертикально. Касается всех пунктов, включая pin/lock dots.*
-
-*2026-09-30 — После завершения импорта (оба визарда) MainLayout дополнительно делает `_kbRefreshTrigger++` → CardsListControl перезагружает отображаемый список: если импорт шёл в открытую локацию, новые карты видны сразу; иначе это безвредный повторный fetch.*
-
-*2026-09-29 — Prerendering выключен (App.razor): единый `InteractiveServerRenderMode(prerender: false)` для HeadOutlet и Routes; первый HTML — пустая оболочка, компоненты инициализируются один раз после подключения SignalR-circuit (без двойного `OnInitializedAsync` и двойной загрузки данных). Детали — §1.1.*
-
-*Обновлено: 2026-09-29 — Навигатор: два пункта чистки в контекстном меню — **🧹 Clear** (deck/collection-узлы, folder не виден; чистит сам выбранный узел) и **🧹 Clear sideboard** (только deck с SB; чистит дочерний SB-узел). Оба: серый disabled при locked, как pin-пункты; диалог подтверждения в стиле Delete («Delete all N cards from the deck/collection "X"? The deck/collection itself is kept.» / «...from the sideboard of "X"? The sideboard itself is kept.»); `OnClearRequested(nodeId)` / `OnClearSideboardRequested(sideboardId)` — ID самого целевого узла (для SB — `NavigatorNodeDeck.Sideboard.Id`, не родительской колоды) → MainLayout: `IDeckCardService.ClearNodeAsync` (CQRS: `RemoveCardsFromDeckCommand` → `ICollectionStore.RemoveCardsAsync`, 1 SQL-запрос; пустой `CardIds` = чистка всех карт узла, результат = сумма возвращённых копий) — карты удаляются, сам узел остаётся; статус-бар, `_stripRefresh++`, `_kbRefreshTrigger++`, `RefreshCardCountsAsync()`. Детали — §2.1.*
-
-*2026-09-29 — Legacy-визард: коммит через `BuildLegacyImportCardsAsync` (полная коллекция: авто-резолв + ручные маппинги, счётчики из XML); кнопка «Import N» — N берётся из коллекции для сохранения (`BuildLegacyImportCardsAsync`, строится после маппинга последней строки): `cards.Sum(c => c.Count)`, повторки включены; пока все строки не замаплены, кнопка без числа и disabled. Hover-превью кандидата — фиксированные 300×400, закреплено справа по центру вьюпорта, диалог не сдвигается.*
-
-*2026-09-28 — Импорт перестроен под инвариант «создание после полного резолва»: узел не создаётся до разбора всех карт. Legacy-визард — машина состояний: предпроверка несинченных сетов → синк (языки + картинки) → таблица нераспознанных карт с поиском (3+ символа, debounce 300ms) → коммит только при 100% сопоставленных. Modern-визард: атомарный `CommitModernImportAsync` (валидация UUID по БЗ до создания). Детали — §7.1/§7.2.*
-
-*2026-09-25 — Import/Export перенесены из шапки приложения в навигатор: **Import** — в add-node меню (корневая строка и строки папок, после разделителя под Collection/Deck/Folder); `ParentNodeId` передаётся в DeckImportWizard — «new deck» создаётся под родителем меню (null = root, старое поведение), в диалоге подсказка «New deck will be created inside "X"». **Export** — в контекстное меню ⋯ (только deck/collection; экспортируется кликнутый узел через `MainLayout._exportTargetId`, а не отображаемая коллекция). В шапке остались Legacy Import и Update DB. Clamp контекстного меню: 240→270px по высоте (новый пункт).*
-
 ---
 
 ## Table of Contents
@@ -106,7 +70,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 - `RenderDeckContent()` — `@switch (ActiveTab)`: analysis pages + default → `CardsListControl` (deck mode).
 - `RenderKBContent()` — `CardsListControl` (KB mode).
 
-**Dialogs:** Overlay-level dialogs managed by MainLayout state flags (`_showXxx`), rendered only when visible. LocationPickerDialog and EditDeckPropertiesDialog remain in the project as dormant files (no active triggers). Closeable via overlay click, ✕ button, or Escape.
+**Dialogs:** Overlay-level dialogs managed by MainLayout state flags (`_showXxx`), rendered only when visible. Closing is only via the ✕ button (and Cancel/Escape where present) — clicking the overlay does nothing.
 
 | Dialog | Trigger | Purpose |
 |--------|---------|---------|
@@ -117,9 +81,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | DeckExportWizard | DecksNavigator context menu (⋯ → Export; deck/collection nodes only) | Native JSON export + browser download of the clicked node |
 | EditMagicCardPhysicalDialog | CardsListControl ✎ (deck mode) | Edit card instance (count, ownership, price, tags) |
 | SplitDialog | CardsListControl ⫯ (deck mode, count > 1) | Split stack main/sideboard |
-| CardFilterDialog | CardsListControl `Filters` button | Central filter dialog: Type/Rarity/Color/Properties + Collection section (deck mode) |
-| LocationPickerDialog | — (dormant: quick Move targets the pinned collection directly) | Select target deck for card move (file kept, no active trigger) |
-| EditDeckPropertiesDialog | — (dormant: no active trigger) | Edit deck properties / rename (file kept, no active trigger) |
+| CardFilterDialog | CardsListControl `Filters` button | Central filter dialog: Sets (KB only)/Type/Rarity/Color/Properties + Collection section (deck mode) |
 
 ### 1.2 Component Inventory
 
@@ -159,9 +121,8 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | SyncSelectedSetCards | `Components/Dialogs/SyncSelectedSetCards.razor` | Синхронизация конкретного сета (предвыбранный SetCode) |
 | EditMagicCardPhysicalDialog | `Components/Dialogs/EditMagicCardPhysicalDialog.razor` | Редактирование экземпляра: count, ownership, price, comment, tags, forTrade |
 | SplitDialog | `Components/Dialogs/SplitDialog.razor` | Разделение стопки main/sideboard с визуальным баром |
-| LocationPickerDialog | `Components/Dialogs/LocationPickerDialog.razor` | Выбор расположения: список колод, поиск, toggle sideboard |
-| EditDeckPropertiesDialog | `Components/Dialogs/EditDeckPropertiesDialog.razor` | Редактирование свойств колоды: rename (dormant — проводка отсутствует) |
-| CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Type/Rarity (MultiSelectList), Artist, color-чекбоксы + модификаторы, Properties (P/T/CMC), Collection (deck mode: ownership/count/price/tags) |
+| CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Sets picker (только KB), Type/Rarity (MultiSelectList), Artist, color-чекбоксы + модификаторы, Properties (P/T/CMC), Collection (deck mode: ownership/count/price/tags) |
+| SetTypeFilterDialog | `Components/Dialogs/SetTypeFilterDialog.razor` | Toggle-picker по типам сетов (CollectorView Type Filter): staged-выбор, коммит только на Apply; персистится в user settings |
 | **Wizards** | | |
 | DeckImportWizard | `Components/Wizards/DeckImportWizard.razor` | Импорт нативного JSON в новую или существующую колоду |
 | OldDeckImportWizard | `Components/Wizards/OldDeckImportWizard.razor` | Импорт legacy XML (Gatherer ID + полные имена сетов) |
@@ -346,10 +307,11 @@ Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` �
 
 **Layout:** Two-panel — left sidebar (sets list + resizable splitter) + right content area (toolbar row + card view + empty state).
 
-**Left Sidebar — Sets (multi-select):**
-- Loads all sets from KB via `GetKBAvailableSetsQueryHandler` (sorted: newest first, then by ParentSetCode). Subsets indented.
-- Text search input (filters sets by name/code, min 2 characters). Typing narrows the sidebar **and** resolves the matching set codes into `FilterViewModel.SetCodes` (debounced re-query, 300ms — same pattern as the name filter), so cards are filtered by the matched sets in both KB mode and deck mode. The text is stored in `FilterViewModel.SetSearchText` and survives component remounts (`@key` change on navigation): after «Show all cards» the new instance restores it in `OnInitializedAsync`. Clicking a set commits an explicit selection (clears the search text, discards resolved codes); «All Sets» and ✕ clear text + codes. Empty input restores the unfiltered list immediately.
-- "All Sets" option resets the filter (`SetNewSetCodeFilter(null)`). The label is dynamic: KB mode — "All Sets"; location mode — "All sets of collection" / "All sets of deck" / "All sets of sideboard" depending on `FilterViewModel.CurrentCollectionNodeType` (arrives with the navigation state via `LockableCollection.NodeType` — no DB lookup; folders never select).
+**Left Sidebar — Sets (click select):**
+- Set list is a lazy DB view (`FilteredCardSetsCollection`, Shared/): cached by scope composition, queried on first render / scope change; `Invalidate()` after a KB sync. Scope = `FilterViewModel.FilteredSetCodes` — empty means all sets in the KB; location mode auto-fills it with the node's card set codes (`SetNodeScope()`), and the explicit Sets filter from Card Filter (KB only) replaces it. Display order: newest release first, then by parent set code; subsets get the `.subset` class (indented). An empty node shows no sets at all — no fallback to the full KB.
+- Text search input (filters sets by name/code, min 2 characters). Typing narrows **only the visible set list** — cards are not re-queried. The text is stored in `FilterViewModel.SetSearchText` and survives component remounts (`@key` change on navigation). Empty input restores the full scope list immediately.
+- Clicking a set selects it for the card grid: exactly one code (`FilterViewModel.SetActiveCardSets(code)`); the «ALL» row (label dynamic: KB — "All Sets"; location — "All sets of collection" / "All sets of deck" / "All sets of sideboard" per `FilterViewModel.CurrentCollectionNodeType`) and the ✕ button clear the selection, the card filter then falls back to the scope. The query takes `GetEffectiveSetCodes()` = clicked set ∩ scope; an empty intersection yields zero cards.
+- Header: location mode — `sets: N, cards: M, total: T` (unique cards of the node narrowed by the selected set when one is active); KB mode — `KB (sets: N, cards: M)` (cards = the selected set's `CardCount`, otherwise `_totalCount`).
 - Set icons via CSS `.set-symbol-{code}` classes.
 - Header: `KB (sets: N, cards: M)` — `GetDisplayedSetsCount()` / `GetDisplayedCardsCount()`. Right side of the header — a collapse toggle button (`.sets-toggle`, mirrors MainLayout `.panel-toggle`): collapses the sidebar to a 28px strip with only the button visible (`<` → `>`, title/search bar/set list hidden via `.sets-sidebar.collapsed`). State is persisted (`KBCardsListControl.SetsCollapsed`) like the splitter position — the component remounts on every navigation, so a plain bool would reset. Dragging the splitter while collapsed expands the sidebar first, then resizes it.
 - **Resizable splitter:** Draggable 8px divider via JS ES Module (`/js/splitter.js`, `import` pattern + `IAsyncDisposable` + `JSDisconnectedException` handling). `requestAnimationFrame` throttling (~60fps). Range: 160–500px. Position persisted via `SaveUserSettingCommandHandler`.
@@ -365,7 +327,7 @@ Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` �
 - `📦 Move` button — visible only when a collection different from the pinned one is displayed **and neither the displayed nor the pinned collection is locked** (`CurrentCollectionId ≠ null && PinnedCollectionId.HasValue && CurrentCollectionId ≠ PinnedCollectionId && !CurrentCollectionLocked && !PinnedCollectionLocked`). Disabled until a card is selected. Quick move to the pinned collection — no picker.
 
 **Data loading (`ApplyFiltersAndPagination`):**
-- Server-side paged query: `ICardSearchService.GetPagedAsync(CardListFilter)` with `SetCodes`, `Rarity`, `TypeFilters`, `NameFilter` (3+ chars), `Query` (FTS5), `LocationFilter = CurrentCollectionId` (Core-layer property name is unchanged), color/property/layout/legality filters, sort field/direction, page/size.
+- Server-side paged query: `ICardSearchService.GetPagedAsync(CardListFilter)` with `SetCodes = FilterViewModel.GetEffectiveSetCodes()` (clicked set ∩ scope; a non-null empty list → zero cards), `Rarity`, `TypeFilters`, `NameFilter` (3+ chars), `Query` (FTS5), `LocationFilter = CurrentCollectionId` (Core-layer property name is unchanged), color/property/layout/legality filters, sort field/direction, page/size.
 - Deck mode: physical instances loaded via `IDeckCardService.GetDeckCardsAsync(CurrentCollectionId)` into `_physicalByCardId`. The leftmost **Total** column replaces the old count column (−/+ controls live in it; read-only when locked) — always > 0, because a card whose count drops to 0 disappears from the deck. The # column is hidden in deck mode.
 - KB mode with a pinned collection set — unified with deck mode: the leftmost **Total** column shows `[−] total [+]` (one grouped query `IDeckCardService.GetDeckCardCountsAsync`, empty when 0, fixed width). (+) adds one copy to the pinned collection via `IDeckCardService.MaterializeFromIdsAsync` (merge semantics); (−) removes one copy (`RemoveCardsAsync` at 0, otherwise `UpdateCardAsync`) — both are recorded in LastActions. The minus button is hidden when the total is 0; a locked pinned collection shows the total read-only with no buttons. The column stays in sync locally on (+)/(−) press and re-fetches when the pinned target changes while KB is displayed.
 - Errors reset the list to empty (no error UI in this component).
@@ -384,10 +346,11 @@ Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` �
 
 | Condition | Message | Action |
 |-----------|---------|--------|
+| KB mode, a set is clicked and it has no cards in the DB (direct `HasCardsQuery` check — no filter inference) | "No cards from the selected set in knowledge base yet." | `Sync from Scryfall` button → `OnOpenSync` |
 | Active filters, no results | "No cards match the selected filters" | — |
-| No filters, KB empty | "No cards in knowledge base yet." | `Sync from Scryfall` button → `OnOpenSync` |
+| No filters, KB empty | "No cards in knowledge base yet." | — |
 
-**Move flow:** 📦 Move (visible only when current ≠ pinned and neither is locked) → `OnMoveToPinned(physical)` → MainLayout: `IDeckCardService.MoveCardsAsync(currentCollectionId, [cardId], pinnedCollectionId)` → the addition is recorded in LastActionsQueue (Add, copies moved) → status bar + `_kbRefreshTrigger++` (reload). The selected card moves with all its copies. LocationPickerDialog is dormant (file kept, no trigger).
+**Move flow:** 📦 Move (visible only when current ≠ pinned and neither is locked) → `OnMoveToPinned(physical)` → MainLayout: `IDeckCardService.MoveCardsAsync(currentCollectionId, [cardId], pinnedCollectionId)` → the addition is recorded in LastActionsQueue (Add, copies moved) → status bar + `_kbRefreshTrigger++` (reload). The selected card moves with all its copies.
 
 ### 3.5 CardListView
 
@@ -451,7 +414,9 @@ Grouped view of cards rendered by CardsListControl in tree mode.
 
 **Purpose:** Track collection progress across sets.
 
-**Data source:** `IDeckAnalysisService.GetCollectorProgressAsync()` — single SQL query (direct DI, no HTTP).
+**Data source:** `IDeckAnalysisService.GetCollectorProgressAsync(setTypes)` — single SQL query (direct DI, no HTTP); an active set-type filter adds `WHERE s.SetType IN (...)` to that same query.
+
+**Set type filter:** the "Type Filter" button opens SetTypeFilterDialog (§6.6) — one toggle per `CardSetType` value; pressed types are staged locally and committed only on Apply (✕/Cancel close without committing). The filter is persisted in user settings (`CollectorView.SetTypeFilter`, comma-separated names) and restored before the first query; the button shows its active state while the filter is non-empty.
 
 **Counting rules:** Total — set checklist size from `CardSet.CardCount` (Scryfall). Collected/Owned — distinct printings across all user decks, deduplicated by `CollectorNumber` within the set: different printings of the same OracleId+Language are separate cards, a different Language for the same printing (shared CollectorNumber) is one card.
 
@@ -649,7 +614,7 @@ Format legality check for all cards in deck (data via `ICollectionStore.GetDeckC
 
 ## 6. Dialogs
 
-All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). Rendered only when visible (`@if (_showXxx) { <Dialog ... /> }`). Closeable via overlay click, ✕ button, or Escape.
+All dialogs are overlay-level. The MainLayout dialogs are managed by state flags (`_showXxx`) and rendered only when visible (`@if (_showXxx) { <Dialog ... /> }`); SetTypeFilterDialog (§6.6) is owned by CollectorView with its own flag. Closing is only via the ✕ button (and Cancel/Escape where present) — clicking the overlay does nothing.
 
 ### 6.1 SyncKnowledgeBase
 
@@ -689,6 +654,8 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 **Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MagicCardPhysical?)`, `DeckId (int?)`, `OnSaved(MagicCardPhysical?)`.
 
+**Card preview:** a separate 350×500 window docked to the right of the form (wizard pattern): card image only, name in `alt`. Double-sided cards show the front face (`CardFaces[0]`); the name prefers `PrintedName` over `Name`. The image loads lazily — placeholder until the front file lands on disk (`ICardImageLoader.EnsureAsync`; re-render guarded by `ReferenceEquals`, so a stale download never repaints another card).
+
 **Form fields:**
 
 | Field | Type | Description |
@@ -712,43 +679,15 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 **Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MagicCardPhysical?)`, `DeckId (int?)`, `OnSplitDone`.
 
+**Card preview:** compact block at the top of the dialog — card name + "× N in deck" (no image).
+
 **Form:** Main Deck count input with −/+ buttons (range: 0–total). Sideboard count auto-calculated (display only). Visual bar: blue (main) + orange (sideboard).
 
 **Validation:** Split button disabled if main ≤ 0 or side ≤ 0.
 
 **Action:** `IDeckCardService.SplitCardAsync(deckId, cardId, sideCount)` → creates right part and moves to sideboard.
 
-### 6.5 LocationPickerDialog
-
-**File:** `Components/Dialogs/LocationPickerDialog.razor`
-
-**Purpose:** Select a target deck for the Move-cards operation. **Dormant since the current/pinned model:** quick Move targets the pinned collection directly, so no component triggers this dialog anymore. File kept in the project.
-
-**Triggered by:** — (dormant; no component triggers this dialog anymore).
-
-**Parameters:** `IsOpen`, `OnSelected(LocationResult)`, `IsOpenChanged`.
-
-**Features:** Loads all decks from the navigation tree (`IDeckManagementService.GetAllNodesAsync()`, recursive folder traversal). Search bar (instant filter by deck name). Deck list: 🃏 icon + name + card count. Selected deck highlighted with blue background. Sideboard toggle checkbox: "Move to sideboard".
-
-**Result:** `LocationResult { DeckId, IsSideboard }` — fired via `OnSelected`. Dialog stays open until closed explicitly (MainLayout closes it after a successful move).
-
-### 6.6 EditDeckPropertiesDialog
-
-**File:** `Components/Dialogs/EditDeckPropertiesDialog.razor`
-
-**Purpose:** Edit deck properties (rename). **Dormant:** the context menu has no Properties item and no component references this dialog. File kept in the project.
-
-**Triggered by:** — (dormant; no active trigger).
-
-**Parameters:** `IsOpen`, `DeckId (int)`, `OnSaved`, `IsOpenChanged`.
-
-**Form fields:** Name (required, max 100 characters). Errors: "Deck name is required" / "Name must be 100 characters or less".
-
-**Info display:** Deck ID + card count (read-only).
-
-**Save behavior:** `IDeckManagementService.RenameAsync(deckId, newName)`. No-op if name unchanged. Enter to save, Escape to cancel.
-
-### 6.7 CardFilterDialog
+### 6.5 CardFilterDialog
 
 **File:** `Components/Dialogs/CardFilterDialog.razor`
 
@@ -762,6 +701,7 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 
 | Field | ViewModel property | Control |
 |-------|-------------------|---------|
+| Sets (**KB mode only** — hidden in collection/deck/sideboard, where the scope is driven by the node) | `FilteredSetCodes` (List<string>) | `MultiSelectList`: chips of the current scope + picker dialog (full set catalog with search, 2+ chars; checkbox rows with set icon/name/code). Picker selection is staged and committed on Apply → `SetFilteredSetCodes()` (Cancel discards); removing a chip commits live, same as Type/Rarity |
 | Type | `TypeFilter` (List<string>) | `MultiSelectList` with types as chips |
 | Rarity | `Rarity` (List<string>) | `MultiSelectList` with rarities as chips with color dots |
 | Artist | `Artist` | Text input, oninput binding |
@@ -789,6 +729,18 @@ All dialogs are overlay-level, managed by MainLayout state flags (`_showXxx`). R
 | **Cancel** | Closes dialog without firing `Changed`. Pending changes in ViewModel remain. |
 
 **OnParametersSet:** Syncs internal MultiSelectList view models from current `FilterViewModel.Rarity` / `FilterViewModel.TypeFilter` state.
+
+### 6.6 SetTypeFilterDialog
+
+**File:** `Components/Dialogs/SetTypeFilterDialog.razor`
+
+**Purpose:** Toggle picker for the CollectorView "Type Filter" button — one toggle per `CardSetType` value.
+
+**Triggered by:** CollectorView Type Filter button (owned by CollectorView, not MainLayout).
+
+**Parameters:** `IsOpen`, `IsOpenChanged`, `SelectedTypes (IReadOnlyCollection<CardSetType>?)`, `OnApplied(IReadOnlyCollection<CardSetType>)`.
+
+**Behavior:** pressed toggles are staged locally; **Apply** commits the staged set via `OnApplied` → CollectorView re-queries (`WHERE s.SetType IN (...)`) and persists the filter in user settings (`CollectorView.SetTypeFilter`). ✕/Cancel close without committing. Closing is only via ✕/Cancel — clicking the overlay does nothing.
 
 ---
 
@@ -946,8 +898,9 @@ SearchControl → OnSearchCompleted(query) → CardFilterDialog → MainLayout._
 
 | Property | Type | Source |
 |----------|------|--------|
-| `SetCodes` | `List<string>` | Sidebar multi-select + resolved set-search text → `SetNewSetCodeFilter()` / `SetSetCodes()` |
-| `SetSearchText` | `string` | Sidebar text input — persisted across component remounts, reset by `Clear()` |
+| `FilteredSetCodes` | `List<string>` | Set-list scope: location-mode auto-fill (`SetNodeScope()`) or the explicit Sets filter in Card Filter (KB only, `SetFilteredSetCodes()`) — empty = all sets; `Clear()` resets it in KB mode only |
+| `ActiveCardSets` | `List<string>?` | Clicked sidebar set — exactly one code or null → `SetActiveCardSets()`; the card query takes `GetEffectiveSetCodes()` (click ∩ scope; an empty intersection yields zero cards) |
+| `SetSearchText` | `string` | Sidebar text input — narrows only the visible set list, never the cards; persisted across component remounts, reset by `Clear()` |
 | `Rarity` | `List<string>` | Toolbar dropdown / CardFilterDialog MultiSelectList |
 | `NameFilter` | `string` | CardsListControl debounced input (300ms, 3+ chars) |
 | `SearchQuery` | `string` | SearchControl (FTS5, вверху окна CardFilterDialog) — Enter/🔍 → `Apply()` |
@@ -964,7 +917,7 @@ SearchControl → OnSearchCompleted(query) → CardFilterDialog → MainLayout._
 | `SortField` / `SortAsc` | `string` / `bool` | Sortable CardListView column headers (values match `CardListFilter.SortFields`: Name/CmcNumber/Type/SetCode/Rarity) |
 | `ClearGeneration` | `int` | Increments on every `Clear()` — CardsListControl uses it to reset local input buffers after an external Clear All |
 
-**Methods:** `Apply()` → fires `Changed`; `ClearAndApply()` → `Clear()` + `Apply()`; `Clear()` resets all fields without notification. Set/type/rarity helpers: `SetNewSetCodeFilter`, `GetSetCodesOrExpression`, `SetNewTypeFilter`, `SetTypeFilters`, `GetTypesOrExpression`, `SetNewRarityFilter`, `GetRarityOrExpression`.
+**Methods:** `Apply()` → fires `Changed`; `ClearAndApply()` → `Clear()` + `Apply()`; `Clear()` resets all fields without notification. Set-scope helpers: `SetFilteredSetCodes`, `SetNodeScope`, `ResetSetScope`, `SetActiveCardSets`, `GetEffectiveSetCodes`. Type/rarity helpers: `SetNewTypeFilter`, `SetTypeFilters`, `GetTypesOrExpression`, `SetNewRarityFilter`, `GetRarityOrExpression`.
 
 `Apply()` → fires `Changed` event → CardsListControl resets `_currentPage = 1` + re-queries the server via `InvokeAsync`.
 
@@ -1007,7 +960,6 @@ SearchControl → OnSearchCompleted(query) → CardFilterDialog → MainLayout._
 │  ├─ SplitDialog               (⫯ in CardsListControl, count > 1)    │
 │  ├─ CardFilterDialog          (Filters in CardsListControl;         │
 │  │                            FTS5 search at top; Collection sect.)  │
-│  ├─ LocationPickerDialog      (dormant — file kept, no trigger)      │
-│  └─ EditDeckPropertiesDialog  (dormant — file kept, no trigger)      │
+│  └─ SetTypeFilterDialog       (CollectorView Type Filter)           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
