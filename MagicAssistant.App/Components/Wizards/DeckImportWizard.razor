@@ -11,7 +11,7 @@
 @inject GetUserSettingQueryHandler GetSettingQueryHandler
 @inject SaveUserSettingCommandHandler SaveSettingCommandHandler
 
-<div class="dialog-overlay" @onclick="OnOverlayClick">
+<div class="dialog-overlay">
     <div class="dialog-box" @onclick:stopPropagation="true">
         @* Fixed target (⋯ context menu): the target name lives in the title — gold, same
            technology as the export wizard. Select mode keeps the generic title. *@
@@ -466,16 +466,6 @@
         await OnImported.InvokeAsync();
 
         // Close the dialog after a successful import
-        IsOpen = false;
-        await IsOpenChanged.InvokeAsync(false);
-    }
-
-    private void OnOverlayClick() => _ = OnCancel();
-
-    private async Task OnCancel()
-    {
-        if (_state is WizardState.Syncing or WizardState.Committing or WizardState.Checking) return;
-        _cts?.Cancel();
         IsOpen = false;
         await IsOpenChanged.InvokeAsync(false);
     }

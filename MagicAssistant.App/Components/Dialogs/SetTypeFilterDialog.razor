@@ -8,7 +8,7 @@
 
 @if (!IsOpen) return;
 
-<div class="set-type-dialog-overlay" @onclick="OnOverlayClick">
+<div class="set-type-dialog-overlay">
     <div class="set-type-dialog-box" @onclick:stopPropagation>
         @* ── Header ── *@
         <div class="set-type-header">
@@ -85,10 +85,8 @@
         await Close();
     }
 
-    /// <summary>Cancel semantics: close without committing (also used by ✕ and the overlay click).</summary>
+    /// <summary>Cancel semantics: close without committing (used by ✕ and Cancel).</summary>
     private async Task Close() => await IsOpenChanged.InvokeAsync(false);
-
-    private Task OnOverlayClick() => Close();
 
     /// <summary>Pretties a snake_case enum name for display: "from_the_vault" → "From the Vault".</summary>
     private static string DisplayType(CardSetType type)

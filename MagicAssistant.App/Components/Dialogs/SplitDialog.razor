@@ -3,7 +3,7 @@
 
 @if (!IsOpen) return;
 
-<div class="split-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+<div class="split-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
     <div class="split-dialog-box" @onclick:stopPropagation>
         @* ── Header ── *@
         <div class="split-header">
@@ -145,8 +145,6 @@
         IsOpen = false;
         await IsOpenChanged.InvokeAsync(false);
     }
-
-    private async Task OnOverlayClick() => await Close();
 
     private void OnKeyDown(KeyboardEventArgs e)
     {

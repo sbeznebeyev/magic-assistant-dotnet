@@ -6,7 +6,7 @@
 
 @if (!IsOpen) return;
 
-<div class="filter-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+<div class="filter-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
     <div class="filter-dialog-box" @onclick:stopPropagation>
         @* ── Header ── *@
         <div class="filter-header">
@@ -589,8 +589,6 @@
         IsOpen = false;
         await IsOpenChanged.InvokeAsync(false);
     }
-
-    private async Task OnOverlayClick() => await Close();
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {

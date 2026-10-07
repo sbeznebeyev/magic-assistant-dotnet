@@ -6,7 +6,7 @@
 
 @if (!IsOpen) return;
 
-<div class="edit-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+<div class="edit-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
     <div class="edit-dialog-box" @onclick:stopPropagation>
         @* ── Header ── *@
         <div class="edit-header">
@@ -282,8 +282,6 @@
         IsOpen = false;
         await IsOpenChanged.InvokeAsync(false);
     }
-
-    private async Task OnOverlayClick() => await Close();
 
     // async Task, not void: rule 8 forbids fire-and-forget — the close must be awaited
     private async Task OnKeyDown(KeyboardEventArgs e)
