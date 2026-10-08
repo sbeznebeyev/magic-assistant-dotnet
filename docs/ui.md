@@ -346,11 +346,15 @@ Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` �
 
 **Empty states:**
 
-| Condition | Message | Action |
+| Condition (mode explicit) | Message | Action |
 |-----------|---------|--------|
-| KB mode, a set is clicked and it has no cards in the DB (direct `HasCardsQuery` check — no filter inference) | "No cards from the selected set in knowledge base yet." | `Sync from Scryfall` button → `OnOpenSync` |
-| Active filters, no results | "No cards match the selected filters" | — |
-| No filters, KB empty | "No cards in knowledge base yet." | — |
+| KB: a set is clicked and it has no cards in the DB (direct `HasCardsQuery` check — no filter inference) | "No cards from the selected set in knowledge base yet." | `Sync from Scryfall` button → `OnOpenSync` |
+| KB: active filters, no results | "No cards match the selected filters" | — |
+| KB: no filters, KB empty (explicitly gated on KB mode) | "No cards in knowledge base yet." | — |
+| Location: the node itself is empty — count check (`GetLocationTotalCount()`) precedes any filter inference, so an empty node reports as empty even with active filters | "No cards in the deck/collection/sideboard yet." (wording by `CurrentCollectionNodeType`) | — |
+| Location: the node has cards but none displayed — filters are hiding them | "No cards match the selected filters" | — |
+
+**Clear All button (✕):** lights up on `HasActiveFilters` — at least one *card* filter is set. The set scope (`ActiveCardSets`) and location mode itself are excluded on purpose: the set scope has its own ✕ in the sets sidebar, and a bare location is not a filter.
 
 **Move flow:** 📦 Move (visible only when current ≠ pinned and neither is locked) → `OnMoveToPinned(physical)` → MainLayout: `IDeckCardService.MoveCardsAsync(currentCollectionId, [cardId], pinnedCollectionId)` → the addition is recorded in LastActionsQueue (Add, copies moved) → status bar + `_kbRefreshTrigger++` (reload). The selected card moves with all its copies.
 

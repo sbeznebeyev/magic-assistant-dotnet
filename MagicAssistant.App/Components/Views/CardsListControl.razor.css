@@ -426,8 +426,12 @@
     transition: all 0.15s ease;
 }
 
-.clear-filters-btn:hover {
+.clear-filters-btn:hover:not(:disabled) {
     background: rgba(120, 30, 30, 0.15);
+}
+
+.clear-filters-btn:disabled {
+    cursor: default;
 }
 
 .clear-filters-btn.active {

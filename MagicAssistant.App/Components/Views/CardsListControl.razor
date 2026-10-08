@@ -124,7 +124,7 @@
                         }
                     </select>
                     <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
-                    <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
+                    <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" disabled="@(!HasActiveFilters)" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
                     @if (FilterViewModel.CurrentCollectionId.HasValue
                         && PinnedCollectionId.HasValue
                         && FilterViewModel.CurrentCollectionId != PinnedCollectionId
@@ -202,23 +202,37 @@
             @if (!_loading && !_displayCards.Any())
             {
                 <div class="kb-empty">
-                    @if (!IsLocationMode && FilterViewModel.ActiveCardSets is { Count: > 0 } && !_selectedSetHasCards)
+                    @if (!IsLocationMode)
                     {
-                        @* Direct DB check (HasCardsQuery) — no filter inference: the selected set
-                           has no cards in the KB, so offer to sync it. Sync is a KB-only operation —
-                           collection/deck/sideboard display never offers it. *@
-                        <span>No cards from the selected set in knowledge base yet.</span>
-                        <button class="sync-btn-inline" @onclick="OnSyncClick">
-                            Sync from Scryfall
-                        </button>
+                        @if (FilterViewModel.ActiveCardSets is { Count: > 0 } && !_selectedSetHasCards)
+                        {
+                            @* Direct DB check (HasCardsQuery) — no filter inference: the selected set
+                               has no cards in the KB, so offer to sync it. Sync is a KB-only operation —
+                               collection/deck/sideboard display never offers it. *@
+                            <span>No cards from the selected set in knowledge base yet.</span>
+                            <button class="sync-btn-inline" @onclick="OnSyncClick">
+                                Sync from Scryfall
+                            </button>
+                        }
+                        else if (HasActiveFilters)
+                        {
+                            <span class="empty-filters-msg">No cards match the selected filters</span>
+                        }
+                        else
+                        {
+                            <span>No cards in knowledge base yet.</span>
+                        }
                     }
-                    else if (HasActiveFilters)
+                    else if (GetLocationTotalCount() == 0)
                     {
-                        <span class="empty-filters-msg">No cards match the selected filters</span>
+                        @* The location itself is empty — the count check precedes any filter inference:
+                           an empty node reports as empty even when filters happen to be active. *@
+                        <span>No cards in the @GetLocationTypeLabel() yet.</span>
                     }
                     else
                     {
-                        <span>No cards in knowledge base yet.</span>
+                        @* The location has cards but none displayed — filters are hiding them. *@
+                        <span class="empty-filters-msg">No cards match the selected filters</span>
                     }
                 </div>
             }
@@ -648,9 +662,12 @@
         await OnOpenFilter.InvokeAsync();
     }
 
-    /// <summary>Clear all active filters and re-query.</summary>
+    /// <summary>Clear all active filters and re-query. Inert while no filter is set — the button
+    /// is disabled in that state; this guard keeps the callback itself inert even if a future
+    /// caller invokes it directly.</summary>
     private void OnClearFiltersClick()
     {
+        if (!HasActiveFilters) return;
         FilterViewModel.ClearAndApply();
     }
 
@@ -1160,10 +1177,21 @@
         _ => "All Sets"
     };
 
-    /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
+    /// <summary>Singular node label for empty-state messages: "deck" / "collection" / "sideboard".
+    /// The node type arrives with the navigation state — no DB lookup.</summary>
+    private string GetLocationTypeLabel() => FilterViewModel.CurrentCollectionNodeType switch
+    {
+        NodeType.Collection => "collection",
+        NodeType.Deck => "deck",
+        NodeType.Sideboard => "sideboard",
+        _ => "location"
+    };
+
+    /// <summary>True when at least one card filter is actively set in FilterViewModel.
+    /// The set scope (ActiveCardSets) and location mode itself are excluded on purpose:
+    /// the set scope has its own clear button in the sidebar, and a bare location is not a filter.</summary>
     private bool HasActiveFilters =>
-        FilterViewModel.ActiveCardSets is not null
-        || (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
+        (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
         || FilterViewModel.Rarity.Count > 0
         || FilterViewModel.TypeFilter.Count > 0
         || !string.IsNullOrWhiteSpace(FilterViewModel.NameFilter)
@@ -1188,8 +1216,7 @@
         || !string.IsNullOrWhiteSpace(FilterViewModel.MaxPrice)
         || FilterViewModel.IsFoil
         || FilterViewModel.HasForTrade
-        || FilterViewModel.HasComment
-        || FilterViewModel.CurrentCollectionId.HasValue;
+        || FilterViewModel.HasComment;
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
