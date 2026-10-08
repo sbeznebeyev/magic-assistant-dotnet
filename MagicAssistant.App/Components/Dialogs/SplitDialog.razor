@@ -35,8 +35,8 @@
                     <span class="split-dialog-count">@_mainCount</span>
                     <div class="split-dialog-track-wrap">
                         <div class="split-dialog-bar">
-                            <div class="split-dialog-bar-main" style="width:@MainBarWidthPct%"></div>
-                            <div class="split-dialog-bar-side" style="width:@SideBarWidthPct%"></div>
+                            <div class="split-dialog-bar-main" style="width:@LeftBarWidthPct%"></div>
+                            <div class="split-dialog-bar-side" style="width:@RightBarWidthPct%"></div>
                         </div>
                         <input type="range" min="0" max="@_totalCount" step="1"
                                value="@_sideCount" @oninput="OnSliderInput"
@@ -114,10 +114,12 @@
 
     private int _sideCount => _totalCount - _mainCount;
 
-    // Whole-percent segment widths, same as CreaturePage's bar chart: an int renders
-    // identically in any culture (no decimal separator to break the inline style).
-    private int MainBarWidthPct => _totalCount > 0 ? (int)Math.Round(_mainCount / (double)_totalCount * 100) : 0;
-    private int SideBarWidthPct => _totalCount > 0 ? (int)Math.Round(_sideCount / (double)_totalCount * 100) : 0;
+    // Bar segments are positioned relative to the slider handle (slider value = sideboard count):
+    // blue fills [0, handle], orange fills [handle, 1] — the handle sits exactly at the boundary.
+    // Whole percents via Math.Round, same as CreaturePage's bar chart: an int renders identically
+    // in any culture (no decimal separator to break the inline style).
+    private int LeftBarWidthPct => _totalCount > 0 ? (int)Math.Round(_sideCount / (double)_totalCount * 100) : 0;
+    private int RightBarWidthPct => _totalCount > 0 ? (int)Math.Round(_mainCount / (double)_totalCount * 100) : 0;
 
     /// <summary>The slider value is the SIDEBOARD count: dragging right pushes cards into the
     /// sideboard, dragging left pulls them back to the deck — cards flow in the direction of the drag.</summary>
