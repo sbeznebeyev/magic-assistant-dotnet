@@ -121,7 +121,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | SyncKnowledgeBase | `Components/Dialogs/SyncKnowledgeBase.razor` | Диалог синхронизации, прогресс-бар, отмена |
 | SyncSelectedSetCards | `Components/Dialogs/SyncSelectedSetCards.razor` | Синхронизация конкретного сета (предвыбранный SetCode) |
 | EditMagicCardPhysicalDialog | `Components/Dialogs/EditMagicCardPhysicalDialog.razor` | Редактирование экземпляра: count, ownership, price, comment, tags, forTrade |
-| SplitDialog | `Components/Dialogs/SplitDialog.razor` | Разделение стопки main/sideboard с визуальным баром |
+| SplitDialog | `Components/Dialogs/SplitDialog.razor` | Разделение стопки deck/sideboard ползунком на прогресс-баре (0–total) |
 | CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Sets picker (только KB), Type/Rarity (MultiSelectList), color-чекбоксы + модификаторы, Properties (P/T/CMC); золотая кнопка Advanced открывает вспомогательный диалог |
 | CardFilterAdvancedDialog | `Components/Dialogs/CardFilterAdvancedDialog.razor` | Вспомогательные фильтры: Artist, Layout, Legality, Other (Game Changer), Collection (deck mode: ownership/count/price/tags — IsFoil disabled); единственная кнопка Close |
 | SetTypeFilterDialog | `Components/Dialogs/SetTypeFilterDialog.razor` | Toggle-picker по типам сетов (CollectorView Type Filter): staged-выбор, коммит только на Apply; персистится в user settings |
@@ -685,11 +685,11 @@ All dialogs are overlay-level. The MainLayout dialogs are managed by state flags
 
 **Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MagicCardPhysical?)`, `DeckId (int?)`, `OnSplitDone`.
 
-**Card preview:** compact block at the top of the dialog — card name + "× N in deck" (no image).
+**Card preview:** compact block at the top of the dialog — card name + "× N in deck" (no image). The name is resolved exactly like EditMagicCardPhysicalDialog: for double-sided cards the front face's `PrintedName` (fallback `Name`, then base-card values); otherwise base-card `PrintedName ?? Name`.
 
-**Form:** Main Deck count input with −/+ buttons (range: 0–total). Sideboard count auto-calculated (display only). Visual bar: blue (main) + orange (sideboard).
+**Split slider:** gold uppercase "DECK" label above the bar (left, same visual scale as the badge text) and gold capsule badge "sideboard" (right, same pill as the Colors tab / CreaturePage `.sideboard-badge`: dark background, gold text, translucent gold border). On the bar line: deck count to the left of the bar, sideboard count to the right. A range slider (0–total) sits on the bar; its value is the SIDEBOARD count — dragging the handle right pushes cards into the sideboard, dragging left pulls them back to the deck (cards flow in the direction of the drag, one per step). Bar under the slider: blue (deck) + orange (sideboard), no transition — follows the pointer 1:1. Segment widths are whole percents via `Math.Round`, same as CreaturePage's bar chart — an int renders identically in any culture (a locale decimal separator would break the inline style).
 
-**Validation:** Split button disabled if main ≤ 0 or side ≤ 0.
+**Validation:** the **Move** button is enabled only when the slider value differs from its initial position at open (all copies in the deck); disabled while saving.
 
 **Action:** `IDeckCardService.SplitCardAsync(deckId, cardId, sideCount)` → creates right part and moves to sideboard.
 
