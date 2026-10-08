@@ -1,0 +1,223 @@
+/* ── Overlay (above CardFilterDialog's 1000) ───────────────────── */
+.card-filter-advanced-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+}
+
+/* ── Dialog box ────────────────────────────────────────────────── */
+.card-filter-advanced-dialog-box {
+    background: #252525;
+    border: 1px solid #444;
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Header (no close button — the single Close is in the footer) ── */
+.card-filter-advanced-dialog-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #383838;
+}
+
+.card-filter-advanced-dialog-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ddd;
+}
+
+/* ── Content ───────────────────────────────────── */
+.card-filter-advanced-dialog-content {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── Field rows ────────────────────────────────────── */
+.card-filter-advanced-dialog-filter-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.card-filter-advanced-dialog-filter-label {
+    font-size: 11px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.card-filter-advanced-dialog-filter-input,
+.card-filter-advanced-dialog-filter-select {
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.card-filter-advanced-dialog-filter-input:focus,
+.card-filter-advanced-dialog-filter-select:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+/* ── Other toggle button ───────────────────────── */
+.card-filter-advanced-dialog-other-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.card-filter-advanced-dialog-other-toggle:hover {
+    background: #2d2d2d;
+    border-color: #555;
+    color: #ccc;
+}
+
+.card-filter-advanced-dialog-other-toggle.active {
+    background: #1a3a5c;
+    border-color: #0078d4;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(0, 120, 212, 0.3);
+}
+
+.card-filter-advanced-dialog-other-toggle.active:hover {
+    background: #1f4568;
+}
+
+/* ── Collection filters (location mode only) ─────────── */
+.card-filter-advanced-dialog-collection-filters {
+    border-top: 1px solid #383838;
+    padding-top: 10px;
+    gap: 8px;
+}
+
+.card-filter-advanced-dialog-collection-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-filter-advanced-dialog-collection-group-title {
+    width: 110px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #999;
+}
+
+.card-filter-advanced-dialog-toggle-group {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+
+.card-filter-advanced-dialog-toggle-btn {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: #1e1e1e;
+    color: #999;
+    border: 1px solid #444;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.card-filter-advanced-dialog-toggle-btn:hover:not(:disabled) {
+    background: #2a2a2a;
+    color: #ccc;
+}
+
+.card-filter-advanced-dialog-toggle-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Pressed state — same blue as Type Filter's toggles */
+.card-filter-advanced-dialog-toggle-btn.active {
+    background: #1a3a5c;
+    border-color: #0078d4;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(0, 120, 212, 0.3);
+}
+
+.card-filter-advanced-dialog-toggle-btn.active:hover {
+    background: #1f4568;
+}
+
+
+.card-filter-advanced-dialog-range-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-filter-advanced-dialog-range-input {
+    width: 64px;
+    background: #1e1e1e;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.card-filter-advanced-dialog-range-input:focus {
+    border-color: #0078d4;
+    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
+}
+
+.card-filter-advanced-dialog-range-sep {
+    color: #666;
+}
+
+/* IsFoil stays disabled: no foil flag column in the DB yet */
+.card-filter-advanced-dialog-collection-filters input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* ── Footer (single Close button) ──────────────────────────────── */
+.card-filter-advanced-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #383838;
+}
+
+.card-filter-advanced-dialog-btn-close {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+}
+
+.card-filter-advanced-dialog-btn-close:hover {
+    background: #4a4a4a;
+}

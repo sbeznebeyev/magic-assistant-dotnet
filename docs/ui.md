@@ -81,7 +81,8 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | DeckExportWizard | DecksNavigator context menu (⋯ → Export; deck/collection nodes only) | Native JSON export + browser download of the clicked node |
 | EditMagicCardPhysicalDialog | CardsListControl ✎ (deck mode) | Edit card instance (count, ownership, price, tags) |
 | SplitDialog | CardsListControl ⫯ (deck mode, count > 1) | Split stack main/sideboard |
-| CardFilterDialog | CardsListControl `Filters` button | Central filter dialog: Sets (KB only)/Type/Rarity/Color/Properties + Collection section (deck mode) |
+| CardFilterDialog | CardsListControl `Filters` button | Central filter dialog: Sets (KB only)/Type/Rarity/Color/Properties; gold **Advanced** button opens the auxiliary dialog |
+| CardFilterAdvancedDialog | CardFilterDialog gold **Advanced** button | Auxiliary filter dialog: Artist/Layout/Legality/Other + Collection section (deck mode); single Close button, committed by the main dialog's Apply |
 
 ### 1.2 Component Inventory
 
@@ -121,7 +122,8 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | SyncSelectedSetCards | `Components/Dialogs/SyncSelectedSetCards.razor` | Синхронизация конкретного сета (предвыбранный SetCode) |
 | EditMagicCardPhysicalDialog | `Components/Dialogs/EditMagicCardPhysicalDialog.razor` | Редактирование экземпляра: count, ownership, price, comment, tags, forTrade |
 | SplitDialog | `Components/Dialogs/SplitDialog.razor` | Разделение стопки main/sideboard с визуальным баром |
-| CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Sets picker (только KB), Type/Rarity (MultiSelectList), Artist, color-чекбоксы + модификаторы, Properties (P/T/CMC), Collection (deck mode: ownership/count/price/tags) |
+| CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Sets picker (только KB), Type/Rarity (MultiSelectList), color-чекбоксы + модификаторы, Properties (P/T/CMC); золотая кнопка Advanced открывает вспомогательный диалог |
+| CardFilterAdvancedDialog | `Components/Dialogs/CardFilterAdvancedDialog.razor` | Вспомогательные фильтры: Artist, Layout, Legality, Other (Game Changer), Collection (deck mode: ownership/count/price/tags — IsFoil disabled); единственная кнопка Close |
 | SetTypeFilterDialog | `Components/Dialogs/SetTypeFilterDialog.razor` | Toggle-picker по типам сетов (CollectorView Type Filter): staged-выбор, коммит только на Apply; персистится в user settings |
 | **Wizards** | | |
 | DeckImportWizard | `Components/Wizards/DeckImportWizard.razor` | Импорт нативного JSON в новую или существующую колоду |
@@ -416,7 +418,7 @@ Grouped view of cards rendered by CardsListControl in tree mode.
 
 **Data source:** `IDeckAnalysisService.GetCollectorProgressAsync(setTypes)` — single SQL query (direct DI, no HTTP); an active set-type filter adds `WHERE s.SetType IN (...)` to that same query.
 
-**Set type filter:** the "Type Filter" button opens SetTypeFilterDialog (§6.6) — one toggle per `CardSetType` value; pressed types are staged locally and committed only on Apply (✕/Cancel close without committing). The filter is persisted in user settings (`CollectorView.SetTypeFilter`, comma-separated names) and restored before the first query; the button shows its active state while the filter is non-empty.
+**Set type filter:** the "Type Filter" button opens SetTypeFilterDialog (§6.7) — one toggle per `CardSetType` value; pressed types are staged locally and committed only on Apply (✕/Cancel close without committing). The filter is persisted in user settings (`CollectorView.SetTypeFilter`, comma-separated names) and restored before the first query; the button shows its active state while the filter is non-empty.
 
 **Counting rules:** Total — set checklist size from `CardSet.CardCount` (Scryfall). Collected/Owned — distinct printings across all user decks, deduplicated by `CollectorNumber` within the set: different printings of the same OracleId+Language are separate cards, a different Language for the same printing (shared CollectorNumber) is one card.
 
@@ -614,7 +616,7 @@ Format legality check for all cards in deck (data via `ICollectionStore.GetDeckC
 
 ## 6. Dialogs
 
-All dialogs are overlay-level. The MainLayout dialogs are managed by state flags (`_showXxx`) and rendered only when visible (`@if (_showXxx) { <Dialog ... /> }`); SetTypeFilterDialog (§6.6) is owned by CollectorView with its own flag. Closing is only via the ✕ button (and Cancel/Escape where present) — clicking the overlay does nothing.
+All dialogs are overlay-level. The MainLayout dialogs are managed by state flags (`_showXxx`) and rendered only when visible (`@if (_showXxx) { <Dialog ... /> }`); SetTypeFilterDialog (§6.7) is owned by CollectorView with its own flag. Closing is only via the ✕ button (and Cancel/Escape where present) — clicking the overlay does nothing.
 
 ### 6.1 SyncKnowledgeBase
 
@@ -704,33 +706,50 @@ All dialogs are overlay-level. The MainLayout dialogs are managed by state flags
 | Sets (**KB mode only** — hidden in collection/deck/sideboard, where the scope is driven by the node) | `FilteredSetCodes` (List<string>) | `MultiSelectList`: chips of the current scope + picker dialog (full set catalog with search, 2+ chars; checkbox rows with set icon/name/code). Picker selection is staged and committed on Apply → `SetFilteredSetCodes()` (Cancel discards); removing a chip commits live, same as Type/Rarity |
 | Type | `TypeFilter` (List<string>) | `MultiSelectList` with types as chips |
 | Rarity | `Rarity` (List<string>) | `MultiSelectList` with rarities as chips with color dots |
-| Artist | `Artist` | Text input, oninput binding |
 | Color Filters | `ColorFilters[ColorBitFlags]` (Dictionary) | Checkboxes: C/W/U/B/R/G/MULTI/MONO/HYBRID. Modifiers: And/Only/Identity (bool flags) |
 | Properties | `PowerOp`/`PowerValue`, `ToughnessOp`/`ToughnessValue`, `CmcOp`/`CmcValue` | select operator (>=, =, <=) + number input per property |
-| Layout | `LayoutFilter` | Select (all `LayoutEnum` values with display names) |
-| Legality | `LegalityFilter` | Select (all `Format` values via Scryfall keys) |
-| Other | `GameChangerFilter` | Toggle button |
 
-**Collection section** — rendered only when `FilterViewModel.CurrentCollectionId` is set (deck/collection/sideboard mode); hidden in KB mode. **Read-only** — all controls are `disabled` while the feature is turned off; ViewModel wiring and SQL clauses remain in place for re-enabling.
-
-| Field | ViewModel property | Control / SQL source |
-|-------|-------------------|---------------------|
-| Ownership | `Ownership` ("all"/"owned"/"borrowed") | Radio group → `Deck.IsOwn` |
-| Card Count | `MinCount` / `MaxCount` (string, parsed at query time) | Number range 1–4 → `Deck.Count` |
-| Price Range ($) | `MinPrice` / `MaxPrice` (string, parsed at query time) | Number range → `CAST(Cards.Usd AS REAL)` |
-| Special Tags | `IsFoil`, `HasForTrade`, `HasComment` | Checkboxes → `IsFoil` is a DB-layer placeholder (no foil flag column yet); `HasForTrade` → `Deck.ForTradeCount > 0`; `HasComment` → `Deck.Comment` non-empty |
+**Advanced filters:** Artist, Layout, Legality, Other and the Collection section live in the auxiliary **CardFilterAdvancedDialog** (§6.6), opened by the gold **Advanced** button.
 
 **Buttons:**
 
 | Button | Action |
 |--------|--------|
-| **Apply** | `FilterViewModel.Apply()` → fires `Changed` → CardsListControl re-queries. Dialog closes. |
-| **Clear All** | `FilterViewModel.ClearAndApply()` → resets all fields + fires `Changed`. Dialog closes. |
+| **Advanced** (gold, left side of the footer) | Opens CardFilterAdvancedDialog (§6.6) on top; the main dialog stays open behind it. |
+| **Apply** | `FilterViewModel.Apply()` → fires `Changed` → CardsListControl re-queries (includes all Advanced-dialog fields). Dialog closes. |
+| **Clear All** | `FilterViewModel.ClearAndApply()` → resets all fields, including the Advanced-dialog ones + fires `Changed`. Dialog closes. |
 | **Cancel** | Closes dialog without firing `Changed`. Pending changes in ViewModel remain. |
 
 **OnParametersSet:** Syncs internal MultiSelectList view models from current `FilterViewModel.Rarity` / `FilterViewModel.TypeFilter` state.
 
-### 6.6 SetTypeFilterDialog
+### 6.6 CardFilterAdvancedDialog
+
+**File:** `Components/Dialogs/CardFilterAdvancedDialog.razor`
+
+**Purpose:** Auxiliary filter dialog — the less-frequently used fields of Card Filter, split out of the main window. Rendered by CardFilterDialog as a sibling overlay above it (z-index 1100 vs 1000).
+
+**Parameters:** `FilterViewModel (required)`, `IsOpen`, `IsOpenChanged`.
+
+**Fields** — all bind live to the shared `FilterViewModel`; nothing is committed on Close:
+
+| Field | ViewModel property | Control |
+|-------|-------------------|---------|
+| Artist | `Artist` | Text input, oninput binding |
+| Layout | `LayoutFilter` | Select (all `LayoutEnum` values with display names) |
+| Legality | `LegalityFilter` | Select (all `Format` values via Scryfall keys) |
+| Other | `GameChangerFilter` | Toggle button |
+
+**Collection section** — rendered only when `FilterViewModel.CurrentCollectionId` is set (deck/collection/sideboard mode); hidden in KB mode. All controls are **enabled**; the full chain UI → FilterViewModel → CardListFilter → SQL is wired.
+
+| Field | ViewModel property | Control / SQL source |
+|-------|-------------------|---------------------|
+| Card Count | `MinCount` / `MaxCount` (string, parsed at query time) | Number range 1–4 → `Deck.Count` |
+| Price Range ($) | `MinPrice` / `MaxPrice` (string, parsed at query time) | Number range → `CAST(Cards.Usd AS REAL)` |
+| Ownership + tags (one headerless toggle row) | `Ownership` ("all"/"owned"/"borrowed"), `HasForTrade`, `HasComment` | Toggle buttons: Owned/Borrowed (press the active one again to release → "all") → `Deck.IsOwn`; For Trade → `Deck.ForTradeCount > 0`; Has comment → `Deck.Comment` non-empty; Foil stays **disabled** (no foil flag column in the DB yet; SQL branch intentionally absent) |
+
+**Commit semantics:** Close (the single footer button) and Escape only close the dialog — changes already live in the shared ViewModel and are committed by the main dialog's **Apply**. The header has no ✕ button.
+
+### 6.7 SetTypeFilterDialog
 
 **File:** `Components/Dialogs/SetTypeFilterDialog.razor`
 

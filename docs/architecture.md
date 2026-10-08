@@ -537,7 +537,7 @@ Content area (`@key="_currentCollectionId"`): deck-режим — TabBar (Cards 
 
 *Файл:* `MagicAssistant.App/Shared/FilterViewModel.cs`
 
-`FilterViewModel` — центральный POCO-класс, инкапсулирующий всё состояние фильтрации и сортировки для KB- и deck-режимов. Все UI-компоненты, участвующие в фильтрации (SearchControl, CardsListControl, CardFilterDialog), мутируют один экземпляр этого класса и триггерят событие `Changed` для синхронизации.
+`FilterViewModel` — центральный POCO-класс, инкапсулирующий всё состояние фильтрации и сортировки для KB- и deck-режимов. Все UI-компоненты, участвующие в фильтрации (SearchControl, CardsListControl, CardFilterDialog, CardFilterAdvancedDialog), мутируют один экземпляр этого класса и триггерят событие `Changed` для синхронизации. CardFilterAdvancedDialog — вспомогательный диалог, открываемый золотой кнопкой Advanced внутри CardFilterDialog (оверлей поверх, z-index 1100); его поля (Artist/Layout/Legality/GameChanger + Collection) коммитятся Apply основного диалога, а Close закрывает без изменений.
 
 ### Свойства
 
@@ -600,8 +600,7 @@ Content area (`@key="_currentCollectionId"`): deck-режим — TabBar (Cards 
 │              │  │ (multi-value)    │  │       │ Color checkboxes (9) ───┼──┤
 │              │  │ Name input ──────┼──┤       │ Color modifiers (3) ────┼──┤
 │              │  │ Set sidebar      ┼──┤       │ Properties (P/T/CMC) ───┼──┤
-│              │  │ (click select)   │  │       │ Layout/Legality/Game    │
-│              │  │ Sort headers ────┼──┘       │ Changer ────────────────┼──┤
+│              │  │ (click select)   │  │       │ Advanced → adv dialog      │
 │              │  │                  │          │ Sets picker (KB only)   │
 └──────────────┘  └──────────────────┘          └─────────────────────────┘
                       ▼                                    ▼
@@ -631,8 +630,8 @@ Content area (`@key="_currentCollectionId"`): deck-режим — TabBar (Cards 
 | Set sidebar selection | `ActiveCardSets` (List<string>?) | Клик по сету → `SetActiveCardSets(code)` + `Apply()`; «All Sets»/✕ → `SetActiveCardSets(null)` + `Apply()` |
 | Заголовки столбцов CardListView (list view) | `SortField`, `SortAsc` | Клик = новый столбец (asc), повторный клик = смена направления → `Apply()` |
 | MainLayout navigation | `CurrentCollectionId` | `OnDeckSelected(LockableCollection)` → `= CollectionId` (pinned не трогается; очередь не сбрасывается) → `Apply()`; `OnDeckSelectedFromInstance(deckId)` → `= deckId` (только current) → `Apply()`; `OnShowKB()` → `= null` (pinned живёт) → `Apply()` |
-| CardFilterDialog → Apply | all fields (Type/Rarity via MultiSelectList, ColorFilters dict, Properties; Collection: Ownership/Count/Price/Tags — только при CurrentCollectionId) | `Apply()` + close dialog |
-| CardFilterDialog → Clear All | all fields | `ClearAndApply()` + close dialog |
+| CardFilterDialog → Apply | all fields (Type/Rarity via MultiSelectList, ColorFilters dict, Properties; Advanced dialog: Artist/Layout/Legality/GameChanger + Collection: Ownership/Count/Price/Tags — только при CurrentCollectionId) | `Apply()` + close dialog |
+| CardFilterDialog → Clear All | all fields, включая поля Advanced-диалога | `ClearAndApply()` + close dialog |
 
 ### Исключения (прямые вызовы, не через канал)
 
@@ -784,7 +783,6 @@ IAnalysisService
 
 **Архитектура вертикальных срезов:**
 - Доменные сервисы: `IDeckManagementService`, `IDeckCardService`, `ICardResolveService`, `IKnowledgeBaseSyncService`, `IDeckImportExportService`, `ICardSearchService`, `IDeckAnalysisService`
-- Вся бизнес-логика — в вертикальных срезах
 - Blazor-компоненты используют только вертикальные сервисы (не Data-контракты напрямую)
 
 **Контракты:**
@@ -827,11 +825,3 @@ IAnalysisService
 - **Analysis-компоненты** — ManaCurve, SpellColour, Creature, Type, Ability, Info, DeckLegality
 - **DI**: Commands/Queries → Scoped, вертикальные сервисы → Scoped, инфраструктурные сервисы → Singleton
 - **Lock-механика (UI)**: кнопка-lock в строках Deck/Collection навигатора (модель видимости как у Pin); lock deck распространяется на sideboard (Core, `LockAsync`/`UnlockAsync`); locked узлы не пинятся, при блокировке pinned-узла пин снимается; карточные операции (−/+, (+), Move, ✎, ⫯) скрыты для locked коллекций (count — read-only)
-
-### ⚠️ Частично реализовано
-- GetDeckCardsQuery использует `ICollectionStore.GetDeckCardsAsync()` с SQL JOIN — фильтрация на уровне БД
-- Analysis-компоненты читают карты через `ICollectionStore.GetDeckCardsAsync(deckId)` и считают метрики через `IAnalysisService`
-
-### ❌ Не реализовано
-- События (EventManager, CardEvent) — UI не реагирует на изменения карт
-- Локализация карт (locale/CardText)

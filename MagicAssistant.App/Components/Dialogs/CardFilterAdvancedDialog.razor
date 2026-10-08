@@ -1,0 +1,180 @@
+@using MagicAssistant.App.Shared
+@using MagicAssistant.Data.Model
+@using MagicAssistant.Data.Model.Enums
+
+@if (!IsOpen) return;
+
+<div class="card-filter-advanced-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+    <div class="card-filter-advanced-dialog-box" @onclick:stopPropagation>
+        @* ── Header ── *@
+        <div class="card-filter-advanced-dialog-header">
+            <span class="card-filter-advanced-dialog-title">Advanced Filters</span>
+        </div>
+
+        @* ── Fields — bound directly to shared FilterViewModel; committed by the main dialog's Apply ── *@
+        <div class="card-filter-advanced-dialog-content">
+            <div class="card-filter-advanced-dialog-filter-field-row">
+                <label class="card-filter-advanced-dialog-filter-label">Artist</label>
+                <input value="@FilterViewModel.Artist"
+                       @oninput="@(e => FilterViewModel.Artist = e.Value?.ToString() ?? "")"
+                       class="card-filter-advanced-dialog-filter-input" placeholder="Artist name..." />
+            </div>
+
+            @* ── Layout ── *@
+            <div class="card-filter-advanced-dialog-filter-field-row">
+                <label class="card-filter-advanced-dialog-filter-label">Layout</label>
+                <select class="card-filter-advanced-dialog-filter-select" value="@FilterViewModel.LayoutFilter"
+                        @onchange="@(e => FilterViewModel.LayoutFilter = e.Value?.ToString() ?? "")">
+                    <option value="">(All)</option>
+                    @foreach (var layoutValue in _allLayouts)
+                    {
+                        <option value="@layoutValue" selected="@(FilterViewModel.LayoutFilter == layoutValue)">
+                            @GetLayoutDisplayName(layoutValue)
+                        </option>
+                    }
+                </select>
+            </div>
+
+            @* ── Legality ── *@
+            <div class="card-filter-advanced-dialog-filter-field-row">
+                <label class="card-filter-advanced-dialog-filter-label">Legality</label>
+                <select class="card-filter-advanced-dialog-filter-select" value="@FilterViewModel.LegalityFilter"
+                        @onchange="@(e => FilterViewModel.LegalityFilter = e.Value?.ToString() ?? "")">
+                    <option value="">(All)</option>
+                    @foreach (var format in _allFormats)
+                    {
+                        var scryfallKey = format.ToScryfallKey();
+                        <option value="@scryfallKey" selected="@(FilterViewModel.LegalityFilter == scryfallKey)">
+                            @format.DisplayName()
+                        </option>
+                    }
+                </select>
+            </div>
+
+            @* ── Other ── *@
+            <div class="card-filter-advanced-dialog-filter-field-row">
+                <label class="card-filter-advanced-dialog-filter-label">Other</label>
+                <button type="button" class="card-filter-advanced-dialog-other-toggle @(FilterViewModel.GameChangerFilter ? "active" : "")" @onclick="() => FilterViewModel.GameChangerFilter = !FilterViewModel.GameChangerFilter">
+                    Game Changer
+                </button>
+            </div>
+
+            @* ── Collection filters — only when a location (deck/collection/sideboard) is selected ── *@
+            @if (FilterViewModel.CurrentCollectionId.HasValue)
+            {
+                <div class="card-filter-advanced-dialog-filter-field-row card-filter-advanced-dialog-collection-filters">
+                    <label class="card-filter-advanced-dialog-filter-label">Collection</label>
+
+                    <div class="card-filter-advanced-dialog-collection-group">
+                        <span class="card-filter-advanced-dialog-collection-group-title">Card Count</span>
+                        <div class="card-filter-advanced-dialog-range-row">
+                            <input type="number" min="1" max="4" value="@FilterViewModel.MinCount"
+                                   @oninput="(e) => FilterViewModel.MinCount = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString())"
+                                   class="card-filter-advanced-dialog-range-input" placeholder="Min" />
+                            <span class="card-filter-advanced-dialog-range-sep">—</span>
+                            <input type="number" min="1" max="4" value="@FilterViewModel.MaxCount"
+                                   @oninput="(e) => FilterViewModel.MaxCount = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString())"
+                                   class="card-filter-advanced-dialog-range-input" placeholder="Max" />
+                        </div>
+                    </div>
+
+                    <div class="card-filter-advanced-dialog-collection-group">
+                        <span class="card-filter-advanced-dialog-collection-group-title">Price Range ($)</span>
+                        <div class="card-filter-advanced-dialog-range-row">
+                            <input type="number" min="0" step="0.01" value="@FilterViewModel.MinPrice"
+                                   @oninput="(e) => FilterViewModel.MinPrice = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString())"
+                                   class="card-filter-advanced-dialog-range-input" placeholder="Min" />
+                            <span class="card-filter-advanced-dialog-range-sep">—</span>
+                            <input type="number" min="0" step="0.01" value="@FilterViewModel.MaxPrice"
+                                   @oninput="(e) => FilterViewModel.MaxPrice = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString())"
+                                   class="card-filter-advanced-dialog-range-input" placeholder="Max" />
+                        </div>
+                    </div>
+
+                    @* Ownership + tags — one headerless toggle row *@
+                    <div class="card-filter-advanced-dialog-collection-group">
+                        <div class="card-filter-advanced-dialog-toggle-group">
+                            <button type="button" class="card-filter-advanced-dialog-toggle-btn @(FilterViewModel.Ownership == "owned" ? "active" : "")"
+                                    @onclick='() => SetOwnership("owned")'>Owned</button>
+                            <button type="button" class="card-filter-advanced-dialog-toggle-btn @(FilterViewModel.Ownership == "borrowed" ? "active" : "")"
+                                    @onclick='() => SetOwnership("borrowed")'>Borrowed</button>
+                            <button type="button" class="card-filter-advanced-dialog-toggle-btn @(FilterViewModel.HasForTrade ? "active" : "")"
+                                    @onclick="() => FilterViewModel.HasForTrade = !FilterViewModel.HasForTrade">For Trade</button>
+                            <button type="button" class="card-filter-advanced-dialog-toggle-btn @(FilterViewModel.HasComment ? "active" : "")"
+                                    @onclick="() => FilterViewModel.HasComment = !FilterViewModel.HasComment">Has comment</button>
+                            @* IsFoil stays disabled: no foil flag column in the DB yet, the SQL branch is intentionally absent. *@
+                            <button type="button" class="card-filter-advanced-dialog-toggle-btn" disabled>Foil</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Footer: single Close button — changes are committed by the main dialog's Apply ── *@
+        <div class="card-filter-advanced-dialog-footer">
+            <button class="card-filter-advanced-dialog-btn-close" @onclick="Close">Close</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Shared filter/sort view model — mutations here are committed by CardFilterDialog's Apply.</summary>
+    [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
+
+    // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    // ── Layout filter options ──
+    private static readonly string[] _allLayouts = Enum.GetNames(typeof(LayoutEnum));
+
+    // ── Legality format filter options ──
+    private static readonly Format[] _allFormats = (Format[])Enum.GetValues(typeof(Format));
+
+    /// <summary>Ownership toggle — press to select, press the active one again to release (back to "all").</summary>
+    private void SetOwnership(string value) => FilterViewModel.Ownership = FilterViewModel.Ownership == value ? "all" : value;
+
+    // ── Layout display names ──
+    private static string GetLayoutDisplayName(string layout) => layout switch
+    {
+        "normal" => "Normal",
+        "split" => "Split",
+        "flip" => "Flip",
+        "transform" => "Transform",
+        "modal_dfc" => "Modal DFC",
+        "meld" => "Meld",
+        "leveler" => "Leveler",
+        "class" => "Class",
+        "case" => "Case",
+        "saga" => "Saga",
+        "adventure" => "Adventure",
+        "prepare" => "Prepare",
+        "mutate" => "Mutate",
+        "prototype" => "Prototype",
+        "battle" => "Battle",
+        "planar" => "Planar",
+        "scheme" => "Scheme",
+        "vanguard" => "Vanguard",
+        "token" => "Token",
+        "double_faced_token" => "Double-Faced Token",
+        "emblem" => "Emblem",
+        "augment" => "Augment",
+        "host" => "Host",
+        "art_series" => "Art Series",
+        "reversible_card" => "Reversible Card",
+        _ => layout
+    };
+
+    // ── Close helpers ──
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await Close();
+    }
+}

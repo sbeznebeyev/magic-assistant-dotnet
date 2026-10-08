@@ -1,8 +1,5 @@
 @using MagicAssistant.App.Shared
 @using MagicAssistant.Data.Model
-@using MagicAssistant.Data.Model.Enums
-@using MagicAssistant.Data.Model.Legality
-@using MagicAssistant.Data.Extensions
 
 @if (!IsOpen) return;
 
@@ -101,13 +98,6 @@
                 </div>
 
                 <div class="filter-field-row">
-                    <label class="filter-label">Artist</label>
-                    <input value="@FilterViewModel.Artist"
-                           @oninput="@(e => FilterViewModel.Artist = e.Value?.ToString() ?? "")"
-                           class="filter-input" placeholder="Artist name..." />
-                </div>
-
-                <div class="filter-field-row">
                     <label class="filter-label">Color</label>
                     @* ── Base colors (icons only) ── *@
                     <div class="color-toggle-grid color-toggle-grid-6">
@@ -145,7 +135,7 @@
                             </select>
                             <input type="text" inputmode="decimal" class="prop-value"
                                    value="@FilterViewModel.PowerValue"
-                                   @oninput="@(e => FilterViewModel.PowerValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                                   @oninput="@(e => FilterViewModel.PowerValue = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString() ?? ""))"
                                    placeholder="0" />
                         </div>
                         <div class="prop-row">
@@ -158,7 +148,7 @@
                             </select>
                             <input type="text" inputmode="decimal" class="prop-value"
                                    value="@FilterViewModel.ToughnessValue"
-                                   @oninput="@(e => FilterViewModel.ToughnessValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                                   @oninput="@(e => FilterViewModel.ToughnessValue = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString() ?? ""))"
                                    placeholder="0" />
                         </div>
                         <div class="prop-row">
@@ -171,131 +161,28 @@
                             </select>
                             <input type="text" inputmode="decimal" class="prop-value"
                                    value="@FilterViewModel.CmcValue"
-                                   @oninput="@(e => FilterViewModel.CmcValue = SanitizeNumericInput(e.Value?.ToString() ?? ""))"
+                                   @oninput="@(e => FilterViewModel.CmcValue = FilterInputSanitizer.SanitizeNumeric(e.Value?.ToString() ?? ""))"
                                    placeholder="0" />
                         </div>
                     </div>
                 </div>
-
-                @* ── Layout ── *@
-                <div class="filter-field-row">
-                    <label class="filter-label">Layout</label>
-                    <select class="filter-select" value="@FilterViewModel.LayoutFilter"
-                            @onchange="@(e => FilterViewModel.LayoutFilter = e.Value?.ToString() ?? "")">
-                        <option value="">(All)</option>
-                        @foreach (var layoutValue in _allLayouts)
-                        {
-                            <option value="@layoutValue" selected="@(FilterViewModel.LayoutFilter == layoutValue)">
-                                @GetLayoutDisplayName(layoutValue)
-                            </option>
-                        }
-                    </select>
-                </div>
-
-                @* ── Legality ── *@
-                <div class="filter-field-row">
-                    <label class="filter-label">Legality</label>
-                    <select class="filter-select" value="@FilterViewModel.LegalityFilter"
-                            @onchange="@(e => FilterViewModel.LegalityFilter = e.Value?.ToString() ?? "")">
-                        <option value="">(All)</option>
-                        @foreach (var format in _allFormats)
-                        {
-                            var scryfallKey = format.ToScryfallKey();
-                            <option value="@scryfallKey" selected="@(FilterViewModel.LegalityFilter == scryfallKey)">
-                                @format.DisplayName()
-                            </option>
-                        }
-                    </select>
-                </div>
-
-                @* ── Other ── *@
-                <div class="filter-field-row">
-                    <label class="filter-label">Other</label>
-                    <button type="button" class="other-toggle @(FilterViewModel.GameChangerFilter ? "active" : "")" @onclick="() => FilterViewModel.GameChangerFilter = !FilterViewModel.GameChangerFilter">
-                        Game Changer
-                    </button>
-                </div>
-
-                @* ── Collection filters — only when a location (deck/collection/sideboard) is selected ── *@
-                @if (FilterViewModel.CurrentCollectionId.HasValue)
-                {
-                    <div class="filter-field-row collection-filters">
-                        <label class="filter-label">Collection</label>
-
-                        <div class="collection-group">
-                            <span class="collection-group-title">Ownership</span>
-                            <div class="ownership-options">
-                                @* Read-only for now — the Collection feature is disabled pending wiring *@
-                                <label class="owner-option">
-                                    <input type="radio" name="ownership-filter" value="all" checked="@(FilterViewModel.Ownership == "all")" @onchange="OnOwnershipChanged" disabled />
-                                    <span>All</span>
-                                </label>
-                                <label class="owner-option">
-                                    <input type="radio" name="ownership-filter" value="owned" checked="@(FilterViewModel.Ownership == "owned")" @onchange="OnOwnershipChanged" disabled />
-                                    <span>Owned</span>
-                                </label>
-                                <label class="owner-option">
-                                    <input type="radio" name="ownership-filter" value="borrowed" checked="@(FilterViewModel.Ownership == "borrowed")" @onchange="OnOwnershipChanged" disabled />
-                                    <span>Borrowed</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="collection-group">
-                            <span class="collection-group-title">Card Count</span>
-                            <div class="range-row">
-                                <input type="number" min="1" max="4" value="@FilterViewModel.MinCount"
-                                       @oninput="(e) => FilterViewModel.MinCount = SanitizeNumericInput(e.Value?.ToString())"
-                                       class="range-input" placeholder="Min" disabled />
-                                <span class="range-sep">—</span>
-                                <input type="number" min="1" max="4" value="@FilterViewModel.MaxCount"
-                                       @oninput="(e) => FilterViewModel.MaxCount = SanitizeNumericInput(e.Value?.ToString())"
-                                       class="range-input" placeholder="Max" disabled />
-                            </div>
-                        </div>
-
-                        <div class="collection-group">
-                            <span class="collection-group-title">Price Range ($)</span>
-                            <div class="range-row">
-                                <input type="number" min="0" step="0.01" value="@FilterViewModel.MinPrice"
-                                       @oninput="(e) => FilterViewModel.MinPrice = SanitizeNumericInput(e.Value?.ToString())"
-                                       class="range-input" placeholder="Min" disabled />
-                                <span class="range-sep">—</span>
-                                <input type="number" min="0" step="0.01" value="@FilterViewModel.MaxPrice"
-                                       @oninput="(e) => FilterViewModel.MaxPrice = SanitizeNumericInput(e.Value?.ToString())"
-                                       class="range-input" placeholder="Max" disabled />
-                            </div>
-                        </div>
-
-                        <div class="collection-group">
-                            <span class="collection-group-title">Special Tags</span>
-                            <div class="tag-options">
-                                <label class="tag-option">
-                                    <input type="checkbox" checked="@FilterViewModel.IsFoil" @onchange="@(() => FilterViewModel.IsFoil = !FilterViewModel.IsFoil)" disabled />
-                                    <span>Foil</span>
-                                </label>
-                                <label class="tag-option">
-                                    <input type="checkbox" checked="@FilterViewModel.HasForTrade" @onchange="@(() => FilterViewModel.HasForTrade = !FilterViewModel.HasForTrade)" disabled />
-                                    <span>For Trade</span>
-                                </label>
-                                <label class="tag-option">
-                                    <input type="checkbox" checked="@FilterViewModel.HasComment" @onchange="@(() => FilterViewModel.HasComment = !FilterViewModel.HasComment)" disabled />
-                                    <span>Has Comment</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                }
         </div>
 
-        @* ── Footer ── *@
+        @* ── Footer: Advanced opens the auxiliary dialog (left); commit actions stay right ── *@
         <div class="filter-footer">
-            <button class="btn-apply" @onclick="OnApply">Apply</button>
-            <button class="btn-clear" @onclick="OnClearAndApply">Clear All</button>
-            <button class="btn-cancel" @onclick="Close">Cancel</button>
+            <button type="button" class="btn-advanced" @onclick="() => _showAdvanced = true">Advanced</button>
+            <div class="filter-footer-actions">
+                <button class="btn-apply" @onclick="OnApply">Apply</button>
+                <button class="btn-clear" @onclick="OnClearAndApply">Clear All</button>
+                <button class="btn-cancel" @onclick="Close">Cancel</button>
+            </div>
         </div>
     </div>
 </div>
+
+<CardFilterAdvancedDialog FilterViewModel="@FilterViewModel"
+                          IsOpen="@_showAdvanced"
+                          IsOpenChanged="@(v => _showAdvanced = v)" />
 
 @code {
     /// <summary>Shared filter/sort view model — mutations here propagate to CardsListControl.</summary>
@@ -330,11 +217,8 @@
     [Inject] private IDbCardStore DbStore { get; set; } = default!;
     [Inject] private IDeckCardService DeckCardService { get; set; } = default!;
 
-    // ── Layout filter options ──
-    private static readonly string[] _allLayouts = Enum.GetNames(typeof(LayoutEnum));
-
-    // ── Legality format filter options ──
-    private static readonly Format[] _allFormats = (Format[])Enum.GetValues(typeof(Format));
+    // ── Auxiliary Advanced dialog (Artist/Layout/Legality/Other/Collection) ──
+    private bool _showAdvanced;
 
     // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
     [Parameter] public bool IsOpen { get; set; }
@@ -489,37 +373,6 @@
         _ => "#888888"
     };
 
-    // ── Layout display names ──
-    private static string GetLayoutDisplayName(string layout) => layout switch
-    {
-        "normal" => "Normal",
-        "split" => "Split",
-        "flip" => "Flip",
-        "transform" => "Transform",
-        "modal_dfc" => "Modal DFC",
-        "meld" => "Meld",
-        "leveler" => "Leveler",
-        "class" => "Class",
-        "case" => "Case",
-        "saga" => "Saga",
-        "adventure" => "Adventure",
-        "prepare" => "Prepare",
-        "mutate" => "Mutate",
-        "prototype" => "Prototype",
-        "battle" => "Battle",
-        "planar" => "Planar",
-        "scheme" => "Scheme",
-        "vanguard" => "Vanguard",
-        "token" => "Token",
-        "double_faced_token" => "Double-Faced Token",
-        "emblem" => "Emblem",
-        "augment" => "Augment",
-        "host" => "Host",
-        "art_series" => "Art Series",
-        "reversible_card" => "Reversible Card",
-        _ => layout
-    };
-
     // ── Type MultiSelectList handlers ──
     private void OnTypeRemoved(MultiSelectItemBase item)
     {
@@ -551,36 +404,6 @@
     private void ToggleColorFlag(ColorBitFlags flag)
     {
         FilterViewModel.ColorFilters[flag] = !FilterViewModel.ColorFilters[flag];
-    }
-
-    /// <summary>Ownership radio change — the value comes from the input's value attribute (all/owned/borrowed).</summary>
-    private void OnOwnershipChanged(ChangeEventArgs e) => FilterViewModel.Ownership = e.Value?.ToString() ?? "all";
-
-    // ── Numeric input sanitization (Power / Toughness / CMC / Collection ranges) ──
-    /// <summary>Strip all non-numeric characters except a single dot. Replaces comma with dot.</summary>
-    private static string SanitizeNumericInput(string? input)
-    {
-        if (string.IsNullOrEmpty(input)) return string.Empty;
-
-        // Replace comma with dot (European input)
-        input = input.Replace(',', '.');
-
-        var result = new System.Text.StringBuilder();
-        bool hasDot = false;
-
-        foreach (char c in input)
-        {
-            if (char.IsDigit(c))
-                result.Append(c);
-            else if (c == '.' && !hasDot)
-            {
-                result.Append(c);
-                hasDot = true;
-            }
-            // All other characters are silently dropped
-        }
-
-        return result.ToString();
     }
 
     // ── Close helpers ──

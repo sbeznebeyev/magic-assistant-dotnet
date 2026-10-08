@@ -82,34 +82,42 @@
     letter-spacing: 0.5px;
 }
 
-.filter-input,
-.filter-select {
-    background: #1e1e1e;
-    color: #ccc;
-    border: 1px solid #444;
-    padding: 6px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    outline: none;
-}
-
-.filter-input:focus,
-.filter-select:focus {
-    border-color: #0078d4;
-    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
-}
-
-.filter-input-sm {
-    width: 60px;
-}
-
-/* ── Footer ────────────────────────────────────────── */
+/* ── Footer: Advanced (left) + commit actions (right) ───────────── */
 .filter-footer {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
     padding: 12px 16px;
     border-top: 1px solid #383838;
+}
+
+.filter-footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Gold Advanced button — gradient built on the site-wide gold variables */
+.btn-advanced {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    color: #2b2005;
+    background: linear-gradient(110deg,
+        var(--gold-deep) 0%,
+        var(--gold) 25%,
+        var(--gold-light) 33%,
+        var(--gold) 41%,
+        var(--gold-mid) 62%,
+        var(--gold-deep) 100%);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.btn-advanced:hover {
+    filter: brightness(1.12);
 }
 
 .btn-apply,
@@ -326,125 +334,6 @@
 .prop-value:focus {
     border-color: #0078d4;
     box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
-}
-
-/* ── Other toggle button ───────────────────────── */
-.other-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 8px;
-    background: #1e1e1e;
-    border: 1px solid #444;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #888;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.other-toggle:hover {
-    background: #2d2d2d;
-    border-color: #555;
-    color: #ccc;
-}
-
-.other-toggle.active {
-    background: #1a3a5c;
-    border-color: #0078d4;
-    color: #fff;
-    box-shadow: 0 0 6px rgba(0, 120, 212, 0.3);
-}
-
-.other-toggle.active:hover {
-    background: #1f4568;
-}
-
-.other-checkbox input[type="checkbox"] {
-    accent-color: #0078d4;
-}
-
-/* ── Collection filters (location mode only) ─────────── */
-.collection-filters {
-    border-top: 1px solid #383838;
-    padding-top: 10px;
-    gap: 8px;
-}
-
-.collection-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.collection-group-title {
-    width: 110px;
-    flex-shrink: 0;
-    font-size: 12px;
-    color: #999;
-}
-
-.ownership-options,
-.tag-options {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.owner-option,
-.tag-option {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: #ccc;
-    cursor: pointer;
-    user-select: none;
-}
-
-.owner-option input[type="radio"],
-.tag-option input[type="checkbox"] {
-    accent-color: #0078d4;
-    margin: 0;
-}
-
-.range-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.range-input {
-    width: 64px;
-    background: #1e1e1e;
-    color: #ccc;
-    border: 1px solid #444;
-    padding: 5px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    outline: none;
-}
-
-.range-input:focus {
-    border-color: #0078d4;
-    box-shadow: 0 0 0 1px rgba(0, 120, 212, 0.3);
-}
-
-.range-sep {
-    color: #666;
-}
-
-/* Collection section is read-only while the feature is disabled */
-.collection-filters input[type="radio"]:disabled,
-.collection-filters input[type="checkbox"]:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-}
-
-.collection-filters input[type="number"]:disabled {
-    color: #666;
-    background: #191919;
-    cursor: not-allowed;
 }
 
 /* ── Sets picker (inside the MultiSelectList add dialog) ─────────── */
