@@ -130,12 +130,9 @@ public static class JsonExport
         if (!string.IsNullOrEmpty(physical.Custom))
             writer.WriteString("custom", physical.Custom);
 
-        if (!string.IsNullOrEmpty(physical.SpecialTags))
-            writer.WriteString("special", physical.SpecialTags);
-
-        // ForTradeCount — same rule as the legacy XML format: only when > 0 and the fortrade tag is absent
+        // ForTradeCount — legacy XML/JSON rule: only when > 0
         var forTrade = physical.GetForTradeCount();
-        if (forTrade > 0 && !physical.HasSpecialTag("fortrade"))
+        if (forTrade > 0)
             writer.WriteNumber("forTrade", forTrade);
 
         writer.WriteEndObject();

@@ -44,7 +44,6 @@ public enum MagicCardField
     IsOwn,
     Location,
     Comment,
-    Special,
     DateAdded,
     Custom,
     MyPrice,

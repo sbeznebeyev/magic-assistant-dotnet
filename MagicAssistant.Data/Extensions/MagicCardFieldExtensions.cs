@@ -60,7 +60,6 @@ public static class MagicCardFieldExtensions
             MagicCardField.IsOwn => GetIsOwn(card),
             MagicCardField.Location => card.Collection,
             MagicCardField.Comment => GetComment(card),
-            MagicCardField.Special => GetSpecial(card),
             MagicCardField.DateAdded => GetDateAdded(card),
             MagicCardField.Custom => GetCustom(card),
             MagicCardField.ForTradeCount => GetForTradeCount(card),
@@ -151,7 +150,6 @@ public static class MagicCardFieldExtensions
             case MagicCardField.IsOwn:
             case MagicCardField.Location:
             case MagicCardField.Comment:
-            case MagicCardField.Special:
             case MagicCardField.DateAdded:
             case MagicCardField.Custom:
             case MagicCardField.ForTradeCount:
@@ -194,9 +192,6 @@ public static class MagicCardFieldExtensions
                 break;
             case MagicCardField.Comment:
                 physical.Comment = value?.ToString();
-                break;
-            case MagicCardField.Special:
-                physical.SpecialTags = value?.ToString();
                 break;
             case MagicCardField.DateAdded:
                 if (value is DateTimeOffset dto)
@@ -305,7 +300,6 @@ public static class MagicCardFieldExtensions
     private static int GetPhysicalCount(IMagicCard card) => card.IsPhysical ? card.Count : 1;
     private static bool GetIsOwn(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.IsOwn : false;
     private static string? GetComment(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Comment : null;
-    private static string? GetSpecial(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.SpecialTags : null;
     private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.DateAdded : null;
     private static string? GetCustom(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Custom : null;
     private static int GetForTradeCount(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.GetForTradeCount() : 0;

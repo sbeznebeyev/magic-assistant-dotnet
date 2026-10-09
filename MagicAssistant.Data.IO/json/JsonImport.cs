@@ -9,7 +9,8 @@ namespace MagicAssistant.Data.IO.json;
 ///
 /// The reference core (id / name / set / count) is required on every card —
 /// a missing or invalid core field is a format error. Optional fields fall back
-/// to defaults when absent (own=true, price=0, empty comment/custom/special, forTrade=0).
+/// to defaults when absent (own=true, price=0, empty comment/custom, forTrade=0;
+/// a legacy "fortrade" tag in "special" maps to forTrade).
 /// Unknown properties are ignored (forward compatibility with future versions).
 ///
 /// The top-level "sideboard" array is optional and uses the exact same card schema
@@ -117,7 +118,11 @@ public static class JsonImport
 
         physical.Comment = GetString(element, "comment");
         physical.Custom = GetString(element, "custom");
-        physical.SpecialTags = GetString(element, "special");
+        // Legacy bridge: a "fortrade" tag in "special" marks the whole pile as for trade
+        var specialTags = GetString(element, "special");
+        if (!string.IsNullOrEmpty(specialTags) &&
+            specialTags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("fortrade"))
+            physical.SetForTradeCount(physical.Count);
 
         if (element.TryGetProperty("forTrade", out var forTrade) && forTrade.ValueKind == JsonValueKind.Number)
         {

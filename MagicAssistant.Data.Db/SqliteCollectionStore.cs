@@ -41,7 +41,9 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// Shared column list for all Deck LEFT JOIN Cards queries.
     /// Keep in sync with FullDeckCardRow — Dapper maps by exact column name.
     /// </summary>
-    private const string DeckCardColumns = @"d.CollectionId, n.NodeType, d.CardId, d.Count, d.IsOwn, d.Comment,
+    private const string DeckCardColumns = @"d.CollectionId, n.NodeType, n.Name AS CollectionName,
+                   n.ParentId AS CollectionParentId, n.Locked AS CollectionLocked,
+                   d.CardId, d.Count, d.IsOwn, d.Comment,
                    d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
@@ -990,8 +992,15 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             AttachOwnCountStats(baseCard, stats);
         }
 
-        // Stamp the owning collection node with its real type — sideboard rows carry NodeType.Sideboard
-        var collection = new Collection(row.CollectionId, string.Empty, null, (NodeType)row.NodeType, 0);
+        // Stamp the owning collection node fully from the JOINed row (all-null when the node is gone).
+        // CardCount is a computed POCO field, not a table column — left at 0 here.
+        var collection = new Collection(
+            row.CollectionId,
+            row.CollectionName ?? string.Empty,
+            row.CollectionParentId,
+            (NodeType)row.NodeType,
+            0,
+            row.CollectionLocked);
         var physical = new MagicCardPhysical(baseCard, collection, row.IsOwn)
         {
             Count = row.Count,
@@ -1055,6 +1064,9 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         // Deck columns
         public int CollectionId { get; set; }
         public int NodeType { get; set; }  // from LEFT JOIN Collection n (0 if the node row is gone)
+        public string? CollectionName { get; set; }
+        public int? CollectionParentId { get; set; }
+        public bool CollectionLocked { get; set; }
         public int Count { get; set; }
         public bool IsOwn { get; set; }
         public string? Comment { get; set; }

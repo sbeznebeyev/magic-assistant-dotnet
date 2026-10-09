@@ -9,7 +9,6 @@ namespace MagicAssistant.Data.Model;
 public class MagicCardPhysical : IMagicCardPhysical
 {
     private string? _comment;
-    private string? _specialTags;
     private string? _custom;
     private int? _forTradeCount;
     private object? _error;
@@ -50,12 +49,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     {
         get => _comment;
         set => _comment = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
-
-    public string? SpecialTags
-    {
-        get => _specialTags;
-        set => _specialTags = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     public string? Custom
@@ -140,20 +133,7 @@ public class MagicCardPhysical : IMagicCardPhysical
     // === IMagicCardPhysical implementation ===
     public void SetCollection(Collection? collection) => Collection = collection;
 
-    public bool HasSpecialTag(string tag)
-    {
-        var tags = SpecialTags;
-        return !string.IsNullOrEmpty(tags) &&
-               tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(tag);
-    }
-
-    public int GetForTradeCount()
-    {
-        if (_forTradeCount.HasValue) return _forTradeCount.Value;
-        // Fall back to checking forTrade tag
-        if (HasSpecialTag("fortrade")) return Count;
-        return 0;
-    }
+    public int GetForTradeCount() => _forTradeCount ?? 0;
 
     public void SetForTradeCount(int count)
     {
@@ -161,47 +141,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     }
 
 
-
-    // === Special tag helpers (mirrors Java MagicCardPhysical) ===
-    public bool IsSpecialTag(string key)
-    {
-        var value = GetSpecialTagValue(key);
-        return bool.TryParse(value, out var result) && result;
-    }
-
-    public string? GetSpecialTagValue(string key)
-    {
-        var tags = SpecialTags;
-        if (string.IsNullOrEmpty(tags)) return null;
-
-        foreach (var pair in tags.Split(','))
-        {
-            var parts = pair.Trim().Split('=');
-            if (parts[0] == key)
-                return parts.Length > 1 ? parts[1] : "true";
-        }
-        return null;
-    }
-
-    public void SetSpecialTag(string tag)
-    {
-        var tags = _specialTags ?? string.Empty;
-        if (!HasSpecialTag(tag))
-            _specialTags = string.IsNullOrEmpty(tags) ? tag : tags + "," + tag;
-    }
-
-    public void RemoveSpecialTag(string tag)
-    {
-        var tags = _specialTags;
-        if (string.IsNullOrEmpty(tags)) return;
-
-        var remaining = tags.Split(',')
-            .Select(t => t.Trim())
-            .Where(t => !t.StartsWith(tag, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        _specialTags = remaining.Any() ? string.Join(",", remaining) : null;
-    }
 
     // === Matching (mirrors Java MagicCardPhysical.matching()) ===
     /// <summary>
@@ -215,7 +154,6 @@ public class MagicCardPhysical : IMagicCardPhysical
         if (MyPrice != other.MyPrice) return false;
         if (!EqualsNull(Custom, other.Custom)) return false;
         if (!EqualsNull(Comment, other.Comment)) return false;
-        if (!EqualsNull(SpecialTags, other.SpecialTags)) return false;
         return true;
     }
 
@@ -239,47 +177,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     }
 
     public int Count4 => Math.Min(OwnCount, 4);
-
-    // === Trade split (mirrors Java MagicCardPhysical.tradeSplit()) ===
-    /// <summary>
-    /// Splits this card into a "for trade" and "not for trade" instance.
-    /// Returns the trade copy, or null if no split is needed.
-    /// </summary>
-    public MagicCardPhysical? TradeSplit(int count, int fcount)
-    {
-        _forTradeCount = null;
-        RemoveSpecialTag("fortrade");
-
-        count = Math.Max(0, count);
-        fcount = Math.Max(0, fcount);
-
-        // Trade count is 0 or less — card is not for trade
-        if (fcount == 0)
-        {
-            Count = count;
-            return null;
-        }
-
-        // Trade count > total count — invalid input, don't mutate state
-        if (fcount > count)
-        {
-            return null;
-        }
-
-        // Trade count == total count — entire pile is for trade
-        if (fcount == count)
-        {
-            SetSpecialTag("fortrade");
-            return null;
-        }
-
-        // Split: some cards for trade, some not
-        Count = count - fcount;
-        var tradeCopy = (MagicCardPhysical)Clone();
-        tradeCopy.Count = fcount;
-        tradeCopy.SetSpecialTag("fortrade");
-        return tradeCopy;
-    }
 
     // === Error field (for import errors) ===
     public object? GetError() => _error;

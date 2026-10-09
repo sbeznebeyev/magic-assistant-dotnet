@@ -146,7 +146,11 @@ public static class XmlImport
         physical.Custom = OptStr(fields, "custom");
         if (bool.TryParse(fields.GetValueOrDefault("ownership"), out var isOwn))
             physical.IsOwn = isOwn;
-        physical.SpecialTags = OptStr(fields, "special");
+        // Legacy bridge: a "fortrade" tag in "special" marks the whole pile as for trade
+        var specialTags = OptStr(fields, "special");
+        if (!string.IsNullOrEmpty(specialTags) &&
+            specialTags.Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries).Contains("fortrade"))
+            physical.SetForTradeCount(physical.Count);
         if (DateTimeOffset.TryParse(fields.GetValueOrDefault("date"), System.Globalization.CultureInfo.InvariantCulture, out var date))
             physical.DateAdded = date;
         var ftVal = fields.GetValueOrDefault("forTrade") ?? fields.GetValueOrDefault("fortradecount");

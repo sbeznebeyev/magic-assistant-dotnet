@@ -75,7 +75,6 @@ public class JsonImportTests
         Assert.That(physical.MyPrice, Is.EqualTo(5.0f).Within(0.001f));
         Assert.That(physical.Comment, Is.EqualTo("My card comment"));
         Assert.That(physical.Custom, Is.EqualTo("custom-data"));
-        Assert.That(physical.SpecialTags, Is.EqualTo("foil"));
         Assert.That(physical.GetForTradeCount(), Is.EqualTo(1));
     }
 
@@ -91,7 +90,31 @@ public class JsonImportTests
         Assert.That(physical.MyPrice, Is.EqualTo(0f), "price defaults to 0");
         Assert.That(physical.Comment, Is.Null);
         Assert.That(physical.Custom, Is.Null);
-        Assert.That(physical.SpecialTags, Is.Null);
+    }
+
+    [Test]
+    public void ImportFromJson_LegacyFortradeTag_MapsToForTradeCount()
+    {
+        var cardId = Guid.NewGuid();
+        var json = $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""name"": ""Test Deck"",
+  ""cards"": [
+    {{
+      ""id"": ""{cardId}"",
+      ""name"": ""Card"",
+      ""set"": ""m19"",
+      ""count"": 3,
+      ""special"": ""foil,fortrade""
+    }}
+  ]
+}}";
+
+        var physical = (MagicCardPhysical)JsonImport.ImportFromJson(json).Cards[0];
+
+        Assert.That(physical.Count, Is.EqualTo(3));
+        Assert.That(physical.GetForTradeCount(), Is.EqualTo(3),
+            "legacy 'fortrade' tag must mark the whole pile as for trade");
     }
 
     [Test]

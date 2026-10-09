@@ -52,10 +52,6 @@
                         {
                             <span class="prop-price" title="Price">@instance.MyPrice.ToString("F2")</span>
                         }
-                        @if (!string.IsNullOrEmpty(instance.SpecialTags))
-                        {
-                            <span class="prop-special" title="@instance.SpecialTags">★</span>
-                        }
                         @if (!string.IsNullOrEmpty(instance.Comment))
                         {
                             <span class="prop-comment" title="@instance.Comment">📝</span>

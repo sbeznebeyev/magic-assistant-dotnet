@@ -64,6 +64,12 @@ public interface IDeckCardService
     Task<MagicCardPhysical?> SplitCardAsync(int deckId, Guid cardId, int rightCount, CancellationToken ct = default);
 
     /// <summary>
+    /// Move copies from a deck's sideboard back into the deck (inverse of SplitCardAsync).
+    /// Returns the deck part, or null if nothing to move.
+    /// </summary>
+    Task<MagicCardPhysical?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default);
+
+    /// <summary>
     /// Split cards from a collection into two parts.
     /// </summary>
     Task<ICollection<MagicCardPhysical>> SplitCardsAsync(ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default);

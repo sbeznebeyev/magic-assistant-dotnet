@@ -143,6 +143,37 @@ public class ServiceTests
             "Service must filter by CardId; other card in same deck must remain untouched");
     }
 
+    [Test]
+    public async Task DeckCard_SplitCardBack_ReturnsDeckPart()
+    {
+        var cardId = Guid.NewGuid();
+        var coll = new Mock<ICollectionStore>();
+        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+
+        // Sideboard node 99 (child of deck 1) holds 4 copies.
+        var sbNode = new Collection(99, "sideboard", 1, NodeType.Sideboard, 0);
+        var sbPhysical = new MagicCardPhysical(new MagicCard { Id = cardId, Name = "Test" }, sbNode, true) { Count = 4 };
+
+        coll.Setup(s => s.GetByParentIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(sbNode);
+        coll.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MagicCardPhysical[] { sbPhysical });
+        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        cardStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object,
+            new RemoveCardsFromDeckCommandHandler(coll.Object));
+        var result = await service.SplitCardBackAsync(1, cardId, 2);
+        Assert.That(result, Is.Not.Null, "Moving 2 of 4 back must return the deck part");
+        Assert.That(result!.Count, Is.EqualTo(2), "Deck part must have count=2");
+        Assert.That(result.Card.Id, Is.EqualTo(cardId), "Deck part must reference the correct card");
+        Assert.That(result.Collection?.Id, Is.EqualTo(1), "Deck part must be stamped with the deck node");
+        Assert.That(sbPhysical.Count, Is.EqualTo(2),
+            "Sideboard row must be reduced to leftCount (4-2=2)");
+    }
+
     /* ═══════════════════════════════════════════════════════
      * CardResolveService — разрешение карт и групп
      * ═══════════════════════════════════════════════════════ */

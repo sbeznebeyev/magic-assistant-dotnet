@@ -1,6 +1,7 @@
 @using MagicAssistant.Core.Services.DeckCard
 @using MagicAssistant.Data.Model
 @inject IDeckCardService DeckCardService
+@inject ICollectionStore CollectionStore
 
 @if (!IsOpen) return;
 
@@ -21,7 +22,7 @@
             @* ── Card preview ── *@
             <div class="split-dialog-preview">
                 <span class="split-dialog-preview-name">@ActiveName</span>
-                <span class="split-dialog-preview-count">× @_totalCount in deck</span>
+                <span class="split-dialog-preview-count">× @_totalCount</span>
             </div>
 
             @* ── Split slider: drag the handle to move cards one at a time between deck and sideboard ── *@
@@ -65,14 +66,18 @@
 
 @code {
     private MagicCardPhysical? _card;
+    private MagicCardPhysical? _sideboardCard;
+    private Collection? _sideboardNode;
+    private int _deckId;
     private int _totalCount = 0;
     private int _mainCount = 0;
-    private bool _isDoubleSided;
     private int _initialMainCount;
+    private int _initialSideCount;
+    private bool _isDoubleSided;
     private bool _saving;
     private string? _error;
 
-    /// <summary>True when the slider value differs from its initial position at open (all copies in the deck).
+    /// <summary>True when the slider value differs from the distribution at open time.
     /// The Move button is enabled only in that state.</summary>
     private bool _moved => _mainCount != _initialMainCount;
 
@@ -84,22 +89,59 @@
     [Parameter] public int? DeckId { get; set; }
     [Parameter] public EventCallback OnSplitDone { get; set; }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (IsOpen && Card != _card)
-            LoadCard(Card);
+            await LoadCardAsync(Card);
     }
 
-    private void LoadCard(MagicCardPhysical? card)
+    private async Task LoadCardAsync(MagicCardPhysical? card)
     {
         _card = card;
+        _error = null;
         if (card == null) return;
 
-        _totalCount = card.Count;
-        _mainCount = _totalCount;
-        _initialMainCount = _totalCount;
         _isDoubleSided = card.Card.Has2Faces;
-        _error = null;
+
+        if (!DeckId.HasValue)
+        {
+            _totalCount = card.Count;
+            _mainCount = _initialMainCount = card.Count;
+            return;
+        }
+
+        // Resolve the deck root: in a sideboard view DeckId is the sideboard node itself,
+        // whose ParentId is the owning deck. Collections have no sideboard concept — block the move.
+        try
+        {
+            var node = await CollectionStore.GetByIdAsync(DeckId.Value);
+            if (node?.NodeType == NodeType.Sideboard)
+                _deckId = node.ParentId!.Value;   // opened from a sideboard view → resolve the owning deck
+            else if (node?.NodeType == NodeType.Deck)
+                _deckId = DeckId.Value;           // opened from a deck view
+            else
+            {
+                _error = "Split is only available for decks.";
+                _totalCount = card.Count;
+                _mainCount = _initialMainCount = card.Count;
+                return;
+            }
+
+            // Load both rows of the deck+sideboard pair so the slider opens at the real distribution.
+            _sideboardNode = await CollectionStore.GetByParentIdAsync(_deckId);
+            var rows = await CollectionStore.GetCardsAsync(card.Id);
+            var deckRow = rows.FirstOrDefault(r => r.Collection?.Id == _deckId);
+            _sideboardCard = _sideboardNode is { } sb ? rows.FirstOrDefault(r => r.Collection?.Id == sb.Id) : null;
+
+            _totalCount = (deckRow?.Count ?? 0) + (_sideboardCard?.Count ?? 0);
+            _mainCount = deckRow?.Count ?? 0;
+            _initialMainCount = _mainCount;
+            _initialSideCount = _sideboardCard?.Count ?? 0;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
     }
 
     private CardFace? ActiveFace => _isDoubleSided && _card?.Card.CardFaces is { Length: >= 2 }
@@ -132,17 +174,34 @@
     private async Task OnMove()
     {
         if (_card == null || !DeckId.HasValue) return;
-        if (!_moved) return;
+        if (!_moved || _saving) return;
+        if (!string.IsNullOrEmpty(_error)) return;
 
         _saving = true;
         _error = null;
 
         try
         {
-            var rightPart = await DeckCardService.SplitCardAsync(DeckId.Value, _card.Id, _sideCount);
+            // Delta from the distribution at open time: positive pushes copies deck→sideboard,
+            // negative pulls them back. Full moves use MoveCardsAsync (whole-row move + merge).
+            var delta = _sideCount - _initialSideCount;
 
-            // Note: sideboard is now a separate child node with NodeType=Sideboard,
-            // SplitCardAsync handles this internally via the service layer.
+            if (delta > 0)
+            {
+                if (delta == _initialMainCount && _sideboardNode is not null)
+                    await DeckCardService.MoveCardsAsync(_deckId, new[] { _card.Id }, _sideboardNode.Id);
+                else
+                    await DeckCardService.SplitCardAsync(_deckId, _card.Id, delta);
+            }
+            else
+            {
+                // back > 0 implies the sideboard row existed at open time → node is loaded
+                var back = -delta;
+                if (back == _initialSideCount && _sideboardNode is not null)
+                    await DeckCardService.MoveCardsAsync(_sideboardNode.Id, new[] { _card.Id }, _deckId);
+                else
+                    await DeckCardService.SplitCardBackAsync(_deckId, _card.Id, back);
+            }
 
             await OnSplitDone.InvokeAsync();
         }

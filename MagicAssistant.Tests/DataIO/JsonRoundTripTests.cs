@@ -23,7 +23,6 @@ public class JsonRoundTripTests
             Count = 4,
             MyPrice = 2.5f,
             Comment = "Test comment",
-            SpecialTags = "foil,premium",
             Custom = "custom-data",
         };
 
@@ -43,7 +42,6 @@ public class JsonRoundTripTests
         Assert.That(imported.Count, Is.EqualTo(4));
         Assert.That(imported.MyPrice, Is.EqualTo(2.5f).Within(0.01f));
         Assert.That(imported.Comment, Is.EqualTo("Test comment"));
-        Assert.That(imported.SpecialTags, Is.EqualTo("foil,premium"));
         Assert.That(imported.Custom, Is.EqualTo("custom-data"));
         Assert.That(imported.IsOwn, Is.True);
     }
@@ -196,7 +194,6 @@ public class JsonRoundTripTests
             Count = 2,
             MyPrice = 0.5f,
             Comment = "SB comment",
-            SpecialTags = "foil",
             Custom = "sb-custom",
         };
 
@@ -221,7 +218,6 @@ public class JsonRoundTripTests
         Assert.That(importedSb.IsOwn, Is.False);
         Assert.That(importedSb.MyPrice, Is.EqualTo(0.5f).Within(0.01f));
         Assert.That(importedSb.Comment, Is.EqualTo("SB comment"));
-        Assert.That(importedSb.SpecialTags, Is.EqualTo("foil"));
         Assert.That(importedSb.Custom, Is.EqualTo("sb-custom"));
 
         // The main deck is untouched by the sideboard round-trip.

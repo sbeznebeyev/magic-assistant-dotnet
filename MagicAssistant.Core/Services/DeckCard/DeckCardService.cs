@@ -171,16 +171,10 @@ public class DeckCardService : IDeckCardService
                 case MagicCardField.Comment when value is string comment:
                     matching.Comment = comment;
                     fieldsToUpdate.Add(field); break;
-                case MagicCardField.Special when value is string special:
-                    matching.SpecialTags = special;
-                    fieldsToUpdate.Add(field); break;
                 case MagicCardField.Custom when value is string custom:
                     matching.Custom = custom;
                     fieldsToUpdate.Add(field); break;
                 case MagicCardField.ForTradeCount when value is int forTrade:
-                    // 0 clears the count and any legacy "fortrade" tag fallback
-                    if (forTrade == 0)
-                        matching.RemoveSpecialTag("fortrade");
                     matching.SetForTradeCount(forTrade);
                     fieldsToUpdate.Add(field); break;
                 // Nullable value types are illegal in patterns (CS8116) — split into two cases.
@@ -230,7 +224,6 @@ public class DeckCardService : IDeckCardService
             Count = rightCount,
             MyPrice = matching.MyPrice,
             Comment = matching.Comment,
-            SpecialTags = matching.SpecialTags,
             Custom = matching.Custom,
         };
 
@@ -242,6 +235,46 @@ public class DeckCardService : IDeckCardService
         await _cardStore.AddAsync(rightPart, ct);
 
         return rightPart;
+    }
+
+    /// <inheritdoc />
+    public async Task<MagicCardPhysical?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default)
+    {
+        if (count <= 0)
+            return null;
+
+        var sideboard = await _collectionStore.GetByParentIdAsync(deckId);
+        if (sideboard is null)
+            throw new InvalidOperationException("sideboard is not exists");
+
+        var existing = await _collectionStore.GetCardsAsync(cardId, ct);
+        var matching = existing.FirstOrDefault(e => e.Collection?.Id == sideboard.Id && e.Card.Id == cardId);
+        if (matching == null)
+            return null;
+
+        var total = matching.Count;
+        if (count >= total)
+            return null; // nothing to move back
+
+        var leftCount = total - count;
+
+        // Create the deck part FIRST (before modifying the sideboard count)
+        var deckPart = new MagicCardPhysical(matching.Card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), matching.IsOwn)
+        {
+            Count = count,
+            MyPrice = matching.MyPrice,
+            Comment = matching.Comment,
+            Custom = matching.Custom,
+        };
+
+        // Update the sideboard row to the left count
+        matching.Count = leftCount;
+        await _cardStore.UpdateAsync(matching, new[] { MagicCardField.Count }, ct);
+
+        // Add the deck part (merges into the existing deck row if any)
+        await _cardStore.AddAsync(deckPart, ct);
+
+        return deckPart;
     }
 
     /// <inheritdoc />

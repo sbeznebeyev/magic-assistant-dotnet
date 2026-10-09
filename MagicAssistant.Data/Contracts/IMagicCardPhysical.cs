@@ -10,6 +10,5 @@ public interface IMagicCardPhysical : ICardModifiable
 {
     MagicCard Card { get; }
     void SetCollection(Collection? collection);
-    bool HasSpecialTag(string tag);
     int GetForTradeCount();
 }

@@ -58,10 +58,6 @@ public class UpdateCardCommandHandler
                     matching.Comment = comment;
                     fieldsToUpdate.Add(field);
                     break;
-                case MagicCardField.Special when value is string special:
-                    matching.SpecialTags = special;
-                    fieldsToUpdate.Add(field);
-                    break;
                 case MagicCardField.Custom when value is string custom:
                     matching.Custom = custom;
                     fieldsToUpdate.Add(field);

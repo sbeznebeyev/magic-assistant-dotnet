@@ -79,41 +79,12 @@ public class MagicCardPhysicalTests
         Assert.That(new MagicCardPhysical(Card(), new Collection(1, "deck-1", null, NodeType.Deck, 0), true).IsSideboard, Is.False);
     }
 
-    /* ─── Special tags ────────────────────────────────────── */
-
-    [Test]
-    public void SpecialTags_AddRemoveAndCheck()
-    {
-        var physical = new MagicCardPhysical(Card());
-        physical.SetSpecialTag("foil");
-        Assert.That(physical.HasSpecialTag("foil"), Is.True);
-        Assert.That(physical.HasSpecialTag("premium"), Is.False);
-
-        physical.SetSpecialTag("foil"); // duplicate — should not add again
-        Assert.That(physical.SpecialTags, Is.EqualTo("foil"));
-
-        physical.SetSpecialTag("premium");
-        Assert.That(physical.HasSpecialTag("premium"), Is.True);
-
-        physical.RemoveSpecialTag("foil");
-        Assert.That(physical.HasSpecialTag("foil"), Is.False);
-        Assert.That(physical.HasSpecialTag("premium"), Is.True);
-    }
-
     /* ─── ForTrade logic ──────────────────────────────────── */
 
     [Test]
     public void ForTradeCount_DefaultIsZero()
     {
         Assert.That(new MagicCardPhysical(Card()).GetForTradeCount(), Is.EqualTo(0));
-    }
-
-    [Test]
-    public void ForTradeCount_ReturnsTotal_WhenTagSet()
-    {
-        var physical = new MagicCardPhysical(Card()) { Count = 4 };
-        physical.SetSpecialTag("fortrade");
-        Assert.That(physical.GetForTradeCount(), Is.EqualTo(4));
     }
 
     [Test]
@@ -125,53 +96,6 @@ public class MagicCardPhysicalTests
 
         physical.SetForTradeCount(0);
         Assert.That(physical.GetForTradeCount(), Is.EqualTo(0));
-    }
-
-    /* ─── TradeSplit — разделение стопки для трейда ───────── */
-
-    [Test]
-    public void TradeSplit_ReturnsNull_WhenNoSplitNeeded()
-    {
-        var physical = new MagicCardPhysical(Card()) { Count = 4 };
-        Assert.That(physical.TradeSplit(4, 4), Is.Null);   // fcount == total → entire pile for trade
-        Assert.That(physical.TradeSplit(4, 0), Is.Null);   // fcount == 0 → nothing to trade
-    }
-
-    [Test]
-    public void TradeSplit_WhenFcountExceedsTotal_ShouldNotMutateState()
-    {
-        // BUG: TradeSplit(2, 5) where fcount > total silently mutates state
-        // (sets Count=5 and adds "fortrade" tag) while returning null.
-        // Expected: when fcount > count, the method should either reject the input
-        // or leave the original object unchanged. Returning null with side-effects is incorrect.
-        var physical = new MagicCardPhysical(Card()) { Count = 2 };
-        var result = physical.TradeSplit(2, 5);
-
-        Assert.That(result, Is.Null,
-            "TradeSplit should return null when fcount > total (no split possible)");
-        Assert.That(physical.Count, Is.EqualTo(2),
-            "BUG: TradeSplit must not mutate Count when fcount exceeds total. " +
-            "Expected Count to remain 2, but implementation sets it to fcount (5). " +
-            "This silently corrupts the card state on invalid input.");
-        Assert.That(physical.HasSpecialTag("fortrade"), Is.False,
-            "BUG: TradeSplit must not add 'fortrade' tag when fcount exceeds total. " +
-            "The original card should remain untouched on invalid input.");
-    }
-
-    [Test]
-    public void TradeSplit_SplitsCardsCorrectly()
-    {
-        var physical = new MagicCardPhysical(Card()) { Count = 4, MyPrice = 5.0f, Comment = "test" };
-        // fcount(2) < count(4) → actual split occurs
-        var tradeCopy = physical.TradeSplit(4, 2);
-
-        Assert.That(tradeCopy, Is.Not.Null);
-        Assert.That(physical.Count, Is.EqualTo(2));
-        Assert.That(tradeCopy!.Count, Is.EqualTo(2));
-        Assert.That(tradeCopy.HasSpecialTag("fortrade"), Is.True);
-        Assert.That(physical.HasSpecialTag("fortrade"), Is.False); // original cleared
-        Assert.That(tradeCopy.MyPrice, Is.EqualTo(5.0f));
-        Assert.That(tradeCopy.Comment, Is.EqualTo("test"));
     }
 
     /* ─── Matching — сравнение физических карт ────────────── */
