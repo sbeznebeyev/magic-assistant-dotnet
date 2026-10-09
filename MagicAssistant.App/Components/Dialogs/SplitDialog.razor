@@ -179,6 +179,7 @@
 
         _saving = true;
         _error = null;
+        var movedOk = false;
 
         try
         {
@@ -204,6 +205,7 @@
             }
 
             await OnSplitDone.InvokeAsync();
+            movedOk = true;
         }
         catch (Exception ex)
         {
@@ -213,6 +215,9 @@
         {
             _saving = false;
         }
+
+        // Close after finally: Close() guards on _saving, which is still true inside the try block.
+        if (movedOk) await Close();
     }
 
     // ── Close helpers ──
