@@ -99,7 +99,7 @@ public interface ICollectionStore
 
     /// <summary>
     /// Compute ownership statistics for all unique card IDs in one SQL query.
-    /// Returns CardId → { OwnCount, TotalCount, OwnUnique } for efficient reconciliation.
+    /// Returns CardId → { OwnCount, TotalCount } for efficient reconciliation.
     /// </summary>
     Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default);
 

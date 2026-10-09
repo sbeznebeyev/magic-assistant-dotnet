@@ -45,12 +45,6 @@ public class MagicCardTests
 
         card.OwnTotal = 10;
         Assert.That(card.OwnTotal, Is.EqualTo(10));
-
-        card.OwnTotalAll = 12;
-        Assert.That(card.OwnTotalAll, Is.EqualTo(12));
-
-        card.OwnUnique = 3;
-        Assert.That(card.OwnUnique, Is.EqualTo(3));
     }
 
     [Test]
@@ -59,8 +53,6 @@ public class MagicCardTests
         var card = new MagicCard();
         Assert.That(card.OwnCount, Is.EqualTo(0));
         Assert.That(card.OwnTotal, Is.EqualTo(0));
-        Assert.That(card.OwnTotalAll, Is.EqualTo(0));
-        Assert.That(card.OwnUnique, Is.EqualTo(0));
     }
 
     /* ─── Equals — идентичность эталонных карт ─────────────── */

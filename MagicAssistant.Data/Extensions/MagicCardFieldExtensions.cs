@@ -35,8 +35,6 @@ public static class MagicCardFieldExtensions
             MagicCardField.ColorType => card.ColorType,
             MagicCardField.Text => card.Text,
             MagicCardField.Side => card.Side,
-            MagicCardField.CommunityRating => card.CommunityRating,
-            MagicCardField.EnglishName => card.EnglishName,
             MagicCardField.Edition => card.CardSet?.SetCode,
 
             // Extended fields — from properties
@@ -61,15 +59,12 @@ public static class MagicCardFieldExtensions
             MagicCardField.Location => card.Collection,
             MagicCardField.Comment => GetComment(card),
             MagicCardField.DateAdded => GetDateAdded(card),
-            MagicCardField.Custom => GetCustom(card),
             MagicCardField.ForTradeCount => GetForTradeCount(card),
             MagicCardField.Grade => GetGrade(card),
 
             // Derived/computed
             MagicCardField.OwnCount => card.OwnCount,
             MagicCardField.OwnTotal => card.OwnTotal,
-            MagicCardField.OwnTotalAll => card.OwnTotalAll,
-            MagicCardField.OwnUnique => card.OwnUnique,
             MagicCardField.CreatureCount => GetCreatureCount(card),
             MagicCardField.Count4 => Math.Min(GetPhysicalCount(card), 4),
             MagicCardField.PercentComplete => ComputePercentComplete(card),
@@ -129,9 +124,6 @@ public static class MagicCardFieldExtensions
             case MagicCardField.CollectorNumber:
                 card.CollectorNumber = value?.ToString();
                 break;
-            case MagicCardField.CommunityRating:
-                card.CommunityRating = CastToFloat(value);
-                break;
             case MagicCardField.Rulings:
                 card.Rulings = value?.ToString();
                 break;
@@ -151,7 +143,6 @@ public static class MagicCardFieldExtensions
             case MagicCardField.Location:
             case MagicCardField.Comment:
             case MagicCardField.DateAdded:
-            case MagicCardField.Custom:
             case MagicCardField.ForTradeCount:
                 // These are set on MagicCardPhysical, not MagicCard
                 break;
@@ -200,9 +191,6 @@ public static class MagicCardFieldExtensions
                     physical.DateAdded = dt;
                 else if (value is string s && DateTimeOffset.TryParse(s, out var parsed))
                     physical.DateAdded = parsed;
-                break;
-            case MagicCardField.Custom:
-                physical.Custom = value?.ToString();
                 break;
             case MagicCardField.ForTradeCount:
                 physical.SetForTradeCount(CastToInt(value));
@@ -256,8 +244,6 @@ public static class MagicCardFieldExtensions
             or MagicCardField.Error
             or MagicCardField.OwnCount
             or MagicCardField.OwnTotal
-            or MagicCardField.OwnTotalAll
-            or MagicCardField.OwnUnique
             or MagicCardField.Sideboard;
     }
 
@@ -301,7 +287,6 @@ public static class MagicCardFieldExtensions
     private static bool GetIsOwn(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.IsOwn : false;
     private static string? GetComment(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Comment : null;
     private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.DateAdded : null;
-    private static string? GetCustom(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Custom : null;
     private static int GetForTradeCount(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.GetForTradeCount() : 0;
     private static object? GetGrade(IMagicCard card) => card is MagicCardPhysical p ? (object?)p.Grade : null;
     private static int GetCreatureCount(IMagicCard card)

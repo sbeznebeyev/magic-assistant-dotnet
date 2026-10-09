@@ -13,8 +13,6 @@ public class MagicCard : IMagicCard
     // === Computed/derived fields (set by Data layer via reconciliation) ===
     public int OwnCount { get; set; }
     public int OwnTotal { get; set; }
-    public int OwnTotalAll { get; set; }
-    public int OwnUnique { get; set; }
 
     public MagicCard() { }
 
@@ -91,7 +89,6 @@ public class MagicCard : IMagicCard
     public int? IdentityBits { get; set; }
 
     // === Additional fields ===
-    public float CommunityRating { get; set; }
     public int Side { get; set; }
     public int CollectorNumberId { get; set; }
     public LegalityMap LegalityMap { get; set; } = LegalityMap.Empty;
@@ -215,14 +212,6 @@ public class MagicCard : IMagicCard
     public MagicCard GetBase() => this;
 
     public bool Has2Faces => Layout is LayoutEnum.transform or LayoutEnum.modal_dfc or LayoutEnum.meld or LayoutEnum.double_faced_token or LayoutEnum.reversible_card;
-
-    /// <summary>
-    /// Returns the English name of this card.
-    /// If EnglishCardId is set and differs from CardId, the English variant's name
-    /// should be resolved via EditionsRegistry / KnowledgeBase. Falls back to Name.
-    /// Mirrors Java MagicCard.getEnglishName().
-    /// </summary>
-    public string? EnglishName => Name;
 
     public bool IsBasicLand()
     {

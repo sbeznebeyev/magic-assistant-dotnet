@@ -61,7 +61,6 @@ public class JsonImportTests
       ""own"": false,
       ""price"": 5.0,
       ""comment"": ""My card comment"",
-      ""custom"": ""custom-data"",
       ""special"": ""foil"",
       ""forTrade"": 1
     }}
@@ -74,7 +73,6 @@ public class JsonImportTests
         Assert.That(physical.IsOwn, Is.False);
         Assert.That(physical.MyPrice, Is.EqualTo(5.0f).Within(0.001f));
         Assert.That(physical.Comment, Is.EqualTo("My card comment"));
-        Assert.That(physical.Custom, Is.EqualTo("custom-data"));
         Assert.That(physical.GetForTradeCount(), Is.EqualTo(1));
     }
 
@@ -89,7 +87,6 @@ public class JsonImportTests
         Assert.That(physical.IsOwn, Is.True, "own defaults to true");
         Assert.That(physical.MyPrice, Is.EqualTo(0f), "price defaults to 0");
         Assert.That(physical.Comment, Is.Null);
-        Assert.That(physical.Custom, Is.Null);
     }
 
     [Test]

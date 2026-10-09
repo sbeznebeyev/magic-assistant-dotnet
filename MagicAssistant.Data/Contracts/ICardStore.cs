@@ -26,7 +26,7 @@ public interface ICardStore<T> where T : IMagicCard
     }
 
     /// <summary>
-    /// Bulk update OwnCount/OwnTotal/OwnUnique properties on base cards in KB.
+    /// Bulk update OwnCount/OwnTotal properties on base cards in KB.
     /// Default: no-op (override in concrete stores that need it).
     /// </summary>
     Task BulkUpdateOwnCountAsync(ICollection<OwnCountStats> stats, CancellationToken ct = default) => Task.CompletedTask;

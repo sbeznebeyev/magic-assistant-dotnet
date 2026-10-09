@@ -66,7 +66,6 @@ public class MoveCardsCommandHandler
                 Count = moveCount,
                 MyPrice = instance.MyPrice,
                 Comment = instance.Comment,
-                Custom = instance.Custom,
                 DateAdded = DateTimeOffset.Now,
             };
 

@@ -143,7 +143,6 @@ public static class XmlImport
         if (float.TryParse(fields.GetValueOrDefault("price"), System.Globalization.CultureInfo.InvariantCulture, out var price))
             physical.MyPrice = price;
         physical.Comment = OptStr(fields, "comment");
-        physical.Custom = OptStr(fields, "custom");
         if (bool.TryParse(fields.GetValueOrDefault("ownership"), out var isOwn))
             physical.IsOwn = isOwn;
         // Legacy bridge: a "fortrade" tag in "special" marks the whole pile as for trade

@@ -77,7 +77,6 @@ public static class InitializeDb
                 ColorType       TEXT,
                 Side            INTEGER DEFAULT 0,
                 CollectorNumberId INTEGER DEFAULT 0,
-                CommunityRating REAL DEFAULT 0,
                 LegalityFormats TEXT,
                 Colors          TEXT,
                 ColorIdentity   TEXT,
@@ -156,7 +155,6 @@ public static class InitializeDb
                 CardId     uniqueidentifier PRIMARY KEY,
                 OwnCount   INTEGER NOT NULL DEFAULT 0,
                 TotalCount INTEGER NOT NULL DEFAULT 0,
-                OwnUnique  INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE
             )");
     }

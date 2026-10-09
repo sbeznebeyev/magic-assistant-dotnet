@@ -171,9 +171,6 @@ public class DeckCardService : IDeckCardService
                 case MagicCardField.Comment when value is string comment:
                     matching.Comment = comment;
                     fieldsToUpdate.Add(field); break;
-                case MagicCardField.Custom when value is string custom:
-                    matching.Custom = custom;
-                    fieldsToUpdate.Add(field); break;
                 case MagicCardField.ForTradeCount when value is int forTrade:
                     matching.SetForTradeCount(forTrade);
                     fieldsToUpdate.Add(field); break;
@@ -224,7 +221,6 @@ public class DeckCardService : IDeckCardService
             Count = rightCount,
             MyPrice = matching.MyPrice,
             Comment = matching.Comment,
-            Custom = matching.Custom,
         };
 
         // Update original to left count
@@ -264,7 +260,6 @@ public class DeckCardService : IDeckCardService
             Count = count,
             MyPrice = matching.MyPrice,
             Comment = matching.Comment,
-            Custom = matching.Custom,
         };
 
         // Update the sideboard row to the left count

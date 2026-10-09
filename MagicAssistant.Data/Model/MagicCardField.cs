@@ -22,8 +22,6 @@ public enum MagicCardField
     ColorType,
     Text,
     Side,
-    CommunityRating,
-    EnglishName,
     Edition,
 
     // === Extended base fields (stored as properties) ===
@@ -45,7 +43,6 @@ public enum MagicCardField
     Location,
     Comment,
     DateAdded,
-    Custom,
     MyPrice,
     ForTradeCount,
 
@@ -56,8 +53,6 @@ public enum MagicCardField
     // === Derived/computed fields ===
     OwnCount,
     OwnTotal,
-    OwnTotalAll,
-    OwnUnique,
     CreatureCount,
     Count4,
     PercentComplete,

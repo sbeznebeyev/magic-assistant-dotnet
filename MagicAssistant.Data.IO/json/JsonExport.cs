@@ -127,9 +127,6 @@ public static class JsonExport
         if (!string.IsNullOrEmpty(physical.Comment))
             writer.WriteString("comment", physical.Comment);
 
-        if (!string.IsNullOrEmpty(physical.Custom))
-            writer.WriteString("custom", physical.Custom);
-
         // ForTradeCount — legacy XML/JSON rule: only when > 0
         var forTrade = physical.GetForTradeCount();
         if (forTrade > 0)

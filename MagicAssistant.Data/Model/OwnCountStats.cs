@@ -7,5 +7,4 @@
 public record OwnCountStats(
     Guid CardId,
     int OwnCount,
-    int TotalCount,
-    int OwnUnique);
+    int TotalCount);

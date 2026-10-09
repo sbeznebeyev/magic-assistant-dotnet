@@ -19,7 +19,6 @@ public interface IMagicCard : ICard
     int? CmcNumber { get; }
     string? CmcText { get; }
     string? ColorType { get; }
-    float CommunityRating { get; }
     IMagicCard Clone();
     MagicCard GetBase();
     string? Text { get; }
@@ -27,6 +26,5 @@ public interface IMagicCard : ICard
     int CollectorNumberId { get; }
     Model.Legality.LegalityMap LegalityMap { get; }
     bool IsBasicLand();
-    string? EnglishName { get; }
     CardSet? CardSet { get; }
 }

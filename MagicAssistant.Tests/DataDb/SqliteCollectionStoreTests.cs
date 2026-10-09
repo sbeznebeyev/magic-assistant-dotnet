@@ -331,15 +331,13 @@ public class SqliteCollectionStoreTests
 
         Assert.That(stats, Has.Count.EqualTo(2));
 
-        // card1: IsOwn=true, Count=2 → OwnCount=2, TotalCount=2, OwnUnique=1 (1 distinct deck)
+        // card1: IsOwn=true, Count=2 → OwnCount=2, TotalCount=2
         Assert.That(stats[_id_1].OwnCount, Is.EqualTo(2), "Owned copies of id-1 should be 2");
         Assert.That(stats[_id_1].TotalCount, Is.EqualTo(2), "Total copies of id-1 should be 2");
-        Assert.That(stats[_id_1].OwnUnique, Is.EqualTo(1), "id-1 is owned in 1 distinct deck");
 
-        // card2: IsOwn=true, Count=1 → OwnCount=1, TotalCount=1, OwnUnique=1 (1 distinct deck)
+        // card2: IsOwn=true, Count=1 → OwnCount=1, TotalCount=1
         Assert.That(stats[_id_2].OwnCount, Is.EqualTo(1), "Owned copies of id-2 should be 1");
         Assert.That(stats[_id_2].TotalCount, Is.EqualTo(1), "Total copies of id-2 should be 1");
-        Assert.That(stats[_id_2].OwnUnique, Is.EqualTo(1), "id-2 is owned in 1 distinct deck");
     }
 
     [Test]

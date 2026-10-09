@@ -37,8 +37,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         await conn.OpenAsync(ct);
 
         var sql = @"
-            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
+            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
         var result = await conn.ExecuteAsync(sql, new
         {
@@ -68,7 +68,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             card.ColorType,
             card.Side,
             card.CollectorNumberId,
-            card.CommunityRating,
             LegalityFormats = card.LegalityMap.IsEmpty ? null : string.Join(',', card.LegalityMap.LegalFormats.Select(f => f.ToString())),
             Colors = card.Colors is { Length: > 0 } ? string.Join(',', card.Colors) : (string?)null,
             ColorIdentity = card.ColorIdentity is { Length: > 0 } ? string.Join(',', card.ColorIdentity) : (string?)null,
@@ -109,8 +108,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         try
         {
             var sql = @"
-                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
+                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
             await conn.ExecuteAsync(sql, list.Select(c => new
             {
@@ -140,7 +139,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 c.ColorType,
                 c.Side,
                 c.CollectorNumberId,
-                c.CommunityRating,
                 LegalityFormats = c.LegalityMap.IsEmpty ? null : string.Join(',', c.LegalityMap.LegalFormats.Select(f => f.ToString())),
                 Colors = c.Colors is { Length: > 0 } ? string.Join(',', c.Colors) : (string?)null,
                 ColorIdentity = c.ColorIdentity is { Length: > 0 } ? string.Join(',', c.ColorIdentity) : (string?)null,
@@ -261,10 +259,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 case MagicCardField.Text:
                     setClauses.Add("Text = @Text");
                     parameters.Add("@Text", card.Text);
-                    break;
-                case MagicCardField.CommunityRating:
-                    setClauses.Add("CommunityRating = @CommunityRating");
-                    parameters.Add("@CommunityRating", card.CommunityRating);
                     break;
                 case MagicCardField.Set:
                     setClauses.Add("SetCode = @SetCode");
@@ -1610,7 +1604,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             CmcText = row.CmcText,
             Side = row.Side,
             CollectorNumberId = row.CollectorNumberId,
-            CommunityRating = row.CommunityRating,
         };
 
         // Restore LegalityMap from comma-separated formats
@@ -1673,7 +1666,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
     /// <summary>
     /// Attaches ownership statistics to a card's properties so that
-    /// GetOwnCount(), GetOwnTotal(), GetOwnTotalAll(), GetOwnUnique() return real values.
+    /// GetOwnCount() and GetOwnTotal() return real values.
     /// </summary>
     private static void AttachOwnCountStats(MagicCard card, OwnCountStats stats)
     {
@@ -1681,11 +1674,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             card.OwnCount = stats.OwnCount;
         if (stats.TotalCount > 0)
             card.OwnTotal = stats.TotalCount;
-        // OwnTotalAll == TotalCount for deck-only storage (no separate library tracking)
-        if (stats.TotalCount > 0)
-            card.OwnTotalAll = stats.TotalCount;
-        if (stats.OwnUnique > 0)
-            card.OwnUnique = stats.OwnUnique;
     }
 
     /// <summary>
@@ -1701,7 +1689,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     }
 
     /// <summary>
-    /// Bulk update OwnCount/OwnTotal/OwnUnique properties on base cards in KB.
+    /// Bulk update OwnCount/OwnTotal properties on base cards in KB.
     /// Uses a temp table approach: inserts stats, then updates Cards via JOIN.
     /// This is the fastest way to bulk-update properties in SQLite.
     /// </summary>
@@ -1718,22 +1706,21 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             CREATE TEMP TABLE IF NOT EXISTS OwnCountTemp (
                 CardId uniqueidentifier PRIMARY KEY,
                 OwnCount INTEGER,
-                TotalCount INTEGER,
-                OwnUnique INTEGER
+                TotalCount INTEGER
             )");
         await conn.ExecuteAsync("DELETE FROM OwnCountTemp");
 
         // Bulk insert stats into temp table
         var list = stats.ToList();
         await conn.ExecuteAsync(@"
-            INSERT OR REPLACE INTO OwnCountTemp (CardId, OwnCount, TotalCount, OwnUnique)
-            VALUES (@CardId, @OwnCount, @TotalCount, @OwnUnique)",
-            list.Select(s => new { s.CardId, s.OwnCount, s.TotalCount, s.OwnUnique }));
+            INSERT OR REPLACE INTO OwnCountTemp (CardId, OwnCount, TotalCount)
+            VALUES (@CardId, @OwnCount, @TotalCount)",
+            list.Select(s => new { s.CardId, s.OwnCount, s.TotalCount }));
 
         // Persist to OwnCounts table (created by InitializeDb.EnsureCreatedAsync).
         await conn.ExecuteAsync(@"
-            INSERT OR REPLACE INTO OwnCounts (CardId, OwnCount, TotalCount, OwnUnique)
-            SELECT t.CardId, t.OwnCount, t.TotalCount, t.OwnUnique
+            INSERT OR REPLACE INTO OwnCounts (CardId, OwnCount, TotalCount)
+            SELECT t.CardId, t.OwnCount, t.TotalCount
             FROM OwnCountTemp t
             WHERE EXISTS (SELECT 1 FROM Cards c WHERE c.Id = t.CardId)");
 
@@ -1979,10 +1966,10 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     private static async Task<OwnCountStats?> LoadOwnCountForCardAsync(SqliteConnection conn, Guid cardId, CancellationToken ct = default)
     {
         var row = await conn.QuerySingleOrDefaultAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount, OwnUnique FROM OwnCounts WHERE CardId = @Id",
+            "SELECT CardId, OwnCount, TotalCount FROM OwnCounts WHERE CardId = @Id",
             new { Id = cardId });
 
-        return row != null ? new OwnCountStats(row.CardId, row.OwnCount, row.TotalCount, row.OwnUnique) : null;
+        return row != null ? new OwnCountStats(row.CardId, row.OwnCount, row.TotalCount) : null;
     }
 
     /// <summary>
@@ -1992,9 +1979,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         SqliteConnection conn, CancellationToken ct = default)
     {
         var rows = await conn.QueryAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount, OwnUnique FROM OwnCounts");
+            "SELECT CardId, OwnCount, TotalCount FROM OwnCounts");
 
-        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount, r.OwnUnique));
+        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount));
     }
 
     private class OwnCountRow
@@ -2002,7 +1989,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         public Guid CardId { get; set; }
         public int OwnCount { get; set; }
         public int TotalCount { get; set; }
-        public int OwnUnique { get; set; }
     }
 
     // ── Batch resolution for old-format import (Gatherer ID + full set name) ──
@@ -2235,7 +2221,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         public string? ColorType { get; set; }
         public int Side { get; set; }
         public int CollectorNumberId { get; set; }
-        public float CommunityRating { get; set; }
         public string? LegalityFormats { get; set; }
         public string? Colors { get; set; }
         public string? ColorIdentity { get; set; }

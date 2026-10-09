@@ -28,8 +28,6 @@ public class CardGroup : ICard, IEnumerable<IMagicCard>
     public string Name => Label;
     public int OwnCount => _children.Sum(c => c.OwnCount);
     public int OwnTotal => _children.Sum(c => c.OwnTotal);
-    public int OwnTotalAll => _children.Sum(c => c.OwnTotalAll);
-    public int OwnUnique => _children.Sum(c => c.OwnUnique);
 
     public Collection? Collection => null;
     public bool IsSideboard => false;

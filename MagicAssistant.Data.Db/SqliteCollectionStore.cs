@@ -49,7 +49,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
                    c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
                    c.PrintedName, c.PrintedText, c.PrintedTypeLine,
-                   d.MyPrice, c.CommunityRating, c.LegalityFormats";
+                   d.MyPrice, c.LegalityFormats";
 
     // ═══════════════════════════════════════════════════════════
     //  ICollectionStore — deck / folder CRUD
@@ -796,7 +796,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
 
     /// <summary>
     /// Compute ownership statistics for all unique card IDs in one SQL query.
-    /// Returns CardId → { OwnCount, TotalCount, OwnUnique } for efficient reconciliation.
+    /// Returns CardId → { OwnCount, TotalCount } for efficient reconciliation.
     /// </summary>
     public async Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default)
     {
@@ -805,12 +805,11 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         var rows = await conn.QueryAsync<OwnCountRow>(@"
             SELECT d.CardId,
                    SUM(CASE WHEN d.IsOwn = 1 THEN d.Count ELSE 0 END) AS OwnCount,
-                   SUM(d.Count) AS TotalCount,
-                   COUNT(DISTINCT CASE WHEN d.IsOwn = 1 THEN d.CollectionId END) AS OwnUnique
+                   SUM(d.Count) AS TotalCount
             FROM Deck d
             GROUP BY d.CardId");
 
-        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount, r.OwnUnique));
+        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -824,16 +823,16 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         SqliteConnection conn, CancellationToken ct = default)
     {
         var rows = await conn.QueryAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount, OwnUnique FROM OwnCounts");
+            "SELECT CardId, OwnCount, TotalCount FROM OwnCounts");
 
         return rows.ToDictionary(
             r => r.CardId,
-            r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount, r.OwnUnique));
+            r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount));
     }
 
     /// <summary>
     /// Attaches ownership statistics to a card's properties so that
-    /// GetOwnCount(), GetOwnTotal(), GetOwnTotalAll(), GetOwnUnique() return real values.
+    /// GetOwnCount() and GetOwnTotal() return real values.
     /// </summary>
     private static void AttachOwnCountStats(MagicCard card, OwnCountStats stats)
     {
@@ -841,10 +840,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             card.OwnCount = stats.OwnCount;
         if (stats.TotalCount > 0)
             card.OwnTotal = stats.TotalCount;
-        if (stats.TotalCount > 0)
-            card.OwnTotalAll = stats.TotalCount;
-        if (stats.OwnUnique > 0)
-            card.OwnUnique = stats.OwnUnique;
     }
 
     /// <summary>
@@ -972,7 +967,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             CmcText = row.CmcText,
             Side = row.Side,
             CollectorNumberId = row.CollectorNumberId,
-            CommunityRating = row.CommunityRating,
         };
 
         // Restore LegalityMap
@@ -1099,7 +1093,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public int Side { get; set; }
         public int CollectorNumberId { get; set; }
         public float MyPrice { get; set; }
-        public float CommunityRating { get; set; }
         public string? LegalityFormats { get; set; }
     }
 
@@ -1108,7 +1101,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public Guid CardId { get; set; }
         public int OwnCount { get; set; }
         public int TotalCount { get; set; }
-        public int OwnUnique { get; set; }
     }
 
     /// <summary>Row from the CardFaces table (one face of a multi-faced card).</summary>

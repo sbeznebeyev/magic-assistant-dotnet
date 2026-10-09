@@ -9,7 +9,6 @@ namespace MagicAssistant.Data.Model;
 public class MagicCardPhysical : IMagicCardPhysical
 {
     private string? _comment;
-    private string? _custom;
     private int? _forTradeCount;
     private object? _error;
 
@@ -51,12 +50,6 @@ public class MagicCardPhysical : IMagicCardPhysical
         set => _comment = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    public string? Custom
-    {
-        get => _custom;
-        set => _custom = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
-
     // === IMagicCard delegation to base card ===
     public Guid Id => Card.Id;
     public string Name => Card.Name;
@@ -82,7 +75,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     /// Condition grade, persisted in Deck.Grade as a nullable integer (NULL = not graded).
     /// </summary>
     public CardGrade? Grade { get; set; }
-    public float CommunityRating => Card.CommunityRating;
 
     // === Deep clone — mirrors Java MagicCardPhysical.clone() ===
     public IMagicCard Clone()
@@ -96,7 +88,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     public int CollectorNumberId => Card.CollectorNumberId;
     public LegalityMap LegalityMap => Card.LegalityMap;
     public bool IsBasicLand() => Card.IsBasicLand();
-    public string? EnglishName => Card.EnglishName;
     public CardSet? CardSet => Card.CardSet;
 
     // === ICard implementation ===
@@ -111,17 +102,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     /// Delegates to base KB card which reads from OwnCounts properties.
     /// </summary>
     public int OwnTotal => Card.OwnTotal;
-
-    /// <summary>
-    /// Total copies across all locations (decks + library).
-    /// Delegates to base KB card which reads from OwnCounts properties.
-    /// </summary>
-    public int OwnTotalAll => Card.OwnTotalAll;
-
-    /// <summary>
-    /// Whether this physical instance represents a unique owned copy.
-    /// </summary>
-    public int OwnUnique => IsOwn ? 1 : 0;
 
     public bool IsSideboard => Collection?.NodeType == NodeType.Sideboard;
     public int UniqueCount => 1;
@@ -152,7 +132,6 @@ public class MagicCardPhysical : IMagicCardPhysical
         if (!Card.Equals(other.Card)) return false;
         if (IsOwn != other.IsOwn) return false;
         if (MyPrice != other.MyPrice) return false;
-        if (!EqualsNull(Custom, other.Custom)) return false;
         if (!EqualsNull(Comment, other.Comment)) return false;
         return true;
     }

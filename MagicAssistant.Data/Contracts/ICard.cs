@@ -10,8 +10,6 @@ public interface ICard
     bool IsSideboard { get; }
     int OwnCount { get; }
     int OwnTotal { get; }
-    int OwnTotalAll { get; }
-    int OwnUnique { get; }
     int UniqueCount { get; }
     bool IsPhysical { get; }
 }

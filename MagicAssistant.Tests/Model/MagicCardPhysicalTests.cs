@@ -56,13 +56,6 @@ public class MagicCardPhysicalTests
     }
 
     [Test]
-    public void OwnUnique_ReturnsOneOrZero_BasedOnOwnership()
-    {
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true).OwnUnique, Is.EqualTo(1));
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false).OwnUnique, Is.EqualTo(0));
-    }
-
-    [Test]
     public void Count4_CapsAtFour_ForOwnedCards()
     {
         Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 2 }.Count4, Is.EqualTo(2));
