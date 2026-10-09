@@ -971,11 +971,8 @@
 
     private async Task EditLocationCard(MyCard card) => await OnEditCard.InvokeAsync(card);
 
-    private async Task SplitLocationCard(MyCard card)
-    {
-        if (card.Count > 1)
-            await OnSplitCard.InvokeAsync(card);
-    }
+    /// <summary>Any count, including a single copy — the whole row moves deck↔sideboard.</summary>
+    private async Task SplitLocationCard(MyCard card) => await OnSplitCard.InvokeAsync(card);
 
     /// <summary>Look up the selected physical instance and hand it to MainLayout for the quick move.</summary>
     private async Task OnMoveClick()

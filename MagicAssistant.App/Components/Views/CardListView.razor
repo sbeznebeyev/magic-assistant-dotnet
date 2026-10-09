@@ -98,11 +98,9 @@
                             {
                                 <button class="edit-btn" @onclick:stopPropagation="true"
                                         @onclick="() => EditCard(physical)" title="Edit card">✎</button>
-                                @if (physical.Count > 1)
-                                {
-                                    <button class="split-btn" @onclick:stopPropagation="true"
-                                            @onclick="() => SplitCard(physical)" title="Split pile">✂</button>
-                                }
+                                @* Always available — even a single copy can move deck↔sideboard as a whole. *@
+                                <button class="split-btn" @onclick:stopPropagation="true"
+                                        @onclick="() => SplitCard(physical)" title="Split pile">✂</button>
                             }
                         </td>
                         <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
@@ -163,7 +161,8 @@
     /// <summary>Edit requested for a location card.</summary>
     [Parameter] public EventCallback<MyCard> OnEditRequested { get; set; }
 
-    /// <summary>Split requested for a location card (only when Count &gt; 1).</summary>
+    /// <summary>Split requested for a location card — any count, including a single copy
+    /// (the whole row moves deck↔sideboard).</summary>
     [Parameter] public EventCallback<MyCard> OnSplitRequested { get; set; }
 
     /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, KB mode with a
