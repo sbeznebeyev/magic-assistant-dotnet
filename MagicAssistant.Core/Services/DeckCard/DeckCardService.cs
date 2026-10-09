@@ -2,6 +2,7 @@ using MagicAssistant.Core.Commands;
 using MagicAssistant.Core.Services.CardResolve;
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Core.Services.DeckCard;
 
@@ -43,7 +44,7 @@ public class DeckCardService : IDeckCardService
         if (cards == null || !cards.Any())
             return true;
 
-        var location = Location.FromId(deckId, deckId.ToString(), false);
+        var collection = new Collection(deckId, string.Empty, null, NodeType.Deck, 0);
         var physicals = new List<MagicCardPhysical>();
 
         foreach (var card in cards)
@@ -51,7 +52,7 @@ public class DeckCardService : IDeckCardService
             var baseCard = card.GetBase();
             bool isOwn = card is MagicCardPhysical mcp ? mcp.IsOwn : true;
 
-            physicals.Add(new MagicCardPhysical(baseCard, location, isOwn)
+            physicals.Add(new MagicCardPhysical(baseCard, collection, isOwn)
             {
                 Count = card.Count,
             });
@@ -122,7 +123,7 @@ public class DeckCardService : IDeckCardService
         if (!toMove.Any())
             return 0;
 
-        var targetLocation = Location.FromId(targetDeckId, targetDeckId.ToString(), false);
+        var targetCollection = new Collection(targetDeckId, string.Empty, null, NodeType.Deck, 0);
         int moved = 0;
 
         foreach (var card in toMove)
@@ -130,8 +131,8 @@ public class DeckCardService : IDeckCardService
             // Remove from source
             await _cardStore.RemoveAsync(card, ct);
 
-            // Add to target with new location
-            card.SetLocation(targetLocation);
+            // Add to target with new collection
+            card.SetCollection(targetCollection);
             await _cardStore.AddAsync(card, ct);
             moved++;
         }
@@ -148,7 +149,7 @@ public class DeckCardService : IDeckCardService
             return false;
 
         var existing = await _collectionStore.GetCardsAsync(cardId, ct);
-        var matching = existing.FirstOrDefault(e => e.Location.Id == deckId && e.Card.Id == cardId);
+        var matching = existing.FirstOrDefault(e => e.Collection?.Id == deckId && e.Card.Id == cardId);
         if (matching == null)
             return false;
 
@@ -209,7 +210,7 @@ public class DeckCardService : IDeckCardService
             return null;
 
         var existing = await _collectionStore.GetCardsAsync(cardId, ct);
-        var matching = existing.FirstOrDefault(e => e.Location.Id == deckId && e.Card.Id == cardId);
+        var matching = existing.FirstOrDefault(e => e.Collection?.Id == deckId && e.Card.Id == cardId);
         if (matching == null)
             return null;
 
@@ -223,10 +224,8 @@ public class DeckCardService : IDeckCardService
         if (sideboard is null)
             throw new InvalidOperationException("sideboard is not exists");
 
-        var sideboardLocation = Location.FromCollection(sideboard);
-
         // Create right part FIRST (before modifying original count)
-        var rightPart = new MagicCardPhysical(matching.Card, sideboardLocation, matching.IsOwn)
+        var rightPart = new MagicCardPhysical(matching.Card, sideboard, matching.IsOwn)
         {
             Count = rightCount,
             MyPrice = matching.MyPrice,
@@ -254,9 +253,9 @@ public class DeckCardService : IDeckCardService
 
         foreach (var card in expanded)
         {
-            if (card is MagicCardPhysical mcp && mcp.Location.Id > 0)
+            if (card is MagicCardPhysical mcp && mcp.Collection is { Id: > 0 } c)
             {
-                var locId = mcp.Location.Id;
+                var locId = c.Id;
                 var split = await SplitCardAsync(locId, mcp.Id, rightCount, ct);
                 if (split != null)
                     result.Add(split);
@@ -266,7 +265,7 @@ public class DeckCardService : IDeckCardService
                 for (var i = 0; i < rightCount; i++)
                 {
                     var clone = (MagicCard)mc.Clone();
-                    result.Add(new MagicCardPhysical(clone, Location.NoWhere, true));
+                    result.Add(new MagicCardPhysical(clone, null, true));
                 }
             }
         }
@@ -313,6 +312,6 @@ public class DeckCardService : IDeckCardService
 
         // All physical rows of this card across the DB — filter to the given deck and owned copies only.
         var rows = await _collectionStore.GetCardsAsync(cardId, ct);
-        return rows.Where(r => r.Location.Id == deckId && r.IsOwn).Sum(r => r.Count);
+        return rows.Where(r => r.Collection?.Id == deckId && r.IsOwn).Sum(r => r.Count);
     }
 }

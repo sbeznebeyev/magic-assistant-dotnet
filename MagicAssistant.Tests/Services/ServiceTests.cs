@@ -11,7 +11,7 @@ public class ServiceTests
     private static MagicCardPhysical CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };
-        return new MagicCardPhysical(card, Location.FromId(deckId), isOwn) { Count = count };
+        return new MagicCardPhysical(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
     }
 
     private static ScryfallSetDto SetDto(string code, string name, int? cardCount = 269)
@@ -124,6 +124,8 @@ public class ServiceTests
 
         coll.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MagicCardPhysical[] { physicalTarget, physicalOther });
+        coll.Setup(s => s.GetByParentIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Collection(99, "sideboard", 1, NodeType.Sideboard, 0));
         cardStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         cardStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
@@ -160,34 +162,34 @@ public class ServiceTests
     }
 
     [Test]
-    public void CardResolve_GetLocation_ReturnsCommonOrNull()
+    public void CardResolve_GetCollection_ReturnsCommonOrNull()
     {
         var cardId1 = Guid.NewGuid();
         var cardId2 = Guid.NewGuid();
 
         var service = new CardResolveService(new Mock<IDbCardStore>().Object, new Mock<ICollectionStore>().Object);
 
-        var loc1 = Location.FromId(1);
+        var col1 = new Collection(1, "deck-1", null, NodeType.Deck, 0);
         var cards = new List<IMagicCard>
         {
-            CreatePhysical(cardId1, loc1),
-            CreatePhysical(cardId2, loc1),
+            CreatePhysical(cardId1, col1),
+            CreatePhysical(cardId2, col1),
         };
-        Assert.That(service.GetLocation(cards)?.Id, Is.EqualTo(1));
+        Assert.That(service.GetCollection(cards)?.Id, Is.EqualTo(1));
 
-        // Different locations → null
+        // Different collections → null
         var diffCards = new List<IMagicCard>
         {
-            CreatePhysical(cardId1, Location.FromId(10)),
-            CreatePhysical(cardId2, Location.FromId(20)),
+            CreatePhysical(cardId1, new Collection(10, string.Empty, null, NodeType.Deck, 0)),
+            CreatePhysical(cardId2, new Collection(20, string.Empty, null, NodeType.Deck, 0)),
         };
-        Assert.That(service.GetLocation(diffCards), Is.Null);
+        Assert.That(service.GetCollection(diffCards), Is.Null);
     }
 
-    private static MagicCardPhysical CreatePhysical(Guid cardId, Location location)
+    private static MagicCardPhysical CreatePhysical(Guid cardId, Collection? collection)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };
-        return new MagicCardPhysical(card, location, true) { Count = 1 };
+        return new MagicCardPhysical(card, collection, true) { Count = 1 };
     }
 
     /* ═══════════════════════════════════════════════════════

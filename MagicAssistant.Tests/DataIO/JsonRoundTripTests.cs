@@ -1,3 +1,4 @@
+using MagicAssistant.Data.Model.NavigatorNodes;
 using MagicAssistant.Data.IO.json;
 using MagicAssistant.Data.Model;
 
@@ -17,7 +18,7 @@ public class JsonRoundTripTests
 
         var physical = new MagicCardPhysical(
             new MagicCard { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 4,
             MyPrice = 2.5f,
@@ -53,7 +54,7 @@ public class JsonRoundTripTests
         // Borrowed card (IsOwn = false) — "own": false must survive the round-trip.
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m20" },
-            Location.FromId(1), false)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), false)
         {
             Count = 1,
         };
@@ -73,13 +74,13 @@ public class JsonRoundTripTests
         {
             new MagicCardPhysical(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
-                Location.FromId(1), true) { Count = 4, MyPrice = 2.5f },
+                new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 4, MyPrice = 2.5f },
             new MagicCardPhysical(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
-                Location.FromId(1), true) { Count = 24 },
+                new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 24 },
             new MagicCardPhysical(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Counterspell", SetCode = "m20" },
-                Location.FromId(1), false) { Count = 1, Comment = "Borrowed" },
+                new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 1, Comment = "Borrowed" },
         };
 
         var json = JsonExport.ExportToJson("My Deck", "A test deck", "deck", cards);
@@ -111,7 +112,7 @@ public class JsonRoundTripTests
     {
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Comment = "Tags: <foil> & \"signed\" card — кириллица",
         };
@@ -129,7 +130,7 @@ public class JsonRoundTripTests
         // Unlike the legacy XML format, count is part of the reference core and always written.
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 1,
         };
@@ -149,7 +150,7 @@ public class JsonRoundTripTests
     {
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             MyPrice = 0f,
         };
@@ -169,7 +170,7 @@ public class JsonRoundTripTests
     {
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 3,
         };
@@ -190,7 +191,7 @@ public class JsonRoundTripTests
         var sbId = Guid.NewGuid();
         var sideboardCard = new MagicCardPhysical(
             new MagicCard { Id = sbId, Name = "Liliana, the Wicked", SetCode = "mh3" },
-            Location.FromId(1), false)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), false)
         {
             Count = 2,
             MyPrice = 0.5f,
@@ -201,7 +202,7 @@ public class JsonRoundTripTests
 
         var mainCard = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 4,
         };
@@ -235,7 +236,7 @@ public class JsonRoundTripTests
         // A deck without a sideboard must round-trip WITHOUT the node — it is optional.
         var physical = new MagicCardPhysical(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
-            Location.FromId(1), true)
+            new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 24,
         };

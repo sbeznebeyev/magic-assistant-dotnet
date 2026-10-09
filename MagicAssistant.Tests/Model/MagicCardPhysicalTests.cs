@@ -1,3 +1,6 @@
+using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
+
 namespace MagicAssistant.Tests.Model;
 
 [TestFixture]
@@ -18,7 +21,7 @@ public class MagicCardPhysicalTests
         var physical = new MagicCardPhysical(Card());
         Assert.That(physical.Count, Is.EqualTo(1));
         Assert.That(physical.IsOwn, Is.False, "IsOwn defaults to false (bool default); only the 3-param constructor sets it explicitly");
-        Assert.That(physical.Location.Id, Is.Empty);
+        Assert.That(physical.Collection, Is.Null);
         Assert.That(physical.DateAdded, Is.Not.EqualTo(default(DateTimeOffset)));
     }
 
@@ -29,10 +32,10 @@ public class MagicCardPhysicalTests
     }
 
     [Test]
-    public void Constructor_WithLocation_SetsValues()
+    public void Constructor_WithCollection_SetsValues()
     {
-        var physical = new MagicCardPhysical(Card(), Location.FromId(123), false);
-        Assert.That(physical.Location.Id, Is.EqualTo(123));
+        var physical = new MagicCardPhysical(Card(), new Collection(123, "deck-123", null, NodeType.Deck, 0), false);
+        Assert.That(physical.Collection?.Id, Is.EqualTo(123));
         Assert.That(physical.IsOwn, Is.False);
     }
 
@@ -41,39 +44,39 @@ public class MagicCardPhysicalTests
     [Test]
     public void OwnCount_ReturnsCount_WhenOwned()
     {
-        var physical = new MagicCardPhysical(Card(), Location.FromId(1), true) { Count = 3 };
+        var physical = new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 3 };
         Assert.That(physical.OwnCount, Is.EqualTo(3));
     }
 
     [Test]
     public void OwnCount_ReturnsZero_WhenBorrowed()
     {
-        var physical = new MagicCardPhysical(Card(), Location.FromId(1), false) { Count = 3 };
+        var physical = new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 3 };
         Assert.That(physical.OwnCount, Is.EqualTo(0));
     }
 
     [Test]
     public void OwnUnique_ReturnsOneOrZero_BasedOnOwnership()
     {
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), true).OwnUnique, Is.EqualTo(1));
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), false).OwnUnique, Is.EqualTo(0));
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true).OwnUnique, Is.EqualTo(1));
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false).OwnUnique, Is.EqualTo(0));
     }
 
     [Test]
     public void Count4_CapsAtFour_ForOwnedCards()
     {
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), true) { Count = 2 }.Count4, Is.EqualTo(2));
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), true) { Count = 5 }.Count4, Is.EqualTo(4));
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), false) { Count = 3 }.Count4, Is.EqualTo(0));
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 2 }.Count4, Is.EqualTo(2));
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 5 }.Count4, Is.EqualTo(4));
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 3 }.Count4, Is.EqualTo(0));
     }
 
     /* ─── Sideboard flag ──────────────────────────────────── */
 
     [Test]
-    public void IsSideboard_ReflectsLocationFlag()
+    public void IsSideboard_ReflectsCollectionNodeType()
     {
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1, "deck-1", true), true).IsSideboard, Is.True);
-        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1, "deck-1"), true).IsSideboard, Is.False);
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, "sideboard", null, NodeType.Sideboard, 0), true).IsSideboard, Is.True);
+        Assert.That(new MagicCardPhysical(Card(), new Collection(1, "deck-1", null, NodeType.Deck, 0), true).IsSideboard, Is.False);
     }
 
     /* ─── Special tags ────────────────────────────────────── */

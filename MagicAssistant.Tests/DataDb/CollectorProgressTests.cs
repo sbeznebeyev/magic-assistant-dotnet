@@ -1,3 +1,4 @@
+using MagicAssistant.Data.Model;
 using MagicAssistant.Data.Model.NavigatorNodes;
 using Microsoft.Data.Sqlite;
 using Dapper;
@@ -99,9 +100,9 @@ public class CollectorProgressTests
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
         // Own c1 (common R) and c3 (mythic colorless); c2 stays unowned
         await _collectionStore.AddAsync(
-            new MagicCardPhysical(new MagicCard { Id = c1.Id, Name = "Bolt" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+            new MagicCardPhysical(new MagicCard { Id = c1.Id, Name = "Bolt" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
         await _collectionStore.AddAsync(
-            new MagicCardPhysical(new MagicCard { Id = c3.Id, Name = "Legend" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+            new MagicCardPhysical(new MagicCard { Id = c3.Id, Name = "Legend" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var details = await _cardStore.GetSetProgressDetailsAsync("m19");
 
@@ -164,13 +165,13 @@ public class CollectorProgressTests
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId1, Name = "Lightning Bolt" },
-                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         // Add borrowed card
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId2, Name = "Mountain" },
-                Location.FromId(deck.Id, deck.Name, false), false) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), false) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -218,12 +219,12 @@ public class CollectorProgressTests
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId, Name = "Lightning Bolt" },
-                Location.FromId(deck1.Id), true) { Count = 1 });
+                new Collection(deck1.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 });
 
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId, Name = "Lightning Bolt" },
-                Location.FromId(deck2.Id), true) { Count = 1 });
+                new Collection(deck2.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -253,12 +254,12 @@ public class CollectorProgressTests
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId1, Name = "Lightning Bolt" },
-                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId2, Name = "Lightning Bolt" },
-                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -289,12 +290,12 @@ public class CollectorProgressTests
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardIdEn, Name = "Lightning Bolt" },
-                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardIdRu, Name = "Lightning Bolt" },
-                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -319,7 +320,7 @@ public class CollectorProgressTests
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId, Name = "Lightning Bolt" },
-                Location.FromId(sbId, "Sideboard", true), true) { Count = 1 });
+                new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 
@@ -370,14 +371,14 @@ public class CollectorProgressTests
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId1, Name = "Lightning Bolt" },
-                Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 });
+                new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         // Borrowed in sideboard — query sideboard directly since GetChildrenAsync filters them out
         var sbId = await GetSideboardIdAsync(deck.Id);
         await _collectionStore.AddAsync(
             new MagicCardPhysical(
                 new MagicCard { Id = cardId2, Name = "Mountain" },
-                Location.FromId(sbId, "Sideboard", true), false) { Count = 1 });
+                new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), false) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
 

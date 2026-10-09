@@ -26,8 +26,8 @@ public record CardOperationRecord(
 
 /// <summary>
 /// A single entry in the LastActions queue: which card, how many copies, in which direction,
-/// and in which collection (Location) the operation was performed.
-/// The queue is a rolling history that is never reset, so each entry carries its own location.
+/// and in which collection the operation was performed.
+/// The queue is a rolling history that is never reset, so each entry carries its own collection.
 /// </summary>
 public record LastActionItem(
     int LocationId,

@@ -9,7 +9,7 @@ namespace MagicAssistant.Data.Contracts;
 public interface IMagicCardPhysical : ICardModifiable
 {
     MagicCard Card { get; }
-    void SetLocation(Location location);
+    void SetCollection(Collection? collection);
     bool HasSpecialTag(string tag);
     int GetForTradeCount();
 }

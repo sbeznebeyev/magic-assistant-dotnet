@@ -30,7 +30,7 @@ public class UpdateCardCommandHandler
     {
         // Get existing instance
         var existing = await _cardStore.GetCardsAsync(command.CardId, ct);
-        var matching = existing.FirstOrDefault(e => e.Location.Id == command.DeckId && e.Card.Id == command.CardId);
+        var matching = existing.FirstOrDefault(e => e.Collection?.Id == command.DeckId && e.Card.Id == command.CardId);
 
         if (matching == null)
             return false;

@@ -6,7 +6,7 @@ public interface ICard
 {
     string Name { get; }
     int Count { get; }
-    Location Location { get; }
+    Collection? Collection { get; }
     bool IsSideboard { get; }
     int OwnCount { get; }
     int OwnTotal { get; }

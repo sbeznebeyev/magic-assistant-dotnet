@@ -522,7 +522,7 @@ Three stacked components separated by `<hr class="divider">`. All triggered by `
 |---------|---------|
 | Count | "×N" badge |
 | Ownership | Green "Owned" / Orange "Borrowed" badge |
-| Deck name | Location (truncated) |
+| Deck name | Collection node ID |
 | Sideboard tag | "SB" if in sideboard |
 | Properties | Price ($), Special (★), Comment (📝) — shown if present |
 

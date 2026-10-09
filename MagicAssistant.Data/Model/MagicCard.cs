@@ -199,7 +199,7 @@ public class MagicCard : IMagicCard
 
     // === ICard implementation ===
     public int Count => 1; // reference card always 1
-    public Location Location => Location.NoWhere; // reference card can't be in any location
+    public Collection? Collection => null; // reference card can't be in any location
     public bool IsSideboard => false; // reference card can't be in a sideboard 
 
     public int UniqueCount => 1;

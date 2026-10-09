@@ -2,6 +2,7 @@ using System.Xml;
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.IO;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 namespace MagicAssistant.Data.IO.xml;
 
 /// <summary>
@@ -153,7 +154,7 @@ public static class XmlImport
             physical.SetForTradeCount(ft);
         var loc = fields.GetValueOrDefault("location");
         if (int.TryParse(loc, out var locId) && locId > 0)
-            physical.Location = Location.FromId(locId);
+            physical.Collection = new Collection(locId, string.Empty, null, NodeType.Deck, 0);
 
         return physical;
     }

@@ -1,3 +1,5 @@
+using MagicAssistant.Data.Model.NavigatorNodes;
+using MagicAssistant.Data.Model;
 using Dapper;
 using Microsoft.Data.Sqlite;
 
@@ -672,8 +674,8 @@ public class SqliteCardStoreTests
         var deck = await collectionStore.CreateDeckAsync("Test Deck");
         await collectionStore.AddAllAsync(new[]
         {
-            new MagicCardPhysical(cards[0], Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 },
-            new MagicCardPhysical(cards[1], Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 },
+            new MagicCardPhysical(cards[0], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MagicCardPhysical(cards[1], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
         });
 
         // Act: paged query restricted to the deck location

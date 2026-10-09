@@ -49,7 +49,7 @@ public class CommandHandlerTests
 
         cardStore.Verify(s => s.AddAllAsync(
             It.Is<IEnumerable<MagicCardPhysical>>(cards =>
-                cards.Cast<MagicCardPhysical>().All(p => p.Location.Id == 1 && p.IsOwn)),
+                cards.Cast<MagicCardPhysical>().All(p => p.Collection != null && p.Collection.Id == 1 && p.IsOwn)),
             It.IsAny<CancellationToken>()));
     }
 
@@ -306,6 +306,6 @@ public class CommandHandlerTests
     private static MagicCardPhysical CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };
-        return new MagicCardPhysical(card, Location.FromId(deckId), isOwn) { Count = count };
+        return new MagicCardPhysical(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
     }
 }

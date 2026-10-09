@@ -40,9 +40,6 @@ public class MoveCardsCommandHandler
         if (targetDeck == null)
             throw new InvalidOperationException($"Target deck '{command.TargetDeckId}' not found");
 
-        var sourceLocation = Location.FromId(sourceDeck.Id, sourceDeck.Name, false);
-        var targetLocation = Location.FromId(targetDeck.Id, targetDeck.Name, false);
-
         // Targeted query — get only source deck's cards (WHERE CollectionId = @SourceDeckId)
         var sourceCards = await _collectionStore.GetDeckCardsAsync(sourceDeck.Id, ct);
         var sourceCardMap = sourceCards.ToDictionary(c => c.Id);
@@ -58,13 +55,13 @@ public class MoveCardsCommandHandler
             if (moveCount <= 0) continue;
 
             // Remove from source
-            await _cardStore.RemoveAsync(new MagicCardPhysical(instance.Card, sourceLocation, instance.IsOwn)
+            await _cardStore.RemoveAsync(new MagicCardPhysical(instance.Card, sourceDeck, instance.IsOwn)
             {
                 Count = moveCount,
             }, ct);
 
             // Add to target with updated location
-            var targetInstance = new MagicCardPhysical(instance.Card, targetLocation, instance.IsOwn)
+            var targetInstance = new MagicCardPhysical(instance.Card, targetDeck, instance.IsOwn)
             {
                 Count = moveCount,
                 MyPrice = instance.MyPrice,

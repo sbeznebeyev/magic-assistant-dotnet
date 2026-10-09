@@ -128,10 +128,10 @@
             }
             else
             {
-                // Each physical card carries its owning collection in Location: the deck's own
+                // Each physical card carries its owning collection in Collection: the deck's own
                 // cards (Id == DeckId) vs. the sideboard child's (everything else).
-                var mainCards = cards.Where(c => c.Location.Id == DeckId).ToList();
-                var sideCards = cards.Where(c => c.Location.Id != DeckId).ToList();
+                var mainCards = cards.Where(c => c.Collection?.Id == DeckId).ToList();
+                var sideCards = cards.Where(c => c.Collection?.Id != DeckId).ToList();
                 _hasSideboard = sideCards.Count > 0;
                 _main = BuildChart(AnalysisService.Analyze(mainCards));
                 _side = BuildChart(AnalysisService.Analyze(sideCards));

@@ -2,6 +2,7 @@
 
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model.Enums;
+using MagicAssistant.Data.Model.NavigatorNodes;
 using System.Xml;
 
 namespace MagicAssistant.Data.Model;
@@ -57,7 +58,7 @@ public static class MagicCardFieldExtensions
             MagicCardField.MyPrice => GetMyPrice(card),
             MagicCardField.Count => GetPhysicalCount(card),
             MagicCardField.IsOwn => GetIsOwn(card),
-            MagicCardField.Location => card.Location,
+            MagicCardField.Location => card.Collection,
             MagicCardField.Comment => GetComment(card),
             MagicCardField.Special => GetSpecial(card),
             MagicCardField.DateAdded => GetDateAdded(card),
@@ -184,14 +185,12 @@ public static class MagicCardFieldExtensions
                 physical.IsOwn = value is bool b ? b : bool.Parse(value?.ToString() ?? "false");
                 break;
             case MagicCardField.Location:
-                if (value is Location loc)
-                    physical.Location = loc;
-                else if (value is int id)
-                    physical.Location = Location.FromId(id);
-                else if (value is string s && int.TryParse(s, out var parsedId))
-                    physical.Location = Location.FromId(parsedId);
+                if (value is Collection col)
+                    physical.Collection = col;
+                else if (value is not null && int.TryParse(value.ToString(), out var parsedId))
+                    physical.Collection = new Collection(parsedId, string.Empty, null, NodeType.Deck, 0);
                 else
-                    physical.Location = Location.NoWhere;
+                    physical.Collection = null;
                 break;
             case MagicCardField.Comment:
                 physical.Comment = value?.ToString();

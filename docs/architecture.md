@@ -161,7 +161,7 @@ MagicAssistant.slnx (net10.0)
 │       ├── MagicCardPhysical.cs    ← Физический экземпляр карты
 │       ├── MagicCardField.cs       ← Enum + extension методы для полей
 │       ├── Edition.cs              ← Сет/издание (STH, M19)
-│       ├── Location.cs             ← Расположение карты
+│       ├── Collection.cs           ← Узел дерева коллекции (deck/sideboard/collection/folder)
 │       ├── CardGroup.cs            ← Группа карт
 │       └── ColorTypes.cs           ← Статический класс цветов
 │
@@ -281,7 +281,7 @@ await InitializeDb.EnsureCreatedAsync(cardsDb);
 
 ### MagicCardPhysical — физический экземпляр карты в коллекции/колоде
 
-Ссылается на базовую MagicCard. `Location.RawId` = `CollectionId` из таблицы `Deck`.
+Ссылается на базовую MagicCard. `Collection` (nullable) — ссылка на узел коллекции/колоты/сайдборда; `null` = неразрешённая карта, ещё не привязанная к узлу. `IsSideboard` выводится из `Collection.NodeType == NodeType.Sideboard`.
 
 
 ### MagicCardField — перечисление всех полей карты
@@ -306,13 +306,12 @@ Extension методы:
 - Хранится в колонках `ColorBits` (INTEGER) и `IdentityBits` (INTEGER) таблицы `Cards`
 - Для двусторонних карт (transform/modal_dfc/meld/reversible_card/double_faced_token): `ColorBits` и `IdentityBits` в `Cards` = NULL, биты вычисляются для каждого лица и хранятся в `CardFaces.ColorBits` / `CardFaces.IdentityBits`
 
-### Location — расположение карты
+### Collection — узел дерева коллекции
 
-Поддерживает два формата ID:
-- Integer: `Location.FromId(int id)` → `Id = "123"`, `RawId = 123`
-- Legacy string: `Location.FromPath("deck-123")` → `Id = "deck-123"`, `RawId = 0`
-- `FromPath` распознаёт суффикс `_sb` для sideboard
-- `Equals/GetHashCode` сравнивают по строковому `Id` + `IsSideboard`
+POCO узла навигации (таблица `Collection`, PK: `Id` autoincrement, FK: `ParentId`):
+- `NodeType`: 0=Folder, 1=Collection, 2=Deck, 3=Sideboard; сайдборд — скрытый ребёнок ровно одного Deck
+- `CardCount`, `Locked` — служебные поля узла
+- Физический экземпляр карты держит ссылку на свой узел (`MagicCardPhysical.Collection`, nullable); «unresolved»-карты при импорте несут `null` и штампуются узлом только в момент коммита
 
 ## Контракты доступа к данным
 
@@ -804,7 +803,7 @@ IAnalysisService
 ---
 
 ### ✅ Реализовано: Core Layer и инфраструктура
-- **Модель данных** — MagicCard, MagicCardPhysical, MagicCardField, Edition, Location, CardGroup, ColorTypes, LegalityMap, Format
+- **Модель данных** — MagicCard, MagicCardPhysical, MagicCardField, Edition, Collection, CardGroup, ColorTypes, LegalityMap, Format
 - **Контракты** — ICardStore<T>, IDbCardStore (GetEditionsAsync, BulkUpdateOwnCountAsync, GetCardsByIdsAsync), ICollectionStore (CreateCollectionAsync, CreateFolderAsync, LockAsync, UnlockAsync, GetOwnCountStatsAsync), IScrayfallClient
 - **Фильтры и выражения** — AST: Expr → BinaryExpr/NotExpr/CardFieldExpr/TextValue, MagicCardFilter с сортировкой/группировкой, SearchStringTokenizer, Abilities (regex), ISearchableProperty
 - **Агрегаторы** — `IAnalysisService` однопроходный анализ: mana curve, colors, types, creatures, abilities, basic stats. Analysis Blazor-компоненты.

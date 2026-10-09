@@ -5,9 +5,9 @@ namespace MagicAssistant.Core.Services.CardResolve;
 
 /// <summary>
 /// Vertical slice: resolves stub cards to real KB cards, materializes borrowed cards,
-/// and provides synchronous utility operations (ExpandGroups, GetLocation).
+/// and provides synchronous utility operations (ExpandGroups, GetCollection).
 /// 
-/// Replaces DataManager.ResolveAsync, MaterializeAsync, ExpandGroups, GetLocation.
+/// Replaces DataManager.ResolveAsync, MaterializeAsync, ExpandGroups, GetCollection.
 /// </summary>
 public interface ICardResolveService
 {
@@ -34,11 +34,11 @@ public interface ICardResolveService
     ICollection<IMagicCard> ExpandGroups(ICollection<IMagicCard> cards);
 
     /// <summary>
-    /// Find common location from a collection of cards (all must share the same location).
-    /// Returns null if cards have different or no locations.
+    /// Find common collection from a set of cards (all must share the same collection).
+    /// Returns null if cards have different or no collections.
     /// Synchronous — no I/O involved.
     /// </summary>
-    Location? GetLocation(ICollection<IMagicCard> cards);
+    Collection? GetCollection(ICollection<IMagicCard> cards);
 
     /// <summary>
     /// Resolve card IDs from KB into MagicCardPhysical instances with a specific deck location.

@@ -265,7 +265,7 @@ public class DeckImportExportService : IDeckImportExportService
         {
             var physical = card is MagicCardPhysical p
                 ? p
-                : new MagicCardPhysical(card.GetBase(), Location.FromId(0, "unresolved", false), true);
+                : new MagicCardPhysical(card.GetBase(), null, true);
 
             var key = $"{physical.Name}|{physical.SetCode}";
             if (cardOverrides is { Count: > 0 } && cardOverrides.TryGetValue(key, out var mapped))
@@ -322,17 +322,17 @@ public class DeckImportExportService : IDeckImportExportService
                 $"Sync the corresponding sets and retry.");
         }
 
-        // Wrap into physicals; location is stamped by the commit command
+        // Wrap into physicals; collection is stamped by the commit command
         var physicals = importResult.Cards
             .Select(c => c is MagicCardPhysical p
                 ? p
-                : new MagicCardPhysical(c.GetBase(), Location.FromId(0, "unresolved", false), true))
+                : new MagicCardPhysical(c.GetBase(), null, true))
             .ToList();
 
         var sideboardPhysicals = importResult.Sideboard
             .Select(c => c is MagicCardPhysical p
                 ? p
-                : new MagicCardPhysical(c.GetBase(), Location.FromId(0, "unresolved", true), true))
+                : new MagicCardPhysical(c.GetBase(), null, true))
             .ToList();
 
         var finalName = string.IsNullOrWhiteSpace(deckName) ? importResult.Name : deckName.Trim();

@@ -31,7 +31,7 @@ public class CardGroup : ICard, IEnumerable<IMagicCard>
     public int OwnTotalAll => _children.Sum(c => c.OwnTotalAll);
     public int OwnUnique => _children.Sum(c => c.OwnUnique);
 
-    public Location Location => Location.NoWhere;
+    public Collection? Collection => null;
     public bool IsSideboard => false;
     public int UniqueCount => _children.Count;
     public bool IsPhysical => false;

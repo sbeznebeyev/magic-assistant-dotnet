@@ -1,6 +1,7 @@
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model.Enums;
 using MagicAssistant.Data.Model.Legality;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Data.Model;
 
@@ -20,9 +21,9 @@ public class MagicCardPhysical : IMagicCardPhysical
         DateAdded = DateTimeOffset.Now;
     }
 
-    public MagicCardPhysical(MagicCard card, Location location, bool isOwn) : this(card)
+    public MagicCardPhysical(MagicCard card, Collection? collection, bool isOwn) : this(card)
     {
-        Location = location;
+        Collection = collection;
         IsOwn = isOwn;
     }
 
@@ -40,7 +41,7 @@ public class MagicCardPhysical : IMagicCardPhysical
 
     // === Physical properties ===
     public int Count { get; set; }
-    public Location Location { get; set; } = Location.NoWhere;
+    public Collection? Collection { get; set; }
     public bool IsOwn { get; set; }
     public DateTimeOffset DateAdded { get; set; }
 
@@ -129,7 +130,7 @@ public class MagicCardPhysical : IMagicCardPhysical
     /// </summary>
     public int OwnUnique => IsOwn ? 1 : 0;
 
-    public bool IsSideboard => Location.IsSideboard;
+    public bool IsSideboard => Collection?.NodeType == NodeType.Sideboard;
     public int UniqueCount => 1;
     public bool IsPhysical => true;
 
@@ -137,7 +138,7 @@ public class MagicCardPhysical : IMagicCardPhysical
     void ICardModifiable.SetCount(int count) => Count = count;
 
     // === IMagicCardPhysical implementation ===
-    public void SetLocation(Location location) => Location = location;
+    public void SetCollection(Collection? collection) => Collection = collection;
 
     public bool HasSpecialTag(string tag)
     {
@@ -290,11 +291,13 @@ public class MagicCardPhysical : IMagicCardPhysical
     public override bool Equals(object? obj)
     {
         if (obj is MagicCardPhysical other)
-            return Card.Equals(other.Card) && Count == other.Count && Location.Equals(other.Location);
+            return Card.Equals(other.Card) && Count == other.Count && CollectionId(Collection) == CollectionId(other.Collection);
         if (obj is MagicCard mc)
             return Card.Equals(mc);
         return false;
     }
+
+    private static int CollectionId(Collection? c) => c?.Id ?? 0;
 
     public override string ToString() => $"{Card} x {Count}";
 }

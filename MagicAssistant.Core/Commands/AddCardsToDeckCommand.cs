@@ -24,8 +24,7 @@ public class AddCardsToDeckCommandHandler
         if (deck == null)
             throw new InvalidOperationException($"Deck '{command.DeckId}' not found");
 
-        var location = Location.FromId(deck.Id, deck.Name, false);
-        var physicals = command.Cards.Select(c => new MagicCardPhysical(c.GetBase(), location, true)).ToList();
+        var physicals = command.Cards.Select(c => new MagicCardPhysical(c.GetBase(), deck, true)).ToList();
 
         return await _cardStore.AddAllAsync(physicals, ct);
     }

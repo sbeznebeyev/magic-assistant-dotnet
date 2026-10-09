@@ -1,5 +1,6 @@
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Core.Services.CardResolve;
 
@@ -98,8 +99,8 @@ public class CardResolveService : ICardResolveService
 
             if (physical.IsOwn)
             {
-                // Owned → copy with null location
-                result.Add(new MagicCardPhysical(physical.Card, Location.NoWhere, true)
+                // Owned → copy with null collection
+                result.Add(new MagicCardPhysical(physical.Card, null, true)
                 {
                     Count = physical.Count,
                 });
@@ -116,7 +117,7 @@ public class CardResolveService : ICardResolveService
                         if (remaining <= 0) break;
 
                         var grabCount = Math.Min(candidate.Count, remaining);
-                        result.Add(new MagicCardPhysical(candidate.Card, candidate.Location, true)
+                        result.Add(new MagicCardPhysical(candidate.Card, candidate.Collection, true)
                         {
                             Count = grabCount,
                         });
@@ -124,10 +125,10 @@ public class CardResolveService : ICardResolveService
                     }
                 }
 
-                // Unresolved → placeholder (borrowed, no location)
+                // Unresolved → placeholder (borrowed, no collection)
                 if (remaining > 0)
                 {
-                    result.Add(new MagicCardPhysical(physical.Card, Location.NoWhere, false)
+                    result.Add(new MagicCardPhysical(physical.Card, null, false)
                     {
                         Count = remaining,
                     });
@@ -164,20 +165,20 @@ public class CardResolveService : ICardResolveService
     /// Returns null if cards have different or no locations.
     /// Synchronous — no I/O involved.
     /// </summary>
-    public Location? GetLocation(ICollection<IMagicCard> cards)
+    public Collection? GetCollection(ICollection<IMagicCard> cards)
     {
         if (cards == null || !cards.Any())
             return null;
 
-        Location? common = null;
+        Collection? common = null;
         foreach (var card in cards)
         {
-            if (card is MagicCardPhysical mcp && mcp.Location.Id > 0)
+            if (card is MagicCardPhysical mcp && mcp.Collection is { Id: > 0 } c)
             {
                 if (common == null)
-                    common = mcp.Location;
-                else if (!common.Equals(mcp.Location))
-                    return null; // different locations
+                    common = c;
+                else if (common.Id != c.Id)
+                    return null; // different collections
             }
             else
             {
@@ -202,13 +203,13 @@ public class CardResolveService : ICardResolveService
 
         // Batch resolve all card IDs in one query
         var kbMap = await _kb.GetCardsByIdsAsync(cardIds.ToList(), ct);
-        var location = Location.FromId(deckId, deckId.ToString(), false);
+        var collection = new Collection(deckId, string.Empty, null, NodeType.Deck, 0);
         var physicals = new List<MagicCardPhysical>(kbMap.Count);
 
         foreach (var cardId in cardIds)
         {
             if (kbMap.TryGetValue(cardId, out var card))
-                physicals.Add(new MagicCardPhysical(card, location, true));
+                physicals.Add(new MagicCardPhysical(card, collection, true));
         }
 
         return physicals;

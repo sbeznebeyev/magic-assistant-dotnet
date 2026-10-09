@@ -80,28 +80,25 @@ public class ImportResolvedCardsCommandHandler
             // sideboard as separate transactions, so a late failure would leave a partial import.
             // A non-deck target (Collection) has no sideboard child — the file's sideboard is
             // silently ignored there; only the main cards are imported.
-            int? sbId = null;
-            string? sbName = null;
+            Collection? sbNode = null;
             if (sideboard.Count > 0 && deck.NodeType == NodeType.Deck)
             {
-                sbId = await _collectionStore.GetSideboardIdAsync(targetId, ct);
+                var sbId = await _collectionStore.GetSideboardIdAsync(targetId, ct);
                 if (sbId is not { } foundSbId)
                     throw new InvalidOperationException($"Target deck '{deck.Name}' has no sideboard node.");
 
-                sbName = (await _collectionStore.GetByIdAsync(foundSbId, ct))?.Name ?? $"{deck.Name} (sb)";
+                sbNode = await _collectionStore.GetByIdAsync(foundSbId, ct);
             }
 
-            var location = Location.FromId(deck.Id, deck.Name, false);
             foreach (var card in command.Cards)
-                card.SetLocation(location);
+                card.SetCollection(deck);
 
             await _cardStore.AddAllAsync(command.Cards, ct);
 
-            if (sideboard.Count > 0 && sbId is { } sb)
+            if (sideboard.Count > 0 && sbNode is not null)
             {
-                var sbLocation = Location.FromId(sb, sbName!, true);
                 foreach (var card in sideboard)
-                    card.SetLocation(sbLocation);
+                    card.SetCollection(sbNode);
 
                 await _cardStore.AddAllAsync(sideboard, ct);
             }

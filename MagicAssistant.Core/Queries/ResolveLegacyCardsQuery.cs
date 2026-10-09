@@ -94,9 +94,9 @@ public class ResolveLegacyCardsQueryHandler
                 else
                 {
                     // Raw (non-physical) cards are not produced by XmlImport, but stay supported:
-                    // wrap into a physical with the resolved ID; location is stamped at commit.
+                    // wrap into a physical with the resolved ID; collection is stamped at commit.
                     var baseCopy = new MagicCard { Id = kbCard.Id, Name = card.Name, SetCode = card.SetCode };
-                    result.Resolved.Add(new MagicCardPhysical(baseCopy, Location.FromId(0, "unresolved", false), true));
+                    result.Resolved.Add(new MagicCardPhysical(baseCopy, null, true));
                 }
             }
             else if (seenUnresolved.Add($"{card.Name}|{card.SetCode}"))
