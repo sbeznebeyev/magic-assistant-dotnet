@@ -376,41 +376,6 @@ public class SqliteCardStoreTests
         }
     }
 
-    [Test]
-    public async Task BulkUpdateOwnCountAsync_PersistsStatsToOwnCounts()
-    {
-        var cardId1 = Guid.NewGuid();
-        var cardId2 = Guid.NewGuid();
-
-        var stats = new[]
-        {
-            new OwnCountStats(cardId1, 2, 4, 1),
-            new OwnCountStats(cardId2, 1, 2, 1),
-        };
-
-        await _store.AddAllAsync(new[] { CreateTestCard(cardId1, "Card 1"), CreateTestCard(cardId2, "Card 2") });
-        await _store.BulkUpdateOwnCountAsync(stats);
-
-        // Verify via direct SQL
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
-        var count = await conn.QuerySingleAsync<int>("SELECT COUNT(*) FROM OwnCounts");
-        Assert.That(count, Is.EqualTo(2));
-    }
-
-    [Test]
-    public async Task BulkUpdateOwnCountAsync_HandlesEmptyStats()
-    {
-        await _store.BulkUpdateOwnCountAsync(Array.Empty<OwnCountStats>());
-        // Should not throw
-    }
-
-    [Test]
-    public async Task BulkUpdateOwnCountAsync_HandlesNullStats()
-    {
-        await _store.BulkUpdateOwnCountAsync(null!);
-        // Should not throw
-    }
 
     // ═══ ResolveSetNamesAsync (batch: full name → abbreviation) ═══
 

@@ -291,8 +291,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
         if (row == null) return null;
 
-        var ownCounts = await LoadOwnCountForCardAsync(conn, cardId, ct);
-        var card = MapToMagicCard(row, ownCounts);
+        var card = MapToMagicCard(row);
 
         // Load card faces
         var faces = await LoadCardFacesAsync(conn, cardId, ct);
@@ -331,8 +330,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<MagicCardRow>("SELECT * FROM Cards");
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -371,8 +369,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<MagicCardRow>("SELECT * FROM Cards LIMIT @Limit", new { Limit = limit });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -421,8 +418,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             LIMIT @Limit";
 
         var rows = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = query, Limit = limit });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -468,8 +464,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         var rows = await conn.QueryAsync<MagicCardRow>(
             "SELECT * FROM Cards WHERE SetCode = @SetCode ORDER BY CollectorNumber",
             new { SetCode = setAbbreviation });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -506,8 +501,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         var rows = await conn.QueryAsync<MagicCardRow>(
             "SELECT * FROM Cards WHERE Name = @Name ORDER BY SetCode",
             new { Name = name });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -747,8 +741,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         parameters.Add("Offset", filter.Offset);
 
         var rows = await conn.QueryAsync<MagicCardRow>(dataSql, parameters);
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -1575,7 +1568,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return face;
     }
 
-    private static MagicCard MapToMagicCard(MagicCardRow row, OwnCountStats? ownCounts = null)
+    private static MagicCard MapToMagicCard(MagicCardRow row)
     {
         var card = new MagicCard
         {
@@ -1655,25 +1648,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         card.ColorBits = row.ColorBits;
         card.IdentityBits = row.IdentityBits;
 
-        // Attach ownership stats from OwnCounts table (if available)
-        if (ownCounts is { } stats)
-        {
-            AttachOwnCountStats(card, stats);
-        }
-
         return card;
-    }
-
-    /// <summary>
-    /// Attaches ownership statistics to a card's properties so that
-    /// GetOwnCount() and GetOwnTotal() return real values.
-    /// </summary>
-    private static void AttachOwnCountStats(MagicCard card, OwnCountStats stats)
-    {
-        if (stats.OwnCount > 0)
-            card.OwnCount = stats.OwnCount;
-        if (stats.TotalCount > 0)
-            card.OwnTotal = stats.TotalCount;
     }
 
     /// <summary>
@@ -1686,50 +1661,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     {
         // Invalidate L1 cache so next reads hit the DB and pick up any external changes.
         _cache.Clear();
-    }
-
-    /// <summary>
-    /// Bulk update OwnCount/OwnTotal properties on base cards in KB.
-    /// Uses a temp table approach: inserts stats, then updates Cards via JOIN.
-    /// This is the fastest way to bulk-update properties in SQLite.
-    /// </summary>
-    public async Task BulkUpdateOwnCountAsync(ICollection<OwnCountStats> stats, CancellationToken ct = default)
-    {
-        if (stats == null || !stats.Any())
-            return;
-
-        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
-        await conn.OpenAsync(ct);
-
-        // Create a temporary table for the stats
-        await conn.ExecuteAsync(@"
-            CREATE TEMP TABLE IF NOT EXISTS OwnCountTemp (
-                CardId uniqueidentifier PRIMARY KEY,
-                OwnCount INTEGER,
-                TotalCount INTEGER
-            )");
-        await conn.ExecuteAsync("DELETE FROM OwnCountTemp");
-
-        // Bulk insert stats into temp table
-        var list = stats.ToList();
-        await conn.ExecuteAsync(@"
-            INSERT OR REPLACE INTO OwnCountTemp (CardId, OwnCount, TotalCount)
-            VALUES (@CardId, @OwnCount, @TotalCount)",
-            list.Select(s => new { s.CardId, s.OwnCount, s.TotalCount }));
-
-        // Persist to OwnCounts table (created by InitializeDb.EnsureCreatedAsync).
-        await conn.ExecuteAsync(@"
-            INSERT OR REPLACE INTO OwnCounts (CardId, OwnCount, TotalCount)
-            SELECT t.CardId, t.OwnCount, t.TotalCount
-            FROM OwnCountTemp t
-            WHERE EXISTS (SELECT 1 FROM Cards c WHERE c.Id = t.CardId)");
-
-        // Clean up temp table
-        await conn.ExecuteAsync("DROP TABLE IF EXISTS OwnCountTemp");
-
-        // Invalidate cache for affected cards
-        foreach (var s in list)
-            _cache.TryRemove(s.CardId, out _);
     }
 
     /// <summary>
@@ -1784,7 +1715,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             var sql = $"SELECT * FROM Cards WHERE Id IN ({placeholders})";
 
             var rows = (await conn.QueryAsync<MagicCardRow>(sql, parameters)).ToList();
-            var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
 
             // Load card faces for all missing cards
             var facesMap = await LoadCardFacesForIdsAsync(conn, missingIds, ct);
@@ -1797,7 +1727,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
             foreach (var row in rows)
             {
-                var card = MapToMagicCard(row, ownCountsMap.GetValueOrDefault(row.Id));
+                var card = MapToMagicCard(row);
 
                 if (facesMap.TryGetValue(card.Id, out var faces))
                     card.CardFaces = faces;
@@ -1960,37 +1890,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>
-    /// Loads ownership stats for a single card from the OwnCounts table.
-    /// </summary>
-    private static async Task<OwnCountStats?> LoadOwnCountForCardAsync(SqliteConnection conn, Guid cardId, CancellationToken ct = default)
-    {
-        var row = await conn.QuerySingleOrDefaultAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount FROM OwnCounts WHERE CardId = @Id",
-            new { Id = cardId });
-
-        return row != null ? new OwnCountStats(row.CardId, row.OwnCount, row.TotalCount) : null;
-    }
-
-    /// <summary>
-    /// Loads all ownership stats from the OwnCounts table into a dictionary keyed by CardId.
-    /// </summary>
-    private static async Task<Dictionary<Guid, OwnCountStats>> LoadAllOwnCountsAsync(
-        SqliteConnection conn, CancellationToken ct = default)
-    {
-        var rows = await conn.QueryAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount FROM OwnCounts");
-
-        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount));
-    }
-
-    private class OwnCountRow
-    {
-        public Guid CardId { get; set; }
-        public int OwnCount { get; set; }
-        public int TotalCount { get; set; }
-    }
-
     // ── Batch resolution for old-format import (Gatherer ID + full set name) ──
 
     public async Task<Dictionary<string, string>> ResolveSetNamesAsync(ICollection<string> fullNames, CancellationToken ct = default)
@@ -2058,7 +1957,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         var sql = string.Join(" UNION ALL ",
             conditions.Select((c, i) => $"SELECT *, {i} AS __m FROM Cards WHERE {c}"));
         var rows = await conn.QueryAsync<ResolveMatchRow>(sql, paramObj);
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
 
         // Build requested-pair key → card mapping (first match wins per pair)
         var result = new Dictionary<string, MagicCard>();
@@ -2067,7 +1965,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             var pair = pairsList[row.__m];
             var key = $"{pair.Name}|{pair.Set ?? ""}";
             if (!result.ContainsKey(key))
-                result[key] = MapToMagicCard(row, ownCountsMap.GetValueOrDefault(row.Id));
+                result[key] = MapToMagicCard(row);
         }
 
         return result;

@@ -63,8 +63,7 @@ public static class MagicCardFieldExtensions
             MagicCardField.Grade => GetGrade(card),
 
             // Derived/computed
-            MagicCardField.OwnCount => card.OwnCount,
-            MagicCardField.OwnTotal => card.OwnTotal,
+            MagicCardField.OwnCount => GetOwnCount(card),
             MagicCardField.CreatureCount => GetCreatureCount(card),
             MagicCardField.Count4 => Math.Min(GetPhysicalCount(card), 4),
             MagicCardField.PercentComplete => ComputePercentComplete(card),
@@ -243,7 +242,6 @@ public static class MagicCardFieldExtensions
             or MagicCardField.Percent4Complete
             or MagicCardField.Error
             or MagicCardField.OwnCount
-            or MagicCardField.OwnTotal
             or MagicCardField.Sideboard;
     }
 
@@ -283,6 +281,7 @@ public static class MagicCardFieldExtensions
 
     // === Helper methods for physical card fields ===
     private static float GetMyPrice(IMagicCard card) => card is MagicCardPhysical p ? p.MyPrice : 0f;
+    private static int GetOwnCount(IMagicCard card) => card is MagicCardPhysical p ? p.OwnCount : 0;
     private static int GetPhysicalCount(IMagicCard card) => card.IsPhysical ? card.Count : 1;
     private static bool GetIsOwn(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.IsOwn : false;
     private static string? GetComment(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Comment : null;
@@ -316,7 +315,7 @@ public static class MagicCardFieldExtensions
     /// </summary>
     private static float ComputePercentComplete(IMagicCard card)
     {
-        var ownCount = card.OwnCount;
+        var ownCount = GetOwnCount(card);
         if (ownCount == 0)
             return 0f;
 
@@ -331,7 +330,7 @@ public static class MagicCardFieldExtensions
     /// </summary>
     private static float ComputePercent4Complete(IMagicCard card)
     {
-        var ownCount = card.OwnCount;
+        var ownCount = GetOwnCount(card);
         return Math.Min(ownCount, 4) * 25f;
     }
 

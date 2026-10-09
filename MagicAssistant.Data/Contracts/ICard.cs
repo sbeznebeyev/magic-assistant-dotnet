@@ -8,8 +8,6 @@ public interface ICard
     int Count { get; }
     Collection? Collection { get; }
     bool IsSideboard { get; }
-    int OwnCount { get; }
-    int OwnTotal { get; }
     int UniqueCount { get; }
     bool IsPhysical { get; }
 }

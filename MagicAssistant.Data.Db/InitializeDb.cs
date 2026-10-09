@@ -38,7 +38,6 @@ public static class InitializeDb
         await CreateSetTable(conn);
         await CreateCollectionTable(conn);
         await CreateDeckTable(conn);
-        await CreateOwnCountsTable(conn);
         await CreateCardFacesTable(conn);
         await CreateCardAllPartsTable(conn);
         await CreateCardsImageUrisTable(conn);
@@ -144,17 +143,6 @@ public static class InitializeDb
                 Grade         INTEGER,
                 PRIMARY KEY (CollectionId, CardId),
                 FOREIGN KEY (CollectionId) REFERENCES Collection(Id) ON DELETE CASCADE,
-                FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE
-            )");
-    }
-
-    private static async Task CreateOwnCountsTable(SqliteConnection conn)
-    {
-        await conn.ExecuteAsync(@"
-            CREATE TABLE IF NOT EXISTS OwnCounts (
-                CardId     uniqueidentifier PRIMARY KEY,
-                OwnCount   INTEGER NOT NULL DEFAULT 0,
-                TotalCount INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE
             )");
     }

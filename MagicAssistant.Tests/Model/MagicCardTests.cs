@@ -33,27 +33,6 @@ public class MagicCardTests
         Assert.That(original.Name, Is.EqualTo("Test"));
     }
 
-    /* ─── Computed fields — OwnCount/OwnTotal etc. (direct properties) ───── */
-
-    [Test]
-    public void ComputedFields_DirectAssignment()
-    {
-        var card = new MagicCard();
-
-        card.OwnCount = 5;
-        Assert.That(card.OwnCount, Is.EqualTo(5));
-
-        card.OwnTotal = 10;
-        Assert.That(card.OwnTotal, Is.EqualTo(10));
-    }
-
-    [Test]
-    public void ComputedFields_DefaultToZero()
-    {
-        var card = new MagicCard();
-        Assert.That(card.OwnCount, Is.EqualTo(0));
-        Assert.That(card.OwnTotal, Is.EqualTo(0));
-    }
 
     /* ─── Equals — идентичность эталонных карт ─────────────── */
 
@@ -91,7 +70,6 @@ public class MagicCardTests
         var card = new MagicCard();
         Assert.That(card.Count, Is.EqualTo(1), "Reference card always has Count=1 (single instance)");
         Assert.That(card.IsPhysical, Is.False, "Reference card is NOT physical");
-        Assert.That(card.OwnCount, Is.EqualTo(0));
         Assert.That(card.UniqueCount, Is.EqualTo(1));
     }
         

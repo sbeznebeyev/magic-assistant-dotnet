@@ -318,27 +318,6 @@ public class SqliteCollectionStoreTests
         Assert.That(result.Count, Is.EqualTo(4));
     }
 
-    [Test]
-    public async Task GetOwnCountStatsAsync_ReturnsCorrectStats_ForOwnedCards()
-    {
-        var deck = await _store.CreateDeckAsync("Test Deck");
-        var card1 = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 };
-        var card2 = new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
-
-        await _store.AddAllAsync(new[] { card1, card2 });
-
-        var stats = await _store.GetOwnCountStatsAsync();
-
-        Assert.That(stats, Has.Count.EqualTo(2));
-
-        // card1: IsOwn=true, Count=2 → OwnCount=2, TotalCount=2
-        Assert.That(stats[_id_1].OwnCount, Is.EqualTo(2), "Owned copies of id-1 should be 2");
-        Assert.That(stats[_id_1].TotalCount, Is.EqualTo(2), "Total copies of id-1 should be 2");
-
-        // card2: IsOwn=true, Count=1 → OwnCount=1, TotalCount=1
-        Assert.That(stats[_id_2].OwnCount, Is.EqualTo(1), "Owned copies of id-2 should be 1");
-        Assert.That(stats[_id_2].TotalCount, Is.EqualTo(1), "Total copies of id-2 should be 1");
-    }
 
     [Test]
     public async Task GetDeckWithSideboardAsync_IncludesSideboardCards()

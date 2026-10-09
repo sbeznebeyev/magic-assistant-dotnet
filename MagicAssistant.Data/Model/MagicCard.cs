@@ -10,10 +10,6 @@ namespace MagicAssistant.Data.Model;
 /// </summary>
 public class MagicCard : IMagicCard
 {
-    // === Computed/derived fields (set by Data layer via reconciliation) ===
-    public int OwnCount { get; set; }
-    public int OwnTotal { get; set; }
-
     public MagicCard() { }
 
     // === Basic fields ===

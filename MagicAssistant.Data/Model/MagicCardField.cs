@@ -52,7 +52,6 @@ public enum MagicCardField
 
     // === Derived/computed fields ===
     OwnCount,
-    OwnTotal,
     CreatureCount,
     Count4,
     PercentComplete,

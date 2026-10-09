@@ -637,8 +637,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id LEFT JOIN Collection n ON d.CollectionId = n.Id WHERE d.CardId = @CardId",
             new { CardId = cardId });
 
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var physicals = rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        var physicals = rows.Select(r => MapToFullPhysical(r)!).ToList();
         await AttachFacesAsync(conn, physicals, ct);
         return physicals;
     }
@@ -659,8 +658,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         var rows = await conn.QueryAsync<FullDeckCardRow>(
             $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id LEFT JOIN Collection n ON d.CollectionId = n.Id");
 
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        return rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        return rows.Select(r => MapToFullPhysical(r)!).ToList();
     }
 
     /// <summary>
@@ -674,8 +672,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id LEFT JOIN Collection n ON d.CollectionId = n.Id WHERE d.CollectionId = @DeckId",
             new { DeckId = deckId });
 
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var physicals = rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        var physicals = rows.Select(r => MapToFullPhysical(r)!).ToList();
         await AttachFacesAsync(conn, physicals, ct);
         return physicals;
     }
@@ -747,8 +744,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id LEFT JOIN Collection n ON d.CollectionId = n.Id WHERE d.CollectionId IN (" + placeholders + ")",
             parameters);
 
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var physicals = rows.Select(r => MapToFullPhysical(r, ownCountsMap.GetValueOrDefault(r.CardId))!).ToList();
+        var physicals = rows.Select(r => MapToFullPhysical(r)!).ToList();
         await AttachFacesAsync(conn, physicals, ct);
         return physicals;
     }
@@ -794,53 +790,9 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return new Collection(id, name, parentId, NodeType.Folder, 0);
     }
 
-    /// <summary>
-    /// Compute ownership statistics for all unique card IDs in one SQL query.
-    /// Returns CardId → { OwnCount, TotalCount } for efficient reconciliation.
-    /// </summary>
-    public async Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default)
-    {
-        using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
-        var rows = await conn.QueryAsync<OwnCountRow>(@"
-            SELECT d.CardId,
-                   SUM(CASE WHEN d.IsOwn = 1 THEN d.Count ELSE 0 END) AS OwnCount,
-                   SUM(d.Count) AS TotalCount
-            FROM Deck d
-            GROUP BY d.CardId");
-
-        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount));
-    }
-
     // ═══════════════════════════════════════════════════════════
     //  Private helpers
     // ═══════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Loads all ownership stats from the OwnCounts table into a dictionary keyed by CardId.
-    /// </summary>
-    private static async Task<Dictionary<Guid, OwnCountStats>> LoadAllOwnCountsAsync(
-        SqliteConnection conn, CancellationToken ct = default)
-    {
-        var rows = await conn.QueryAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount FROM OwnCounts");
-
-        return rows.ToDictionary(
-            r => r.CardId,
-            r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount));
-    }
-
-    /// <summary>
-    /// Attaches ownership statistics to a card's properties so that
-    /// GetOwnCount() and GetOwnTotal() return real values.
-    /// </summary>
-    private static void AttachOwnCountStats(MagicCard card, OwnCountStats stats)
-    {
-        if (stats.OwnCount > 0)
-            card.OwnCount = stats.OwnCount;
-        if (stats.TotalCount > 0)
-            card.OwnTotal = stats.TotalCount;
-    }
 
     /// <summary>
     /// Batch-loads CardFaces for the given physicals in one query and attaches them to each card.
@@ -941,7 +893,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// <summary>
     /// Maps a full JOIN row (Deck + Cards) to MagicCardPhysical with complete base card info.
     /// </summary>
-    private MagicCardPhysical? MapToFullPhysical(FullDeckCardRow row, OwnCountStats? ownCounts = null)
+    private MagicCardPhysical? MapToFullPhysical(FullDeckCardRow row)
     {
         var baseCard = new MagicCard
         {
@@ -979,13 +931,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                     baseCard.LegalityMap.SetLegal(format);
             }
         }
-
-        // Attach ownership stats from OwnCounts table (if available)
-        if (ownCounts is { } stats)
-        {
-            AttachOwnCountStats(baseCard, stats);
-        }
-
         // Stamp the owning collection node fully from the JOINed row (all-null when the node is gone).
         // CardCount is a computed POCO field, not a table column — left at 0 here.
         var collection = new Collection(
@@ -1094,13 +1039,6 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         public int CollectorNumberId { get; set; }
         public float MyPrice { get; set; }
         public string? LegalityFormats { get; set; }
-    }
-
-    private class OwnCountRow
-    {
-        public Guid CardId { get; set; }
-        public int OwnCount { get; set; }
-        public int TotalCount { get; set; }
     }
 
     /// <summary>Row from the CardFaces table (one face of a multi-faced card).</summary>

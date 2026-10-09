@@ -26,8 +26,6 @@ public class CardGroup : ICard, IEnumerable<IMagicCard>
 
     // ICard implementation - aggregates from children
     public string Name => Label;
-    public int OwnCount => _children.Sum(c => c.OwnCount);
-    public int OwnTotal => _children.Sum(c => c.OwnTotal);
 
     public Collection? Collection => null;
     public bool IsSideboard => false;

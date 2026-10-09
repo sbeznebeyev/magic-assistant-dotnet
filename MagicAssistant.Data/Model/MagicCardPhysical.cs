@@ -97,12 +97,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     /// </summary>
     public int OwnCount => IsOwn ? Count : 0;
 
-    /// <summary>
-    /// Total copies of this card across all decks (owned + borrowed).
-    /// Delegates to base KB card which reads from OwnCounts properties.
-    /// </summary>
-    public int OwnTotal => Card.OwnTotal;
-
     public bool IsSideboard => Collection?.NodeType == NodeType.Sideboard;
     public int UniqueCount => 1;
     public bool IsPhysical => true;

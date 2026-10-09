@@ -97,11 +97,6 @@ public interface ICollectionStore
     /// </summary>
     Task<Collection> CreateFolderAsync(string name, int? parentId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Compute ownership statistics for all unique card IDs in one SQL query.
-    /// Returns CardId → { OwnCount, TotalCount } for efficient reconciliation.
-    /// </summary>
-    Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Sum of counts for the given card IDs within the given collections (exact collection rows only).
