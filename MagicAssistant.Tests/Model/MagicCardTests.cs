@@ -70,7 +70,6 @@ public class MagicCardTests
         var card = new MagicCard();
         Assert.That(card.Count, Is.EqualTo(1), "Reference card always has Count=1 (single instance)");
         Assert.That(card.IsPhysical, Is.False, "Reference card is NOT physical");
-        Assert.That(card.UniqueCount, Is.EqualTo(1));
     }
         
 }

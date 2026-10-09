@@ -55,13 +55,6 @@ public class MagicCardPhysicalTests
         Assert.That(physical.OwnCount, Is.EqualTo(0));
     }
 
-    [Test]
-    public void Count4_CapsAtFour_ForOwnedCards()
-    {
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 2 }.Count4, Is.EqualTo(2));
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 5 }.Count4, Is.EqualTo(4));
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 3 }.Count4, Is.EqualTo(0));
-    }
 
     /* ─── Sideboard flag ──────────────────────────────────── */
 
@@ -91,107 +84,8 @@ public class MagicCardPhysicalTests
         Assert.That(physical.GetForTradeCount(), Is.EqualTo(0));
     }
 
-    /* ─── Matching — сравнение физических карт ────────────── */
 
-    [Test]
-    public void Matching_ReturnsTrue_ForIdenticalCards()
-    {
-        var p1 = new MagicCardPhysical(Card()) { Count = 4, IsOwn = true };
-        var p2 = new MagicCardPhysical(Card()) { Count = 4, IsOwn = true };
-        Assert.That(p1.Matching(p2), Is.True);
-    }
 
-    [Test]
-    public void Matching_ReturnsFalse_ForDifferentProperties()
-    {
-        var base1 = CardWithId("00000000-0000-0000-0000-000000000001");
-        var base2 = CardWithId("00000000-0000-0000-0000-000000000002");
-
-        // Different card IDs
-        Assert.That(new MagicCardPhysical(base1) { Count = 4 }.Matching(
-            new MagicCardPhysical(base2) { Count = 4 }), Is.False);
-
-        // Different ownership
-        Assert.That(new MagicCardPhysical(Card()) { Count = 4, IsOwn = true }.Matching(
-            new MagicCardPhysical(Card()) { Count = 4, IsOwn = false }), Is.False);
-
-        // Different price
-        Assert.That(new MagicCardPhysical(Card()) { MyPrice = 1f }.Matching(
-            new MagicCardPhysical(Card()) { MyPrice = 2f }), Is.False);
-
-        // Different comment
-        Assert.That(new MagicCardPhysical(Card()) { Comment = "a" }.Matching(
-            new MagicCardPhysical(Card()) { Comment = "b" }), Is.False);
-    }
-
-    /* ─── CreatureCount ───────────────────────────────────── */
-
-    [Test]
-    public void GetCreatureCount_ReturnsCount_ForCreatures()
-    {
-        var card = Card();
-        card.Type = "Creature — Human";
-        card.Power = "2";
-        Assert.That(new MagicCardPhysical(card) { Count = 3 }.GetCreatureCount(), Is.EqualTo(3));
-    }
-
-    [Test]
-    public void GetCreatureCount_ReturnsZero_WhenNoPower()
-    {
-        // Cards without Power/Toughness are not creatures (lands, instants, sorceries, etc.)
-        var card = Card();
-        card.Type = "Creature — Human";
-        card.Power = null;
-        Assert.That(new MagicCardPhysical(card) { Count = 3 }.GetCreatureCount(), Is.EqualTo(0));
-    }
-
-    [Test]
-    public void GetCreatureCount_ReturnsZero_ForNonCreatureType()
-    {
-        // Non-creature types should return 0 even if Type string is set
-        var card = Card();
-        card.Type = "Instant";
-        Assert.That(new MagicCardPhysical(card) { Count = 4 }.GetCreatureCount(), Is.EqualTo(0));
-    }
-
-    [Test]
-    public void GetCreatureCount_ShouldCheckTypeContainsCreature()
-    {
-        // BUG: GetCreatureCount only checks Power != null, ignoring Type entirely.
-        // A Planeswalker/Artifact with Power should NOT be counted as a creature.
-        var card = Card();
-        card.Type = "Planeswalker";
-        card.Power = "5";
-        Assert.That(new MagicCardPhysical(card) { Count = 1 }.GetCreatureCount(), Is.EqualTo(0),
-            "BUG: GetCreatureCount must check that Type contains 'Creature'. " +
-            "A Planeswalker with Power='5' is NOT a creature and should return 0. " +
-            "Current implementation only checks Power != null, ignoring Type completely.");
-    }
-
-    /* ─── Clone & property delegation ────────────────────── */
-
-    [Test]
-    public void Clone_CreatesDeepCopy()
-    {
-        var physical = new MagicCardPhysical(Card()) { Count = 3, Comment = "test" };
-        var clone = (MagicCardPhysical)physical.Clone();
-        Assert.That(clone.Count, Is.EqualTo(3));
-        Assert.That(clone.Comment, Is.EqualTo("test"));
-        Assert.That(clone, Is.Not.SameAs(physical));
-    }
-
-    [Test]
-    public void Error_Field_StoresValue()
-    {
-        // Error is a native field, not in _properties anymore.
-        var physical = new MagicCardPhysical(Card());
-        physical.SetError("test error");
-        Assert.That(physical.GetError(), Is.EqualTo("test error"));
-
-        // Non-set error returns null
-        var physical2 = new MagicCardPhysical(Card());
-        Assert.That(physical2.GetError(), Is.Null);
-    }
 
     /* ─── Base card delegation ────────────────────────────── */
 
@@ -211,15 +105,6 @@ public class MagicCardPhysicalTests
         Assert.That(physical.GetBase(), Is.SameAs(card));
     }
 
-    /* ─── Error handling ──────────────────────────────────── */
-
-    [Test]
-    public void SetError_And_GetError_StoreValue()
-    {
-        var physical = new MagicCardPhysical(Card());
-        physical.SetError("import error");
-        Assert.That(physical.GetError(), Is.EqualTo("import error"));
-    }
 
     /* ─── ToString ────────────────────────────────────────── */
 

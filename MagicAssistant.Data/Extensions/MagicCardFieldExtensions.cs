@@ -47,7 +47,6 @@ public static class MagicCardFieldExtensions
             MagicCardField.SetBlock => null, // Block no longer tracked (not in Scryfall set data)
             MagicCardField.SetCore => card.CardSet?.SetType,
             MagicCardField.SetRelease => card.CardSet?.ReleaseDate,
-            MagicCardField.UniqueCount => card.UniqueCount,
             MagicCardField.Size => GetSize(card),
             MagicCardField.Sideboard => card.IsSideboard,
             MagicCardField.EnglishType => card.Type,

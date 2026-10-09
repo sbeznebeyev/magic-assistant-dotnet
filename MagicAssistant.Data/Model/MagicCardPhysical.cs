@@ -10,7 +10,6 @@ public class MagicCardPhysical : IMagicCardPhysical
 {
     private string? _comment;
     private int? _forTradeCount;
-    private object? _error;
 
     public MagicCardPhysical(MagicCard card)
     {
@@ -76,12 +75,6 @@ public class MagicCardPhysical : IMagicCardPhysical
     /// </summary>
     public CardGrade? Grade { get; set; }
 
-    // === Deep clone — mirrors Java MagicCardPhysical.clone() ===
-    public IMagicCard Clone()
-    {
-        return (MagicCardPhysical)MemberwiseClone();
-    }
-
     public MagicCard GetBase() => Card;
     public string? Text => Card.Text;
     public int Side => Card.Side;
@@ -98,11 +91,7 @@ public class MagicCardPhysical : IMagicCardPhysical
     public int OwnCount => IsOwn ? Count : 0;
 
     public bool IsSideboard => Collection?.NodeType == NodeType.Sideboard;
-    public int UniqueCount => 1;
     public bool IsPhysical => true;
-
-    // === ICardModifiable implementation ===
-    void ICardModifiable.SetCount(int count) => Count = count;
 
     // === IMagicCardPhysical implementation ===
     public void SetCollection(Collection? collection) => Collection = collection;
@@ -116,58 +105,8 @@ public class MagicCardPhysical : IMagicCardPhysical
 
 
 
-    // === Matching (mirrors Java MagicCardPhysical.matching()) ===
-    /// <summary>
-    /// Compares two physical cards ignoring count and location.
-    /// Used to determine if two physical instances represent the same card state.
-    /// </summary>
-    public bool Matching(MagicCardPhysical other)
-    {
-        if (!Card.Equals(other.Card)) return false;
-        if (IsOwn != other.IsOwn) return false;
-        if (MyPrice != other.MyPrice) return false;
-        if (!EqualsNull(Comment, other.Comment)) return false;
-        return true;
-    }
-
-    private static bool EqualsNull(string? a, string? b)
-    {
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-        return a == b;
-    }
-
     // === get(ICardField) — delegates to MagicCardField ===
     public object? Get(MagicCardField field) => field.Get(this);
-
-    // === Creature count helper ===
-    public int GetCreatureCount()
-    {
-        var type = Card.Type;
-        if (type == null || !type.Contains("Creature", StringComparison.OrdinalIgnoreCase)) return 0;
-        if (Card.Power == null || string.IsNullOrEmpty(Card.Power)) return 0;
-        return Math.Max(1, Count);
-    }
-
-    public int Count4 => Math.Min(OwnCount, 4);
-
-    // === Error field (for import errors) ===
-    public object? GetError() => _error;
-    public void SetError(object? value) => _error = value;
-
-    // === Equality ===
-    public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is MagicCardPhysical other)
-            return Card.Equals(other.Card) && Count == other.Count && CollectionId(Collection) == CollectionId(other.Collection);
-        if (obj is MagicCard mc)
-            return Card.Equals(mc);
-        return false;
-    }
-
-    private static int CollectionId(Collection? c) => c?.Id ?? 0;
 
     public override string ToString() => $"{Card} x {Count}";
 }

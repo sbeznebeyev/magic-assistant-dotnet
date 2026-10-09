@@ -195,8 +195,6 @@ public class MagicCard : IMagicCard
     public Collection? Collection => null; // reference card can't be in any location
     public bool IsSideboard => false; // reference card can't be in a sideboard 
 
-    public int UniqueCount => 1;
-
     public bool IsPhysical => false;
 
     // === IMagicCard implementation ===

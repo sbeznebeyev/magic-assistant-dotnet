@@ -19,7 +19,6 @@ public interface IMagicCard : ICard
     int? CmcNumber { get; }
     string? CmcText { get; }
     string? ColorType { get; }
-    IMagicCard Clone();
     MagicCard GetBase();
     string? Text { get; }
     int Side { get; }

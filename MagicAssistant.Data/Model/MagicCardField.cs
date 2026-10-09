@@ -30,7 +30,6 @@ public enum MagicCardField
     SetCore,
     SetRelease,
     Sideboard,
-    UniqueCount,
     Size,
     Legality,
     Colors,

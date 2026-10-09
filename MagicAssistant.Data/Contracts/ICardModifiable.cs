@@ -11,5 +11,4 @@ public interface ICardModifiable : IMagicCard
     bool IsOwn { get; set; }
     new Collection? Collection { get; set; }
     string? Comment { get; set; }
-    void SetCount(int count);
 }

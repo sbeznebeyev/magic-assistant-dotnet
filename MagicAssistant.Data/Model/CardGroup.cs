@@ -29,7 +29,6 @@ public class CardGroup : ICard, IEnumerable<IMagicCard>
 
     public Collection? Collection => null;
     public bool IsSideboard => false;
-    public int UniqueCount => _children.Count;
     public bool IsPhysical => false;
 
     public IEnumerator<IMagicCard> GetEnumerator() => _children.GetEnumerator();
