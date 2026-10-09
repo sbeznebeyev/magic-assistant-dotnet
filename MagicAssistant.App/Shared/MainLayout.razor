@@ -499,6 +499,7 @@
     private async Task OnSplitDone()
     {
         _statusText = "Card split";
+        _kbRefreshTrigger++;  // reload the viewed list — deck/sideboard row counts changed
         _stripRefresh++;  // cards moved main/sideboard — refresh ContextStrip stats
         StateHasChanged();
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // cards moved between main deck and sideboard
