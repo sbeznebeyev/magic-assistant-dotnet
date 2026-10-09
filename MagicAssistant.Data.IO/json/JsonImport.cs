@@ -82,7 +82,7 @@ public static class JsonImport
         }
     }
 
-    static MagicCardPhysical ReadMagicCardPhysical(JsonElement element)
+    static MyCard ReadMagicCardPhysical(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object)
             throw new FormatException("Invalid card entry: expected an object.");
@@ -101,7 +101,7 @@ public static class JsonImport
         if (count < 1)
             throw new FormatException($"Card '{name}': count must be >= 1.");
 
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = cardId, Name = name, SetCode = setCode })
         {
             Count = count,

@@ -99,7 +99,7 @@ public static class XmlImport
         return cards;
     }
 
-    static MagicCardPhysical ReadMagicCardPhysical(XmlReader reader)
+    static MyCard ReadMagicCardPhysical(XmlReader reader)
     {
         // Collect all field values, then construct the object
         var fields = new Dictionary<string, string?>();
@@ -136,7 +136,7 @@ public static class XmlImport
             SetCode = fields.GetValueOrDefault("edition")?.ToLowerInvariant(),
         };
 
-        var physical = new MagicCardPhysical(baseCard) { IsOwn = true };
+        var physical = new MyCard(baseCard) { IsOwn = true };
 
         if (int.TryParse(fields.GetValueOrDefault("count"), out var count))
             physical.Count = count;

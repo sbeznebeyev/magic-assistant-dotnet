@@ -31,8 +31,8 @@ public interface ICollectionStore
     /// Cards must already carry valid CardIds present in the knowledge base;
     /// their Collection is stamped from the created node before insertion.
     /// </summary>
-    Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null,
-        IEnumerable<MagicCardPhysical>? sideboardCards = null, CancellationToken ct = default);
+    Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MyCard> cards, int? parentId = null,
+        IEnumerable<MyCard>? sideboardCards = null, CancellationToken ct = default);
 
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
     Task<bool> RenameAsync(int id, string newName, CancellationToken ct = default);
@@ -58,7 +58,7 @@ public interface ICollectionStore
     /// <summary>
     /// Get all physical cards for a specific deck (non-sideboard only) with full card info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
     /// Remove card rows from a collection node in a single SQL round-trip.
@@ -72,7 +72,7 @@ public interface ICollectionStore
     /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
     /// ID of the deck's sideboard child (NodeType = 3), or null when the node has none.
@@ -82,7 +82,7 @@ public interface ICollectionStore
     /// <summary>
     /// Get ALL physical cards across ALL decks (for reconciliation).
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetAllPhysicalCardsAsync(CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetAllPhysicalCardsAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Create a collection node (NodeType = 1) WITHOUT sideboard.
@@ -110,10 +110,10 @@ public interface ICollectionStore
     //  Exposed here so vertical services can work with ICollectionStore directly.
     //  ═══════════════════════════════════════════════════════════
 
-    Task<bool> AddAsync(MagicCardPhysical card, CancellationToken ct = default);
-    Task<bool> AddAllAsync(IEnumerable<MagicCardPhysical> cards, CancellationToken ct = default);
-    Task<bool> RemoveAsync(MagicCardPhysical card, CancellationToken ct = default);
-    Task<bool> UpdateAsync(MagicCardPhysical card, ICollection<MagicCardField> fields, CancellationToken ct = default);
-    Task<ICollection<MagicCardPhysical>> GetCardsAsync(Guid cardId, CancellationToken ct = default);
-    Task<IEnumerable<MagicCardPhysical>> GetAllDeckCardsAsync(CancellationToken ct = default);
+    Task<bool> AddAsync(MyCard card, CancellationToken ct = default);
+    Task<bool> AddAllAsync(IEnumerable<MyCard> cards, CancellationToken ct = default);
+    Task<bool> RemoveAsync(MyCard card, CancellationToken ct = default);
+    Task<bool> UpdateAsync(MyCard card, ICollection<MagicCardField> fields, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetCardsAsync(Guid cardId, CancellationToken ct = default);
+    Task<IEnumerable<MyCard>> GetAllDeckCardsAsync(CancellationToken ct = default);
 }

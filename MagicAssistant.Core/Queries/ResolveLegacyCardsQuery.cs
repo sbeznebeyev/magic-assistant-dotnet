@@ -16,7 +16,7 @@ public record UnresolvedLegacyCard(string Name, string? SetCode);
 /// </summary>
 public class LegacyCardResolution
 {
-    public List<MagicCardPhysical> Resolved { get; } = new();
+    public List<MyCard> Resolved { get; } = new();
     public List<UnresolvedLegacyCard> Unresolved { get; } = new();
 }
 
@@ -86,7 +86,7 @@ public class ResolveLegacyCardsQueryHandler
 
             if (cardMap.TryGetValue(key, out var kbCard))
             {
-                if (card is MagicCardPhysical physical)
+                if (card is MyCard physical)
                 {
                     physical.Card.Id = kbCard.Id;
                     result.Resolved.Add(physical);
@@ -96,7 +96,7 @@ public class ResolveLegacyCardsQueryHandler
                     // Raw (non-physical) cards are not produced by XmlImport, but stay supported:
                     // wrap into a physical with the resolved ID; collection is stamped at commit.
                     var baseCopy = new MagicCard { Id = kbCard.Id, Name = card.Name, SetCode = card.SetCode };
-                    result.Resolved.Add(new MagicCardPhysical(baseCopy, null, true));
+                    result.Resolved.Add(new MyCard(baseCopy, null, true));
                 }
             }
             else if (seenUnresolved.Add($"{card.Name}|{card.SetCode}"))

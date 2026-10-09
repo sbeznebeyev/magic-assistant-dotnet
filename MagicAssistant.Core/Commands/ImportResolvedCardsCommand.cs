@@ -22,9 +22,9 @@ public record ImportResolvedCardsCommand(
     string DeckName,
     int? ParentId,
     int? TargetCollectionId,
-    IReadOnlyList<MagicCardPhysical> Cards,
+    IReadOnlyList<MyCard> Cards,
     IReadOnlyDictionary<string, Guid>? CardOverrides = null,
-    IReadOnlyList<MagicCardPhysical>? SideboardCards = null);
+    IReadOnlyList<MyCard>? SideboardCards = null);
 
 /// <summary>Result of an atomic import commit.</summary>
 public class ImportCommitResult
@@ -40,11 +40,11 @@ public class ImportCommitResult
 public class ImportResolvedCardsCommandHandler
 {
     private readonly ICollectionStore _collectionStore;
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
 
     public ImportResolvedCardsCommandHandler(
         ICollectionStore collectionStore,
-        ICardStore<MagicCardPhysical> cardStore)
+        ICardStore<MyCard> cardStore)
     {
         _collectionStore = collectionStore;
         _cardStore = cardStore;
@@ -56,7 +56,7 @@ public class ImportResolvedCardsCommandHandler
         if (command.Cards.Count == 0)
             throw new ArgumentException("No cards to import.", nameof(command));
 
-        var sideboard = (command.SideboardCards ?? Enumerable.Empty<MagicCardPhysical>()).ToList();
+        var sideboard = (command.SideboardCards ?? Enumerable.Empty<MyCard>()).ToList();
 
         // Apply user overrides from the unresolved-cards table: key = "OriginalName|SetCode"
         if (command.CardOverrides is { Count: > 0 } overrides)

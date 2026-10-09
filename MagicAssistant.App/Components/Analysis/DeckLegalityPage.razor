@@ -175,7 +175,7 @@
 
     private async Task Reload() => await LoadLegality();
 
-    private void BuildLegalityData(ICollection<MagicCardPhysical> cards)
+    private void BuildLegalityData(ICollection<MyCard> cards)
     {
         // Enum Format → display name mapping
         var formatMap = new Dictionary<Format, string>

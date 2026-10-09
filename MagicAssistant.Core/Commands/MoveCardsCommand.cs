@@ -14,11 +14,11 @@ public record MoveCardsCommand(
 
 public class MoveCardsCommandHandler
 {
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
     private readonly ICollectionStore _collectionStore;
 
     public MoveCardsCommandHandler(
-        ICardStore<MagicCardPhysical> cardStore,
+        ICardStore<MyCard> cardStore,
         ICollectionStore collectionStore)
     {
         _cardStore = cardStore;
@@ -55,13 +55,13 @@ public class MoveCardsCommandHandler
             if (moveCount <= 0) continue;
 
             // Remove from source
-            await _cardStore.RemoveAsync(new MagicCardPhysical(instance.Card, sourceDeck, instance.IsOwn)
+            await _cardStore.RemoveAsync(new MyCard(instance.Card, sourceDeck, instance.IsOwn)
             {
                 Count = moveCount,
             }, ct);
 
             // Add to target with updated location
-            var targetInstance = new MagicCardPhysical(instance.Card, targetDeck, instance.IsOwn)
+            var targetInstance = new MyCard(instance.Card, targetDeck, instance.IsOwn)
             {
                 Count = moveCount,
                 MyPrice = instance.MyPrice,

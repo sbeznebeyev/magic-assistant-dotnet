@@ -25,7 +25,7 @@ public interface IDeckCardService
     /// Add cards to a deck by resolving card IDs from KB and creating physical instances.
     /// Uses batch resolution for efficiency.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default);
+    Task<ICollection<MyCard>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default);
 
     /// <summary>
     /// Remove ALL copies of the given cards from a collection node (full-row removal via RemoveCardsFromDeckCommand).
@@ -61,18 +61,18 @@ public interface IDeckCardService
     /// Split a card pile into two parts (e.g., 4 copies → 1 + 3).
     /// Returns the right part, or null if no split needed.
     /// </summary>
-    Task<MagicCardPhysical?> SplitCardAsync(int deckId, Guid cardId, int rightCount, CancellationToken ct = default);
+    Task<MyCard?> SplitCardAsync(int deckId, Guid cardId, int rightCount, CancellationToken ct = default);
 
     /// <summary>
     /// Move copies from a deck's sideboard back into the deck (inverse of SplitCardAsync).
     /// Returns the deck part, or null if nothing to move.
     /// </summary>
-    Task<MagicCardPhysical?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default);
+    Task<MyCard?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default);
 
     /// <summary>
     /// Split cards from a collection into two parts.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> SplitCardsAsync(ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default);
+    Task<ICollection<MyCard>> SplitCardsAsync(ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default);
 
     // ═══════════════════════════════════════════════════════════
     //  Read operations
@@ -81,12 +81,12 @@ public interface IDeckCardService
     /// <summary>
     /// Get all physical cards for a specific deck (non-sideboard only) with full card info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
     /// Sum of counts for the given card IDs within the given decks/collections (exact collection rows only).

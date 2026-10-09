@@ -2,7 +2,7 @@ using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Data.Contracts;
 
-public interface ICard
+public interface ICardSimple
 {
     string Name { get; }
     int Count { get; }

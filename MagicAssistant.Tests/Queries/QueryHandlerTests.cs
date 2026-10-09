@@ -115,8 +115,8 @@ public class QueryHandlerTests
         var coll = new Mock<ICollectionStore>();
         var analysis = new Mock<IAnalysisService>();
         coll.Setup(s => s.GetDeckWithSideboardAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
-        analysis.Setup(a => a.Analyze(It.IsAny<IEnumerable<MagicCardPhysical>>()))
+            .ReturnsAsync(Array.Empty<MyCard>());
+        analysis.Setup(a => a.Analyze(It.IsAny<IEnumerable<MyCard>>()))
             .Returns(new DeckAnalysisResult());
 
         var handler = new GetDeckAnalysisQueryHandler(coll.Object, analysis.Object);

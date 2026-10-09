@@ -251,7 +251,7 @@
     private bool _selectedSetHasCards;
 
     /// <summary>Physical instances of cards in the current location (deck mode). Null = KB mode.</summary>
-    private Dictionary<Guid, MagicCardPhysical>? _physicalByCardId;
+    private Dictionary<Guid, MyCard>? _physicalByCardId;
 
     /// <summary>Total copies of each displayed card in the pinned collection (KB mode with a pinned target only —
     /// deck mode shows the current deck's count in the Total column instead). Null otherwise.</summary>
@@ -334,10 +334,10 @@
     [Parameter] public EventCallback<CardOperationRecord> OnCardOperation { get; set; }
 
     /// <summary>Edit requested for a location card (deck mode only).</summary>
-    [Parameter] public EventCallback<MagicCardPhysical> OnEditCard { get; set; }
+    [Parameter] public EventCallback<MyCard> OnEditCard { get; set; }
 
     /// <summary>Split requested for a location card (deck mode only, Count &gt; 1).</summary>
-    [Parameter] public EventCallback<MagicCardPhysical> OnSplitCard { get; set; }
+    [Parameter] public EventCallback<MyCard> OnSplitCard { get; set; }
 
     /// <summary>Pinned operation target (MainLayout._pinnedCollection.CollectionId).
     /// KB-mode (+) and quick Move work against it.</summary>
@@ -351,7 +351,7 @@
 
     /// <summary>Quick move: send the selected card (with all copies) to the pinned collection.
     /// Available only when a different collection is viewed (current != pinned, both set).</summary>
-    [Parameter] public EventCallback<MagicCardPhysical> OnMoveToPinned { get; set; }
+    [Parameter] public EventCallback<MyCard> OnMoveToPinned { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -947,7 +947,7 @@
     private Dictionary<Guid, int>? GetCountMap() =>
         _physicalByCardId?.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
 
-    private async Task ChangeCardCount((MagicCardPhysical card, int delta) e)
+    private async Task ChangeCardCount((MyCard card, int delta) e)
     {
         if (!FilterViewModel.CurrentCollectionId.HasValue) return;
         var (card, delta) = e;
@@ -969,9 +969,9 @@
         await ApplyFiltersAndPagination();
     }
 
-    private async Task EditLocationCard(MagicCardPhysical card) => await OnEditCard.InvokeAsync(card);
+    private async Task EditLocationCard(MyCard card) => await OnEditCard.InvokeAsync(card);
 
-    private async Task SplitLocationCard(MagicCardPhysical card)
+    private async Task SplitLocationCard(MyCard card)
     {
         if (card.Count > 1)
             await OnSplitCard.InvokeAsync(card);

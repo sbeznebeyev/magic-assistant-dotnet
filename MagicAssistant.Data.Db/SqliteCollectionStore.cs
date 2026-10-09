@@ -17,7 +17,7 @@ namespace MagicAssistant.Data.Db;
 /// Uses per-request connections (same pattern as SqliteCardStore) — no single shared connection,
 /// which is safer for Blazor Server with multiple concurrent circuits.
 /// </summary>
-public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysical>, IAsyncDisposable
+public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyncDisposable
 {
     private readonly string _dbPath;
 
@@ -165,11 +165,11 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         }
     }
 
-    public async Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MagicCardPhysical> cards, int? parentId = null,
-        IEnumerable<MagicCardPhysical>? sideboardCards = null, CancellationToken ct = default)
+    public async Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MyCard> cards, int? parentId = null,
+        IEnumerable<MyCard>? sideboardCards = null, CancellationToken ct = default)
     {
         var list = cards.ToList();
-        var sbList = (sideboardCards ?? Enumerable.Empty<MagicCardPhysical>()).ToList();
+        var sbList = (sideboardCards ?? Enumerable.Empty<MyCard>()).ToList();
 
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
@@ -192,7 +192,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             var sbId = Convert.ToInt32(await conn.ExecuteScalarAsync("SELECT last_insert_rowid()"));
 
             // Single INSERT used for both pools — merge semantics on conflict
-            async Task InsertCardRowAsync(int collectionId, MagicCardPhysical card)
+            async Task InsertCardRowAsync(int collectionId, MyCard card)
             {
                 await conn.ExecuteAsync(@"
                     INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade)
@@ -367,7 +367,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     //  ICardStore<MagicCardPhysical> — card CRUD within decks
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<bool> AddAsync(MagicCardPhysical card, CancellationToken ct = default)
+    public async Task<bool> AddAsync(MyCard card, CancellationToken ct = default)
     {
         var collectionId = card.Collection?.Id ?? 0;
         if (collectionId <= 0)
@@ -411,7 +411,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return true;
     }
 
-    public async Task<bool> AddAllAsync(IEnumerable<MagicCardPhysical> cards, CancellationToken ct = default)
+    public async Task<bool> AddAllAsync(IEnumerable<MyCard> cards, CancellationToken ct = default)
     {
         var list = cards.ToList();
         if (!list.Any()) return true;
@@ -482,7 +482,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         }
     }
 
-    public async Task<bool> RemoveAsync(MagicCardPhysical card, CancellationToken ct = default)
+    public async Task<bool> RemoveAsync(MyCard card, CancellationToken ct = default)
     {
         var collectionId = card.Collection?.Id ?? 0;
         if (collectionId <= 0) return false;
@@ -517,7 +517,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return true;
     }
 
-    public async Task<bool> RemoveAllAsync(IEnumerable<MagicCardPhysical> cards, CancellationToken ct = default)
+    public async Task<bool> RemoveAllAsync(IEnumerable<MyCard> cards, CancellationToken ct = default)
     {
         foreach (var card in cards)
             await RemoveAsync(card, ct);
@@ -551,7 +551,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return counts.Sum();
     }
 
-    public async Task<bool> UpdateAsync(MagicCardPhysical card, ICollection<MagicCardField> fields, CancellationToken ct = default)
+    public async Task<bool> UpdateAsync(MyCard card, ICollection<MagicCardField> fields, CancellationToken ct = default)
     {
         var locationId = card.Collection?.Id ?? 0;
         if (locationId <= 0) return false;
@@ -614,7 +614,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return result > 0;
     }
 
-    public async Task<MagicCardPhysical?> GetCardAsync(Guid cardId, CancellationToken ct = default)
+    public async Task<MyCard?> GetCardAsync(Guid cardId, CancellationToken ct = default)
     {
         // JOIN Deck + Cards to get full card info
         using var conn = CreateConnection();
@@ -629,7 +629,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return physical;
     }
 
-    public async Task<ICollection<MagicCardPhysical>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
@@ -649,7 +649,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return await conn.QuerySingleAsync<int>("SELECT COUNT(*) FROM Deck");
     }
 
-    public async Task<IEnumerable<MagicCardPhysical>> GetAllDeckCardsAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<MyCard>> GetAllDeckCardsAsync(CancellationToken ct = default)
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
@@ -664,7 +664,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// <summary>
     /// Get all physical cards for a specific deck (non-sideboard only) with full card info from Cards table.
     /// </summary>
-    public async Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
@@ -721,7 +721,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
-    public async Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
@@ -753,7 +753,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// Get ALL physical cards across ALL decks (for reconciliation).
     /// Delegates to ICardStore&lt;MagicCardPhysical&gt;.GetAllDeckCardsAsync.
     /// </summary>
-    public async Task<ICollection<MagicCardPhysical>> GetAllPhysicalCardsAsync(CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> GetAllPhysicalCardsAsync(CancellationToken ct = default)
     {
         return (await GetAllDeckCardsAsync(ct)).ToList();
     }
@@ -799,7 +799,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// Double-sided cards carry per-face names/text — needed by the edit dialog preview (ActiveName).
     /// </summary>
     private static async Task AttachFacesAsync(
-        SqliteConnection conn, ICollection<MagicCardPhysical> physicals, CancellationToken ct = default)
+        SqliteConnection conn, ICollection<MyCard> physicals, CancellationToken ct = default)
     {
         var ids = physicals.Select(p => p.Card.Id).Distinct().ToList();
         if (ids.Count == 0) return;
@@ -893,7 +893,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
     /// <summary>
     /// Maps a full JOIN row (Deck + Cards) to MagicCardPhysical with complete base card info.
     /// </summary>
-    private MagicCardPhysical? MapToFullPhysical(FullDeckCardRow row)
+    private MyCard? MapToFullPhysical(FullDeckCardRow row)
     {
         var baseCard = new MagicCard
         {
@@ -940,7 +940,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
             (NodeType)row.NodeType,
             0,
             row.CollectionLocked);
-        var physical = new MagicCardPhysical(baseCard, collection, row.IsOwn)
+        var physical = new MyCard(baseCard, collection, row.IsOwn)
         {
             Count = row.Count,
             MyPrice = row.MyPrice,

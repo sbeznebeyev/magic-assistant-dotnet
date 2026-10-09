@@ -194,9 +194,9 @@
     private bool _showSplitDialog;
 
     // ── Dialog Data ──
-    private MagicCardPhysical? _editCardTarget;
+    private MyCard? _editCardTarget;
 
-    private MagicCardPhysical? _splitCardTarget;
+    private MyCard? _splitCardTarget;
 
     /// <summary>Central filter/sort state shared between CardsListControl and CardFilterDialog.</summary>
     private readonly FilterViewModel _filterViewModel = new();
@@ -355,9 +355,9 @@
     }
 
     // ── Dialog Openers ──
-    private void OpenEditCard(MagicCardPhysical card) { _editCardTarget = card; _showEditCardDialog = true; }
+    private void OpenEditCard(MyCard card) { _editCardTarget = card; _showEditCardDialog = true; }
 
-    private void OpenSplit(MagicCardPhysical card) { _splitCardTarget = card; _showSplitDialog = true; }
+    private void OpenSplit(MyCard card) { _splitCardTarget = card; _showSplitDialog = true; }
 
     // ── Lifecycle (Microsoft Learn: subscribe in OnInitialized, unsubscribe in Dispose) ──
     protected override async Task OnInitializedAsync()
@@ -486,7 +486,7 @@
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();
     }
     private void OnExportCompleted() { _statusText = "Export completed"; }
-    private async Task OnEditCardSaved(MagicCardPhysical? card)
+    private async Task OnEditCardSaved(MyCard? card)
     {
         _statusText = "Card updated";
         _kbRefreshTrigger++;  // reload the viewed list so the saved changes are visible
@@ -504,7 +504,7 @@
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // cards moved between main deck and sideboard
     }
     /// <summary>Quick move: the selected card (with all its copies) moves from the viewed collection to the pinned one.</summary>
-    private async Task OnMoveToPinned(MagicCardPhysical card)
+    private async Task OnMoveToPinned(MyCard card)
     {
         if (_currentCollection.CollectionId == null || _pinnedCollection.CollectionId == null) return;
         if (_currentCollection.CollectionId == _pinnedCollection.CollectionId) return;

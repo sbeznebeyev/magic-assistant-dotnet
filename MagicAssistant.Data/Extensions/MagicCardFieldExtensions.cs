@@ -154,7 +154,7 @@ public static class MagicCardFieldExtensions
     /// Sets the value of this field on a MagicCardPhysical.
     /// Mirrors Java MagicCardField.setM(MagicCardPhysical, Object).
     /// </summary>
-    public static void SetM(this MagicCardField field, MagicCardPhysical physical, object? value)
+    public static void SetM(this MagicCardField field, MyCard physical, object? value)
     {
         if (!field.IsPhysical())
         {
@@ -279,14 +279,14 @@ public static class MagicCardFieldExtensions
     }
 
     // === Helper methods for physical card fields ===
-    private static float GetMyPrice(IMagicCard card) => card is MagicCardPhysical p ? p.MyPrice : 0f;
-    private static int GetOwnCount(IMagicCard card) => card is MagicCardPhysical p ? p.OwnCount : 0;
+    private static float GetMyPrice(IMagicCard card) => card is MyCard p ? p.MyPrice : 0f;
+    private static int GetOwnCount(IMagicCard card) => card is MyCard p ? p.OwnCount : 0;
     private static int GetPhysicalCount(IMagicCard card) => card.IsPhysical ? card.Count : 1;
-    private static bool GetIsOwn(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.IsOwn : false;
-    private static string? GetComment(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Comment : null;
-    private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.DateAdded : null;
-    private static int GetForTradeCount(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.GetForTradeCount() : 0;
-    private static object? GetGrade(IMagicCard card) => card is MagicCardPhysical p ? (object?)p.Grade : null;
+    private static bool GetIsOwn(IMagicCard card) => card is MyCard pcp ? pcp.IsOwn : false;
+    private static string? GetComment(IMagicCard card) => card is MyCard pcp ? pcp.Comment : null;
+    private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MyCard pcp ? pcp.DateAdded : null;
+    private static int GetForTradeCount(IMagicCard card) => card is MyCard pcp ? pcp.GetForTradeCount() : 0;
+    private static object? GetGrade(IMagicCard card) => card is MyCard p ? (object?)p.Grade : null;
     private static int GetCreatureCount(IMagicCard card)
     {
         if (card.Power == null || string.IsNullOrEmpty(card.Power)) return 0;

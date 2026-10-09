@@ -118,7 +118,7 @@
 </div>
 
 @code {
-    private MagicCardPhysical? _card;
+    private MyCard? _card;
     private bool _isOwn = true;
     private float? _price;
     private string _comment = "";
@@ -146,9 +146,9 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
-    [Parameter] public MagicCardPhysical? Card { get; set; }
+    [Parameter] public MyCard? Card { get; set; }
     [Parameter] public int? DeckId { get; set; }
-    [Parameter] public EventCallback<MagicCardPhysical?> OnSaved { get; set; }
+    [Parameter] public EventCallback<MyCard?> OnSaved { get; set; }
 
     protected override Task OnParametersSetAsync()
     {
@@ -157,7 +157,7 @@
         return Task.CompletedTask;
     }
 
-    private async Task LoadCard(MagicCardPhysical? card)
+    private async Task LoadCard(MyCard? card)
     {
         _card = card;
         if (card == null) return;

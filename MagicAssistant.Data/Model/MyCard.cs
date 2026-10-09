@@ -6,19 +6,19 @@ using MagicAssistant.Data.Model.NavigatorNodes;
 namespace MagicAssistant.Data.Model;
 
 // TODO: rename to MyCard
-public class MagicCardPhysical : IMagicCardPhysical
+public class MyCard : IMyCard
 {
     private string? _comment;
     private int? _forTradeCount;
 
-    public MagicCardPhysical(MagicCard card)
+    public MyCard(MagicCard card)
     {
         Card = card ?? throw new ArgumentNullException(nameof(card));
         Count = 1;
         DateAdded = DateTimeOffset.Now;
     }
 
-    public MagicCardPhysical(MagicCard card, Collection? collection, bool isOwn) : this(card)
+    public MyCard(MagicCard card, Collection? collection, bool isOwn) : this(card)
     {
         Collection = collection;
         IsOwn = isOwn;

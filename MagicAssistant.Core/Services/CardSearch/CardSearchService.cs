@@ -47,7 +47,7 @@ public class CardSearchService : ICardSearchService
     }
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCardPhysical>> GetInstancesAsync(Guid cardId, CancellationToken ct = default)
+    public Task<ICollection<MyCard>> GetInstancesAsync(Guid cardId, CancellationToken ct = default)
     {
         return _collectionStore.GetCardsAsync(cardId, ct);
     }

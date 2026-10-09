@@ -13,10 +13,10 @@ public interface IAnalysisService
     /// Mirrors: buildManaCurveStats, buildSpellColorStats, buildTypeStats,
     ///          buildCreatureStats, buildAbilityStats, getMaxRepeats, getManaCost, getCount
     /// </summary>
-    DeckAnalysisResult Analyze(IEnumerable<MagicCardPhysical> cards);
+    DeckAnalysisResult Analyze(IEnumerable<MyCard> cards);
 
     /// <summary>
     /// Quick mana curve only — for chart rendering.
     /// </summary>
-    int[] ComputeManaCurve(IEnumerable<MagicCardPhysical> cards);
+    int[] ComputeManaCurve(IEnumerable<MyCard> cards);
 }

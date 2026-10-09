@@ -301,7 +301,7 @@
     /// The save collection, built once every row is mapped — the single source of truth for the commit
     /// and for the "Import N" count (N = total copies, including duplicates). Null until fully mapped.
     /// </summary>
-    private IReadOnlyList<MagicCardPhysical>? _importCards;
+    private IReadOnlyList<MyCard>? _importCards;
 
     private MagicCard? _hoverCard;
     private readonly Dictionary<string, CancellationTokenSource> _searchCts = new();
@@ -654,7 +654,7 @@
         await DoCommitAsync(_importCards);
     }
 
-    private async Task DoCommitAsync(IReadOnlyList<MagicCardPhysical> cards)
+    private async Task DoCommitAsync(IReadOnlyList<MyCard> cards)
     {
         _error = null;
         _state = WizardState.Committing;

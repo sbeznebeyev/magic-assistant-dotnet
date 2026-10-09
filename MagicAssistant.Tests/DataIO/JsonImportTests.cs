@@ -36,9 +36,9 @@ public class JsonImportTests
         Assert.That(result.Name, Is.EqualTo("Test Deck"));
         Assert.That(result.Type, Is.EqualTo("deck"));
         Assert.That(result.Cards, Has.Count.EqualTo(1));
-        Assert.That(result.Cards[0], Is.InstanceOf<MagicCardPhysical>());
+        Assert.That(result.Cards[0], Is.InstanceOf<MyCard>());
 
-        var physical = (MagicCardPhysical)result.Cards[0];
+        var physical = (MyCard)result.Cards[0];
         Assert.That(physical.Card.Name, Is.EqualTo("Lightning Bolt"));
         Assert.That(physical.Card.Id, Is.EqualTo(cardId));
         Assert.That(physical.Card.SetCode, Is.EqualTo("m19"), "set code should be lowercased");
@@ -68,7 +68,7 @@ public class JsonImportTests
 }}";
 
         var result = JsonImport.ImportFromJson(json);
-        var physical = (MagicCardPhysical)result.Cards[0];
+        var physical = (MyCard)result.Cards[0];
 
         Assert.That(physical.IsOwn, Is.False);
         Assert.That(physical.MyPrice, Is.EqualTo(5.0f).Within(0.001f));
@@ -82,7 +82,7 @@ public class JsonImportTests
         var cardId = Guid.NewGuid();
         var json = MakeJson("Deck", (cardId, "Card", "m19", 3));
 
-        var physical = (MagicCardPhysical)JsonImport.ImportFromJson(json).Cards[0];
+        var physical = (MyCard)JsonImport.ImportFromJson(json).Cards[0];
 
         Assert.That(physical.IsOwn, Is.True, "own defaults to true");
         Assert.That(physical.MyPrice, Is.EqualTo(0f), "price defaults to 0");
@@ -107,7 +107,7 @@ public class JsonImportTests
   ]
 }}";
 
-        var physical = (MagicCardPhysical)JsonImport.ImportFromJson(json).Cards[0];
+        var physical = (MyCard)JsonImport.ImportFromJson(json).Cards[0];
 
         Assert.That(physical.Count, Is.EqualTo(3));
         Assert.That(physical.GetForTradeCount(), Is.EqualTo(3),
@@ -229,7 +229,7 @@ public class JsonImportTests
         Assert.That(result.Cards, Has.Count.EqualTo(1));
         Assert.That(result.Sideboard, Has.Count.EqualTo(1));
 
-        var sb = (MagicCardPhysical)result.Sideboard[0];
+        var sb = (MyCard)result.Sideboard[0];
         Assert.That(sb.Card.Id, Is.EqualTo(sbId));
         Assert.That(sb.Card.SetCode, Is.EqualTo("m20"), "set code should be lowercased in the sideboard too");
         Assert.That(sb.Count, Is.EqualTo(1));

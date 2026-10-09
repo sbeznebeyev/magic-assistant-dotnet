@@ -25,7 +25,7 @@ public interface ICardResolveService
     /// Borrowed cards → resolve from collection store, filling remaining count.
     /// Single query for all physical cards + O(1) dictionary lookup.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> MaterializeCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default);
+    Task<ICollection<MyCard>> MaterializeCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default);
 
     /// <summary>
     /// Expand CardGroup hierarchies — flatten all nested groups into a flat list.
@@ -44,5 +44,5 @@ public interface ICardResolveService
     /// Resolve card IDs from KB into MagicCardPhysical instances with a specific deck location.
     /// Mirrors the old DataManager.MaterializeCardsAsync(deckId, cardIds).
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default);
+    Task<ICollection<MyCard>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default);
 }

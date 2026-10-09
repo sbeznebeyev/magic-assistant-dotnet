@@ -2,7 +2,7 @@ using MagicAssistant.Data.Contracts;
 
 namespace MagicAssistant.Data.Model;
 
-public class CardGroup : ICard, IEnumerable<IMagicCard>
+public class CardGroup : ICardSimple, IEnumerable<IMagicCard>
 {
     private readonly List<IMagicCard> _children = new();
 

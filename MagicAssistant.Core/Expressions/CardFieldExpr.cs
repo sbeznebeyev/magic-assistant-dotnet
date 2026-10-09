@@ -23,17 +23,17 @@ public class CardFieldExpr : Expr, ICardField
     string ICardField.Name => _field.ToString();
     Type ICardField.ValueType => typeof(object);
 
-    object? ICardField.Get(ICard card)
+    object? ICardField.Get(ICardSimple card)
     {
         if (card is not IMagicCard magicCard) return null;
         return _field.Get(magicCard);
     }
 
-    void ICardField.Set(ICard card, object? value)
+    void ICardField.Set(ICardSimple card, object? value)
     {
         if (card is MagicCard mc)
             _field.SetM(mc, value);
-        else if (card is MagicCardPhysical mcp)
+        else if (card is MyCard mcp)
             _field.SetM(mcp, value);
     }
 
@@ -41,7 +41,7 @@ public class CardFieldExpr : Expr, ICardField
 
     public override object? GetFieldValue(object? o)
     {
-        if (o is ICard card)
+        if (o is ICardSimple card)
             return ((ICardField)this).Get(card);
         return null;
     }

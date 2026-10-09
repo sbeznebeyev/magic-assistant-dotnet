@@ -8,10 +8,10 @@ namespace MagicAssistant.Tests.Services;
 [TestFixture]
 public class ServiceTests
 {
-    private static MagicCardPhysical CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
+    private static MyCard CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };
-        return new MagicCardPhysical(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
+        return new MyCard(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
     }
 
     private static ScryfallSetDto SetDto(string code, string name, int? cardCount = 269)
@@ -88,14 +88,14 @@ public class ServiceTests
     {
         var cardId = Guid.NewGuid();
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         // Multiple cards in same deck — service must match by CardId, not just Location.Id
         var physicalTarget = CreatePhysical(cardId, 1, 4);
         var physicalOther = CreatePhysical(Guid.NewGuid(), 1, 3);
 
         coll.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MagicCardPhysical[] { physicalTarget, physicalOther });
-        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MyCard[] { physicalTarget, physicalOther });
+        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MyCard>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object,
@@ -118,17 +118,17 @@ public class ServiceTests
     {
         var cardId = Guid.NewGuid();
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         var physicalTarget = CreatePhysical(cardId, 1, 4);
         var physicalOther = CreatePhysical(Guid.NewGuid(), 1, 3);
 
         coll.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MagicCardPhysical[] { physicalTarget, physicalOther });
+            .ReturnsAsync(new MyCard[] { physicalTarget, physicalOther });
         coll.Setup(s => s.GetByParentIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Collection(99, "sideboard", 1, NodeType.Sideboard, 0));
-        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
+        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MyCard>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
-        cardStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
+        cardStore.Setup(s => s.AddAsync(It.IsAny<MyCard>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object,
@@ -148,19 +148,19 @@ public class ServiceTests
     {
         var cardId = Guid.NewGuid();
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
 
         // Sideboard node 99 (child of deck 1) holds 4 copies.
         var sbNode = new Collection(99, "sideboard", 1, NodeType.Sideboard, 0);
-        var sbPhysical = new MagicCardPhysical(new MagicCard { Id = cardId, Name = "Test" }, sbNode, true) { Count = 4 };
+        var sbPhysical = new MyCard(new MagicCard { Id = cardId, Name = "Test" }, sbNode, true) { Count = 4 };
 
         coll.Setup(s => s.GetByParentIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(sbNode);
         coll.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MagicCardPhysical[] { sbPhysical });
-        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MyCard[] { sbPhysical });
+        cardStore.Setup(s => s.UpdateAsync(It.IsAny<MyCard>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
-        cardStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
+        cardStore.Setup(s => s.AddAsync(It.IsAny<MyCard>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var service = new DeckCardService(coll.Object, cardStore.Object, new Mock<ICardResolveService>().Object,
@@ -217,10 +217,10 @@ public class ServiceTests
         Assert.That(service.GetCollection(diffCards), Is.Null);
     }
 
-    private static MagicCardPhysical CreatePhysical(Guid cardId, Collection? collection)
+    private static MyCard CreatePhysical(Guid cardId, Collection? collection)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };
-        return new MagicCardPhysical(card, collection, true) { Count = 1 };
+        return new MyCard(card, collection, true) { Count = 1 };
     }
 
     /* ═══════════════════════════════════════════════════════

@@ -246,7 +246,7 @@ public class DeckImportExportService : IDeckImportExportService
     // ═══════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<MagicCardPhysical>> BuildLegacyImportCardsAsync(
+    public Task<IReadOnlyList<MyCard>> BuildLegacyImportCardsAsync(
         string xmlContent,
         LegacyCardResolution resolution,
         IReadOnlyDictionary<string, Guid>? cardOverrides = null,
@@ -260,12 +260,12 @@ public class DeckImportExportService : IDeckImportExportService
         foreach (var p in resolution.Resolved)
             resolvedIds[$"{p.Name}|{p.SetCode}"] = p.Card.Id;
 
-        var cards = new List<MagicCardPhysical>(importResult.Cards.Count);
+        var cards = new List<MyCard>(importResult.Cards.Count);
         foreach (var card in importResult.Cards)
         {
-            var physical = card is MagicCardPhysical p
+            var physical = card is MyCard p
                 ? p
-                : new MagicCardPhysical(card.GetBase(), null, true);
+                : new MyCard(card.GetBase(), null, true);
 
             var key = $"{physical.Name}|{physical.SetCode}";
             if (cardOverrides is { Count: > 0 } && cardOverrides.TryGetValue(key, out var mapped))
@@ -279,7 +279,7 @@ public class DeckImportExportService : IDeckImportExportService
             cards.Add(physical);
         }
 
-        return Task.FromResult<IReadOnlyList<MagicCardPhysical>>(cards);
+        return Task.FromResult<IReadOnlyList<MyCard>>(cards);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -291,7 +291,7 @@ public class DeckImportExportService : IDeckImportExportService
         string deckName,
         int? parentId,
         int? targetCollectionId,
-        IReadOnlyList<MagicCardPhysical> cards,
+        IReadOnlyList<MyCard> cards,
         IReadOnlyDictionary<string, Guid>? cardOverrides = null,
         CancellationToken ct = default)
     {
@@ -324,15 +324,15 @@ public class DeckImportExportService : IDeckImportExportService
 
         // Wrap into physicals; collection is stamped by the commit command
         var physicals = importResult.Cards
-            .Select(c => c is MagicCardPhysical p
+            .Select(c => c is MyCard p
                 ? p
-                : new MagicCardPhysical(c.GetBase(), null, true))
+                : new MyCard(c.GetBase(), null, true))
             .ToList();
 
         var sideboardPhysicals = importResult.Sideboard
-            .Select(c => c is MagicCardPhysical p
+            .Select(c => c is MyCard p
                 ? p
-                : new MagicCardPhysical(c.GetBase(), null, true))
+                : new MyCard(c.GetBase(), null, true))
             .ToList();
 
         var finalName = string.IsNullOrWhiteSpace(deckName) ? importResult.Name : deckName.Trim();

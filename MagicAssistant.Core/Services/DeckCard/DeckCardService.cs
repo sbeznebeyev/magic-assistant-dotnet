@@ -15,13 +15,13 @@ namespace MagicAssistant.Core.Services.DeckCard;
 public class DeckCardService : IDeckCardService
 {
     private readonly ICollectionStore _collectionStore;
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
     private readonly ICardResolveService _resolveService;
     private readonly RemoveCardsFromDeckCommandHandler _removeCardsHandler;
 
     public DeckCardService(
         ICollectionStore collectionStore,
-        ICardStore<MagicCardPhysical> cardStore,
+        ICardStore<MyCard> cardStore,
         ICardResolveService resolveService,
         RemoveCardsFromDeckCommandHandler removeCardsHandler)
     {
@@ -45,14 +45,14 @@ public class DeckCardService : IDeckCardService
             return true;
 
         var collection = new Collection(deckId, string.Empty, null, NodeType.Deck, 0);
-        var physicals = new List<MagicCardPhysical>();
+        var physicals = new List<MyCard>();
 
         foreach (var card in cards)
         {
             var baseCard = card.GetBase();
-            bool isOwn = card is MagicCardPhysical mcp ? mcp.IsOwn : true;
+            bool isOwn = card is MyCard mcp ? mcp.IsOwn : true;
 
-            physicals.Add(new MagicCardPhysical(baseCard, collection, isOwn)
+            physicals.Add(new MyCard(baseCard, collection, isOwn)
             {
                 Count = card.Count,
             });
@@ -62,12 +62,12 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
-    public async Task<ICollection<MagicCardPhysical>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
         if (cardIds == null || !cardIds.Any())
-            return Array.Empty<MagicCardPhysical>();
+            return Array.Empty<MyCard>();
 
         // Batch resolve all card IDs in one query, then persist the physical instances
         // into the deck (merge semantics: ON CONFLICT increments Count).
@@ -195,7 +195,7 @@ public class DeckCardService : IDeckCardService
     // ═══════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<MagicCardPhysical?> SplitCardAsync(int deckId, Guid cardId, int rightCount, CancellationToken ct = default)
+    public async Task<MyCard?> SplitCardAsync(int deckId, Guid cardId, int rightCount, CancellationToken ct = default)
     {
         if (rightCount <= 0)
             return null;
@@ -216,7 +216,7 @@ public class DeckCardService : IDeckCardService
             throw new InvalidOperationException("sideboard is not exists");
 
         // Create right part FIRST (before modifying original count)
-        var rightPart = new MagicCardPhysical(matching.Card, sideboard, matching.IsOwn)
+        var rightPart = new MyCard(matching.Card, sideboard, matching.IsOwn)
         {
             Count = rightCount,
             MyPrice = matching.MyPrice,
@@ -234,7 +234,7 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
-    public async Task<MagicCardPhysical?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default)
+    public async Task<MyCard?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default)
     {
         if (count <= 0)
             return null;
@@ -255,7 +255,7 @@ public class DeckCardService : IDeckCardService
         var leftCount = total - count;
 
         // Create the deck part FIRST (before modifying the sideboard count)
-        var deckPart = new MagicCardPhysical(matching.Card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), matching.IsOwn)
+        var deckPart = new MyCard(matching.Card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), matching.IsOwn)
         {
             Count = count,
             MyPrice = matching.MyPrice,
@@ -273,15 +273,15 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
-    public async Task<ICollection<MagicCardPhysical>> SplitCardsAsync(
+    public async Task<ICollection<MyCard>> SplitCardsAsync(
         ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default)
     {
         var expanded = _resolveService.ExpandGroups(cards);
-        var result = new List<MagicCardPhysical>();
+        var result = new List<MyCard>();
 
         foreach (var card in expanded)
         {
-            if (card is MagicCardPhysical mcp && mcp.Collection is { Id: > 0 } c)
+            if (card is MyCard mcp && mcp.Collection is { Id: > 0 } c)
             {
                 var locId = c.Id;
                 var split = await SplitCardAsync(locId, mcp.Id, rightCount, ct);
@@ -293,7 +293,7 @@ public class DeckCardService : IDeckCardService
                 for (var i = 0; i < rightCount; i++)
                 {
                     var clone = (MagicCard)mc.Clone();
-                    result.Add(new MagicCardPhysical(clone, null, true));
+                    result.Add(new MyCard(clone, null, true));
                 }
             }
         }
@@ -306,7 +306,7 @@ public class DeckCardService : IDeckCardService
     // ═══════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
+    public Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
@@ -315,7 +315,7 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
+    public Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));

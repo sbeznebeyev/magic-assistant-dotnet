@@ -251,7 +251,7 @@
         ["other"] = "#909099"
     };
 
-    private TypeChartData BuildSection(List<MagicCardPhysical> cards)
+    private TypeChartData BuildSection(List<MyCard> cards)
     {
         var data = new TypeChartData { TotalCards = cards.Sum(c => c.Count) };
         if (data.TotalCards == 0) return data;

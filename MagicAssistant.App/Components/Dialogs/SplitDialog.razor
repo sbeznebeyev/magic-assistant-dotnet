@@ -65,8 +65,8 @@
 </div>
 
 @code {
-    private MagicCardPhysical? _card;
-    private MagicCardPhysical? _sideboardCard;
+    private MyCard? _card;
+    private MyCard? _sideboardCard;
     private Collection? _sideboardNode;
     private int _deckId;
     private int _totalCount = 0;
@@ -85,7 +85,7 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
-    [Parameter] public MagicCardPhysical? Card { get; set; }
+    [Parameter] public MyCard? Card { get; set; }
     [Parameter] public int? DeckId { get; set; }
     [Parameter] public EventCallback OnSplitDone { get; set; }
 
@@ -95,7 +95,7 @@
             await LoadCardAsync(Card);
     }
 
-    private async Task LoadCardAsync(MagicCardPhysical? card)
+    private async Task LoadCardAsync(MyCard? card)
     {
         _card = card;
         _error = null;

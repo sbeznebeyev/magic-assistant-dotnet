@@ -54,7 +54,7 @@ public class AnalysisService : IAnalysisService
         "planeswalker"
     };
 
-    public DeckAnalysisResult Analyze(IEnumerable<MagicCardPhysical> cards)
+    public DeckAnalysisResult Analyze(IEnumerable<MyCard> cards)
     {
         var result = new DeckAnalysisResult();
 
@@ -168,7 +168,7 @@ public class AnalysisService : IAnalysisService
         return result;
     }
 
-    public int[] ComputeManaCurve(IEnumerable<MagicCardPhysical> cards)
+    public int[] ComputeManaCurve(IEnumerable<MyCard> cards)
     {
         var curve = new int[8];
         foreach (var card in cards)

@@ -10,7 +10,7 @@ public class AnalysisServiceTests
     [Test]
     public void Analyze_EmptyDeck_ReturnsZeroStats()
     {
-        var result = _service.Analyze(Array.Empty<MagicCardPhysical>());
+        var result = _service.Analyze(Array.Empty<MyCard>());
         
         Assert.That(result.TotalCards, Is.EqualTo(0));
         Assert.That(result.TotalManaCost, Is.EqualTo(0));
@@ -224,7 +224,7 @@ public class AnalysisServiceTests
             Type = "Instant",
             CmcNumber = ColorTypes.GetConvertedManaCost("{W}{U}"),
         };
-        var physical = new MagicCardPhysical(card) { Count = 2 };
+        var physical = new MyCard(card) { Count = 2 };
         try
         {
             var result = _service.Analyze(new[] { physical });
@@ -489,7 +489,7 @@ public class AnalysisServiceTests
     [Test]
     public void ComputeManaCurve_EmptyDeck_ReturnsZeros()
     {
-        var curve = _service.ComputeManaCurve(Array.Empty<MagicCardPhysical>());
+        var curve = _service.ComputeManaCurve(Array.Empty<MyCard>());
         
         Assert.That(curve, Has.Length.EqualTo(8));
         Assert.That(curve[0], Is.EqualTo(0));
@@ -528,7 +528,7 @@ public class AnalysisServiceTests
 
     // ─── Helper ────────────────────────────────────────────
 
-    private MagicCardPhysical CreatePhysicalCard(string name, string cost, string type, int count)
+    private MyCard CreatePhysicalCard(string name, string cost, string type, int count)
     {
         var cmc = ColorTypes.GetConvertedManaCost(cost);
         var card = new MagicCard
@@ -540,6 +540,6 @@ public class AnalysisServiceTests
             CmcNumber = cmc,
         };
 
-        return new MagicCardPhysical(card) { Count = count };
+        return new MyCard(card) { Count = count };
     }
 }

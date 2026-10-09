@@ -14,9 +14,9 @@ public record UpdateCardCommand(
 
 public class UpdateCardCommandHandler
 {
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
 
-    public UpdateCardCommandHandler(ICardStore<MagicCardPhysical> cardStore)
+    public UpdateCardCommandHandler(ICardStore<MyCard> cardStore)
     {
         _cardStore = cardStore;
     }

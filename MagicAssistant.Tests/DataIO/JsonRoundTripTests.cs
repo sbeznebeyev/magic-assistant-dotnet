@@ -16,7 +16,7 @@ public class JsonRoundTripTests
     {
         var cardId = Guid.NewGuid();
 
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -34,7 +34,7 @@ public class JsonRoundTripTests
         Assert.That(result.Key, Is.Null, "the native JSON format has no key field");
         Assert.That(result.Cards, Has.Count.EqualTo(1));
 
-        var imported = (MagicCardPhysical)result.Cards[0];
+        var imported = (MyCard)result.Cards[0];
         Assert.That(imported.Card.Id, Is.EqualTo(cardId));
         Assert.That(imported.Name, Is.EqualTo("Lightning Bolt"));
         Assert.That(imported.SetCode, Is.EqualTo("m19"));
@@ -48,7 +48,7 @@ public class JsonRoundTripTests
     public void RoundTrip_PhysicalCard_PreservesBorrowedOwnership()
     {
         // Borrowed card (IsOwn = false) — "own": false must survive the round-trip.
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m20" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), false)
         {
@@ -58,7 +58,7 @@ public class JsonRoundTripTests
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
         var result = JsonImport.ImportFromJson(json);
 
-        var imported = (MagicCardPhysical)result.Cards[0];
+        var imported = (MyCard)result.Cards[0];
         Assert.That(imported.IsOwn, Is.False,
             "Borrowed card (IsOwn=false) should remain borrowed after round-trip.");
     }
@@ -68,13 +68,13 @@ public class JsonRoundTripTests
     {
         var cards = new IMagicCard[]
         {
-            new MagicCardPhysical(
+            new MyCard(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
                 new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 4, MyPrice = 2.5f },
-            new MagicCardPhysical(
+            new MyCard(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
                 new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 24 },
-            new MagicCardPhysical(
+            new MyCard(
                 new MagicCard { Id = Guid.NewGuid(), Name = "Counterspell", SetCode = "m20" },
                 new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 1, Comment = "Borrowed" },
         };
@@ -86,7 +86,7 @@ public class JsonRoundTripTests
         Assert.That(result.Comment, Is.EqualTo("A test deck"));
         Assert.That(result.Cards, Has.Count.EqualTo(3));
 
-        var imported = result.Cards.Cast<MagicCardPhysical>().ToList();
+        var imported = result.Cards.Cast<MyCard>().ToList();
         Assert.That(imported[0].Count, Is.EqualTo(4));
         Assert.That(imported[1].Count, Is.EqualTo(24));
         Assert.That(imported[2].IsOwn, Is.False);
@@ -106,7 +106,7 @@ public class JsonRoundTripTests
     [Test]
     public void RoundTrip_SpecialCharactersInComment_EscapedCorrectly()
     {
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -116,7 +116,7 @@ public class JsonRoundTripTests
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
         var result = JsonImport.ImportFromJson(json);
 
-        var imported = (MagicCardPhysical)result.Cards[0];
+        var imported = (MyCard)result.Cards[0];
         Assert.That(imported.Comment, Is.EqualTo("Tags: <foil> & \"signed\" card — кириллица"));
     }
 
@@ -124,7 +124,7 @@ public class JsonRoundTripTests
     public void RoundTrip_CountOne_AlwaysWritten_StillImportsAsOne()
     {
         // Unlike the legacy XML format, count is part of the reference core and always written.
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -136,7 +136,7 @@ public class JsonRoundTripTests
         Assert.That(json, Does.Contain("\"count\": 1"));
 
         var result = JsonImport.ImportFromJson(json);
-        var imported = (MagicCardPhysical)result.Cards[0];
+        var imported = (MyCard)result.Cards[0];
 
         Assert.That(imported.Count, Is.EqualTo(1));
     }
@@ -144,7 +144,7 @@ public class JsonRoundTripTests
     [Test]
     public void RoundTrip_PriceZero_NotWritten_StillImportsAsZero()
     {
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -156,7 +156,7 @@ public class JsonRoundTripTests
         Assert.That(json, Does.Not.Contain("\"price\""));
 
         var result = JsonImport.ImportFromJson(json);
-        var imported = (MagicCardPhysical)result.Cards[0];
+        var imported = (MyCard)result.Cards[0];
 
         Assert.That(imported.MyPrice, Is.EqualTo(0f));
     }
@@ -164,7 +164,7 @@ public class JsonRoundTripTests
     [Test]
     public void RoundTrip_ForTradeCount_Preserved()
     {
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -176,7 +176,7 @@ public class JsonRoundTripTests
         Assert.That(json, Does.Contain("\"forTrade\": 2"));
 
         var result = JsonImport.ImportFromJson(json);
-        var imported = (MagicCardPhysical)result.Cards[0];
+        var imported = (MyCard)result.Cards[0];
 
         Assert.That(imported.GetForTradeCount(), Is.EqualTo(2));
     }
@@ -185,7 +185,7 @@ public class JsonRoundTripTests
     public void RoundTrip_Sideboard_PreservesAllFields()
     {
         var sbId = Guid.NewGuid();
-        var sideboardCard = new MagicCardPhysical(
+        var sideboardCard = new MyCard(
             new MagicCard { Id = sbId, Name = "Liliana, the Wicked", SetCode = "mh3" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), false)
         {
@@ -194,7 +194,7 @@ public class JsonRoundTripTests
             Comment = "SB comment",
         };
 
-        var mainCard = new MagicCardPhysical(
+        var mainCard = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -207,7 +207,7 @@ public class JsonRoundTripTests
         Assert.That(result.Cards, Has.Count.EqualTo(1));
         Assert.That(result.Sideboard, Has.Count.EqualTo(1));
 
-        var importedSb = (MagicCardPhysical)result.Sideboard[0];
+        var importedSb = (MyCard)result.Sideboard[0];
         Assert.That(importedSb.Card.Id, Is.EqualTo(sbId));
         Assert.That(importedSb.Name, Is.EqualTo("Liliana, the Wicked"));
         Assert.That(importedSb.SetCode, Is.EqualTo("mh3"));
@@ -217,7 +217,7 @@ public class JsonRoundTripTests
         Assert.That(importedSb.Comment, Is.EqualTo("SB comment"));
 
         // The main deck is untouched by the sideboard round-trip.
-        var importedMain = (MagicCardPhysical)result.Cards[0];
+        var importedMain = (MyCard)result.Cards[0];
         Assert.That(importedMain.Name, Is.EqualTo("Lightning Bolt"));
         Assert.That(importedMain.Count, Is.EqualTo(4));
     }
@@ -226,7 +226,7 @@ public class JsonRoundTripTests
     public void RoundTrip_NoSideboard_NodeAbsent()
     {
         // A deck without a sideboard must round-trip WITHOUT the node — it is optional.
-        var physical = new MagicCardPhysical(
+        var physical = new MyCard(
             new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {

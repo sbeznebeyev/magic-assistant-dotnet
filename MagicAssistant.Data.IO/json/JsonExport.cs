@@ -28,7 +28,7 @@ namespace MagicAssistant.Data.IO.json;
 /// has no sideboard cards (forward compatibility: consumers that don't know the field
 /// simply ignore it — version stays 1). Output is pretty-printed with 2-space indent.
 ///
-/// Only <see cref="MagicCardPhysical"/> cards are supported for export.
+/// Only <see cref="MyCard"/> cards are supported for export.
 /// Base <see cref="MagicCard"/> cards cannot be exported directly.
 /// </summary>
 public static class JsonExport
@@ -73,7 +73,7 @@ public static class JsonExport
             writer.WriteStartArray();
             foreach (var card in cards)
             {
-                if (card is MagicCardPhysical physical)
+                if (card is MyCard physical)
                     WriteMagicCardPhysical(writer, physical);
                 else
                     throw new Exception("Can't export non-physical cards");
@@ -88,7 +88,7 @@ public static class JsonExport
                 writer.WriteStartArray();
                 foreach (var card in sideboard)
                 {
-                    if (card is MagicCardPhysical physical)
+                    if (card is MyCard physical)
                         WriteMagicCardPhysical(writer, physical);
                     else
                         throw new Exception("Can't export non-physical cards");
@@ -102,7 +102,7 @@ public static class JsonExport
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    static void WriteMagicCardPhysical(Utf8JsonWriter writer, MagicCardPhysical physical)
+    static void WriteMagicCardPhysical(Utf8JsonWriter writer, MyCard physical)
     {
         writer.WriteStartObject();
 

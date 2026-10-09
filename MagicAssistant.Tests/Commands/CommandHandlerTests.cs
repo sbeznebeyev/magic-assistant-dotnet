@@ -12,7 +12,7 @@ public class CommandHandlerTests
     public async Task AddCards_DeckNotFound_Throws()
     {
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         coll.Setup(s => s.GetByIdAsync(999, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Collection?)null);
 
@@ -38,18 +38,18 @@ public class CommandHandlerTests
     public async Task AddCards_CreatesPhysicalsWithCorrectLocation()
     {
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         coll.Setup(s => s.GetByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Collection(1, "Deck", null, NodeType.Deck, 0));
-        cardStore.Setup(s => s.AddAllAsync(It.IsAny<IEnumerable<MagicCardPhysical>>(), It.IsAny<CancellationToken>()))
+        cardStore.Setup(s => s.AddAllAsync(It.IsAny<IEnumerable<MyCard>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var handler = new AddCardsToDeckCommandHandler(cardStore.Object, coll.Object);
         await handler.Handle(new AddCardsToDeckCommand(1, new[] { (IMagicCard)new MagicCard { Id = Guid.NewGuid()} }));
 
         cardStore.Verify(s => s.AddAllAsync(
-            It.Is<IEnumerable<MagicCardPhysical>>(cards =>
-                cards.Cast<MagicCardPhysical>().All(p => p.Collection != null && p.Collection.Id == 1 && p.IsOwn)),
+            It.Is<IEnumerable<MyCard>>(cards =>
+                cards.Cast<MyCard>().All(p => p.Collection != null && p.Collection.Id == 1 && p.IsOwn)),
             It.IsAny<CancellationToken>()));
     }
 
@@ -137,7 +137,7 @@ public class CommandHandlerTests
     public async Task MoveCards_PreservesOwnership()
     {
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         var cardId = Guid.NewGuid();
 
         var physical = CreatePhysical(cardId, 1, 2, isOwn: false);
@@ -148,9 +148,9 @@ public class CommandHandlerTests
             .ReturnsAsync(new Collection(2, "Target", null, NodeType.Deck, 0));
         coll.Setup(s => s.GetDeckCardsAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { physical });
-        cardStore.Setup(s => s.RemoveAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
+        cardStore.Setup(s => s.RemoveAsync(It.IsAny<MyCard>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
-        cardStore.Setup(s => s.AddAsync(It.IsAny<MagicCardPhysical>(), It.IsAny<CancellationToken>()))
+        cardStore.Setup(s => s.AddAsync(It.IsAny<MyCard>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var handler = new MoveCardsCommandHandler(cardStore.Object, coll.Object);
@@ -158,14 +158,14 @@ public class CommandHandlerTests
             new[] { (IMagicCard)new MagicCard { Id = cardId } }, 1, 2));
 
         cardStore.Verify(s => s.AddAsync(
-            It.Is<MagicCardPhysical>(p => !p.IsOwn), It.IsAny<CancellationToken>()));
+            It.Is<MyCard>(p => !p.IsOwn), It.IsAny<CancellationToken>()));
     }
 
     [Test]
     public async Task MoveCards_SourceNotFound_Throws()
     {
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         coll.Setup(s => s.GetByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Collection?)null);
 
@@ -192,7 +192,7 @@ public class CommandHandlerTests
     public async Task MoveCards_TargetNotFound_Throws()
     {
         var coll = new Mock<ICollectionStore>();
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         coll.Setup(s => s.GetByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Collection(1, "Source", null, NodeType.Deck, 0));
         coll.Setup(s => s.GetByIdAsync(2, It.IsAny<CancellationToken>()))
@@ -222,19 +222,19 @@ public class CommandHandlerTests
     [Test]
     public async Task UpdateCard_UpdatesMultipleFields()
     {
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         var cardId = Guid.NewGuid();
 
         var physical = CreatePhysical(cardId, 1, 1);
 
         ICollection<MagicCardField>? capturedFields = null;
-        MagicCardPhysical? capturedCard = null;
+        MyCard? capturedCard = null;
 
         cardStore.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { physical });
         cardStore.Setup(s => s.UpdateAsync(
-                It.IsAny<MagicCardPhysical>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
-            .Returns((MagicCardPhysical card, ICollection<MagicCardField> fields, CancellationToken ct) =>
+                It.IsAny<MyCard>(), It.IsAny<ICollection<MagicCardField>>(), It.IsAny<CancellationToken>()))
+            .Returns((MyCard card, ICollection<MagicCardField> fields, CancellationToken ct) =>
             {
                 capturedCard = card;
                 capturedFields = fields;
@@ -272,11 +272,11 @@ public class CommandHandlerTests
     [Test]
     public async Task UpdateCard_CardNotFound_ReturnsFalse()
     {
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         var cardId = Guid.NewGuid();
 
         cardStore.Setup(s => s.GetCardsAsync(cardId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
+            .ReturnsAsync(Array.Empty<MyCard>());
 
         var handler = new UpdateCardCommandHandler(cardStore.Object);
         var result = await handler.Handle(new UpdateCardCommand(1, cardId, new Dictionary<MagicCardField, object?>()));
@@ -287,7 +287,7 @@ public class CommandHandlerTests
     [Test]
     public async Task UpdateCard_WrongDeck_ReturnsFalse()
     {
-        var cardStore = new Mock<ICardStore<MagicCardPhysical>>();
+        var cardStore = new Mock<ICardStore<MyCard>>();
         var cardId = Guid.NewGuid();
 
         // Карта есть, но в другой колоде (deck-2), а обновление запрашивается для deck-1
@@ -303,9 +303,9 @@ public class CommandHandlerTests
             "Хендлер ищет карту по CardId И Location.Id. Карта в deck-2, запрос для deck-1 → не найдена");
     }
 
-    private static MagicCardPhysical CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
+    private static MyCard CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
         var card = new MagicCard { Id = cardId, Name = "Test" };
-        return new MagicCardPhysical(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
+        return new MyCard(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
     }
 }

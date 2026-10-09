@@ -1,5 +1,5 @@
 @using MagicAssistant.Data.Contracts
-@inject ICardStore<MagicCardPhysical> CardStore
+@inject ICardStore<MyCard> CardStore
 
 <div class="instances-view">
     <div class="section-header">
@@ -84,7 +84,7 @@
 </div>
 
 @code {
-    private List<MagicCardPhysical> _instances = new();
+    private List<MyCard> _instances = new();
     private bool _loading;
 
     [Parameter] public Guid? CardId { get; set; }
@@ -123,14 +123,14 @@
         }
     }
 
-    private async Task SelectInstance(MagicCardPhysical instance)
+    private async Task SelectInstance(MyCard instance)
     {
         var locId = instance.Collection?.Id ?? 0;
         if (locId > 0)
             await OnDeckSelected.InvokeAsync(locId);
     }
 
-    private static string GetDeckName(MagicCardPhysical instance)
+    private static string GetDeckName(MyCard instance)
     {
         // Collection Id is an int node ID; the sideboard marker comes from NodeType
         // (rendered as the "SB" tag), so there's no suffix to strip or length to truncate.

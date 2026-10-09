@@ -155,16 +155,16 @@
 
     /// <summary>Physical instances of the cards in the current location (deck/sideboard/collection).
     /// Null = KB mode — no count controls rendered.</summary>
-    [Parameter] public Dictionary<Guid, MagicCardPhysical>? Physicals { get; set; }
+    [Parameter] public Dictionary<Guid, MyCard>? Physicals { get; set; }
 
     /// <summary>Count changed by ±1 (location mode only).</summary>
-    [Parameter] public EventCallback<(MagicCardPhysical card, int delta)> OnCountChanged { get; set; }
+    [Parameter] public EventCallback<(MyCard card, int delta)> OnCountChanged { get; set; }
 
     /// <summary>Edit requested for a location card.</summary>
-    [Parameter] public EventCallback<MagicCardPhysical> OnEditRequested { get; set; }
+    [Parameter] public EventCallback<MyCard> OnEditRequested { get; set; }
 
     /// <summary>Split requested for a location card (only when Count &gt; 1).</summary>
-    [Parameter] public EventCallback<MagicCardPhysical> OnSplitRequested { get; set; }
+    [Parameter] public EventCallback<MyCard> OnSplitRequested { get; set; }
 
     /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, KB mode with a
     /// pinned target only — in deck mode the Total column shows the current deck's count instead).
@@ -222,14 +222,14 @@
         await OnNextPage.InvokeAsync();
     }
 
-    private async Task ChangeCount(MagicCardPhysical card, int delta)
+    private async Task ChangeCount(MyCard card, int delta)
     {
         await OnCountChanged.InvokeAsync((card, delta));
     }
 
-    private async Task EditCard(MagicCardPhysical card) => await OnEditRequested.InvokeAsync(card);
+    private async Task EditCard(MyCard card) => await OnEditRequested.InvokeAsync(card);
 
-    private async Task SplitCard(MagicCardPhysical card) => await OnSplitRequested.InvokeAsync(card);
+    private async Task SplitCard(MyCard card) => await OnSplitRequested.InvokeAsync(card);
 
     private async Task AddToFixed(MagicCard card) => await OnKbAddRequested.InvokeAsync(card);
 

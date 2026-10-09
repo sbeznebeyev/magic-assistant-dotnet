@@ -35,7 +35,7 @@ public interface ICardSearchService
     /// Get all physical instances of a card across all user decks/collections.
     /// Returns MagicCardPhysical objects with location and ownership info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetInstancesAsync(Guid cardId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetInstancesAsync(Guid cardId, CancellationToken ct = default);
 
     /// <summary>
     /// Get all cards from a specific set in the knowledge base.

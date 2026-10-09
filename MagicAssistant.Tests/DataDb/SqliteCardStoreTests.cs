@@ -639,8 +639,8 @@ public class SqliteCardStoreTests
         var deck = await collectionStore.CreateDeckAsync("Test Deck");
         await collectionStore.AddAllAsync(new[]
         {
-            new MagicCardPhysical(cards[0], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
-            new MagicCardPhysical(cards[1], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
+            new MyCard(cards[0], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MyCard(cards[1], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
         });
 
         // Act: paged query restricted to the deck location

@@ -113,8 +113,8 @@ builder.Services.AddSingleton<IUserSettingsStore>(_ => new SqliteUserSettingsSto
 
 // Data layer — Collection Store (SQLite, same DB as KnowledgeBase)
 builder.Services.AddSingleton<ICollectionStore>(_ => new SqliteCollectionStore(cardsDb));
-builder.Services.AddSingleton<ICardStore<MagicCardPhysical>>(sp =>
-    sp.GetRequiredService<ICollectionStore>() as ICardStore<MagicCardPhysical>
+builder.Services.AddSingleton<ICardStore<MyCard>>(sp =>
+    sp.GetRequiredService<ICollectionStore>() as ICardStore<MyCard>
     ?? throw new InvalidOperationException("ICollectionStore does not implement ICardStore<MagicCardPhysical>"));
 
 // Core commands & queries — scoped per Blazor circuit (one instance per user session)

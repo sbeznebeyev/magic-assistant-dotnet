@@ -24,7 +24,7 @@ public class CardFieldExprTests
         Assert.That(card.Name, Is.EqualTo("New Name"));
 
         // Works on physical too
-        var phys = new MagicCardPhysical(new MagicCard());
+        var phys = new MyCard(new MagicCard());
         ((ICardField)new CardFieldExpr(MagicCardField.Comment)).Set(phys, "comment");
         Assert.That(phys.Comment, Is.EqualTo("comment"));
     }

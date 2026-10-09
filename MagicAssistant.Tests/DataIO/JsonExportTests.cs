@@ -12,7 +12,7 @@ public class JsonExportTests
     {
         var cardId = Guid.NewGuid();
         var card = new MagicCard { Id = cardId, Name = "Card", SetCode = "m19" };
-        var physical = new MagicCardPhysical(card) { Count = 3 };
+        var physical = new MyCard(card) { Count = 3 };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
@@ -27,7 +27,7 @@ public class JsonExportTests
     {
         // Unlike the legacy XML format, count is part of the reference core and never omitted.
         var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
-        var physical = new MagicCardPhysical(card) { Count = 1 };
+        var physical = new MyCard(card) { Count = 1 };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
@@ -38,7 +38,7 @@ public class JsonExportTests
     public void ExportToJson_OmitsOptionalFields_AtDefaults()
     {
         var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
-        var physical = new MagicCardPhysical(card)
+        var physical = new MyCard(card)
         {
             Count = 1,
             IsOwn = true,
@@ -61,7 +61,7 @@ public class JsonExportTests
     public void ExportToJson_WritesOwnFalse_WhenBorrowed()
     {
         var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
-        var physical = new MagicCardPhysical(card) { Count = 1, IsOwn = false };
+        var physical = new MyCard(card) { Count = 1, IsOwn = false };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
@@ -72,7 +72,7 @@ public class JsonExportTests
     public void ExportToJson_WritesPrice_WhenNonZero()
     {
         var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
-        var physical = new MagicCardPhysical(card) { Count = 1, MyPrice = 5.0f };
+        var physical = new MyCard(card) { Count = 1, MyPrice = 5.0f };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
@@ -83,7 +83,7 @@ public class JsonExportTests
     public void ExportToJson_Price_UsesShortestRoundTrippableRepresentation()
     {
         var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
-        var physical = new MagicCardPhysical(card) { Count = 1, MyPrice = 0.1f };
+        var physical = new MyCard(card) { Count = 1, MyPrice = 0.1f };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
 
@@ -104,7 +104,7 @@ public class JsonExportTests
     public void ExportToJson_WritesSideboard_WhenProvided()
     {
         var sbId = Guid.NewGuid();
-        var sbCard = new MagicCardPhysical(
+        var sbCard = new MyCard(
             new MagicCard { Id = sbId, Name = "Sideboard Card", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
@@ -114,7 +114,7 @@ public class JsonExportTests
 
         var json = JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
             new[] { sbCard });
 
         Assert.That(json, Does.Contain("\"sideboard\""));
@@ -132,7 +132,7 @@ public class JsonExportTests
     {
         var json = JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
             sideboardCards: null);
 
         Assert.That(json, Does.Not.Contain("\"sideboard\""));
@@ -144,7 +144,7 @@ public class JsonExportTests
         // An empty sideboard list must not produce an empty "sideboard": [] node — the field is optional.
         var json = JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
             Array.Empty<IMagicCard>());
 
         Assert.That(json, Does.Not.Contain("\"sideboard\""));
@@ -157,7 +157,7 @@ public class JsonExportTests
 
         Assert.Throws<Exception>(() => JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MagicCardPhysical(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
             new IMagicCard[] { baseCard }));
     }
 }

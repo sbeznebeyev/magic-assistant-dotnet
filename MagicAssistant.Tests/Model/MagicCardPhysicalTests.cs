@@ -18,7 +18,7 @@ public class MagicCardPhysicalTests
     [Test]
     public void Constructor_SetsDefaults()
     {
-        var physical = new MagicCardPhysical(Card());
+        var physical = new MyCard(Card());
         Assert.That(physical.Count, Is.EqualTo(1));
         Assert.That(physical.IsOwn, Is.False, "IsOwn defaults to false (bool default); only the 3-param constructor sets it explicitly");
         Assert.That(physical.Collection, Is.Null);
@@ -28,13 +28,13 @@ public class MagicCardPhysicalTests
     [Test]
     public void Constructor_ThrowsForNullCard()
     {
-        Assert.Throws<ArgumentNullException>(() => new MagicCardPhysical(null!));
+        Assert.Throws<ArgumentNullException>(() => new MyCard(null!));
     }
 
     [Test]
     public void Constructor_WithCollection_SetsValues()
     {
-        var physical = new MagicCardPhysical(Card(), new Collection(123, "deck-123", null, NodeType.Deck, 0), false);
+        var physical = new MyCard(Card(), new Collection(123, "deck-123", null, NodeType.Deck, 0), false);
         Assert.That(physical.Collection?.Id, Is.EqualTo(123));
         Assert.That(physical.IsOwn, Is.False);
     }
@@ -44,14 +44,14 @@ public class MagicCardPhysicalTests
     [Test]
     public void OwnCount_ReturnsCount_WhenOwned()
     {
-        var physical = new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 3 };
+        var physical = new MyCard(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 3 };
         Assert.That(physical.OwnCount, Is.EqualTo(3));
     }
 
     [Test]
     public void OwnCount_ReturnsZero_WhenBorrowed()
     {
-        var physical = new MagicCardPhysical(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 3 };
+        var physical = new MyCard(Card(), new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 3 };
         Assert.That(physical.OwnCount, Is.EqualTo(0));
     }
 
@@ -61,8 +61,8 @@ public class MagicCardPhysicalTests
     [Test]
     public void IsSideboard_ReflectsCollectionNodeType()
     {
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, "sideboard", null, NodeType.Sideboard, 0), true).IsSideboard, Is.True);
-        Assert.That(new MagicCardPhysical(Card(), new Collection(1, "deck-1", null, NodeType.Deck, 0), true).IsSideboard, Is.False);
+        Assert.That(new MyCard(Card(), new Collection(1, "sideboard", null, NodeType.Sideboard, 0), true).IsSideboard, Is.True);
+        Assert.That(new MyCard(Card(), new Collection(1, "deck-1", null, NodeType.Deck, 0), true).IsSideboard, Is.False);
     }
 
     /* ─── ForTrade logic ──────────────────────────────────── */
@@ -70,13 +70,13 @@ public class MagicCardPhysicalTests
     [Test]
     public void ForTradeCount_DefaultIsZero()
     {
-        Assert.That(new MagicCardPhysical(Card()).GetForTradeCount(), Is.EqualTo(0));
+        Assert.That(new MyCard(Card()).GetForTradeCount(), Is.EqualTo(0));
     }
 
     [Test]
     public void ForTradeCount_StoresExplicitValue()
     {
-        var physical = new MagicCardPhysical(Card());
+        var physical = new MyCard(Card());
         physical.SetForTradeCount(2);
         Assert.That(physical.GetForTradeCount(), Is.EqualTo(2));
 
@@ -92,7 +92,7 @@ public class MagicCardPhysicalTests
     [Test]
     public void SetBaseCard_UpdatesReference()
     {
-        var physical = new MagicCardPhysical(CardWithId("00000000-0000-0000-0000-000000000001"));
+        var physical = new MyCard(CardWithId("00000000-0000-0000-0000-000000000001"));
         physical.SetBaseCard(CardWithId("00000000-0000-0000-0000-000000000002"));
         Assert.That(physical.Id, Is.EqualTo(Guid.Parse("00000000-0000-0000-0000-000000000002")));
     }
@@ -101,7 +101,7 @@ public class MagicCardPhysicalTests
     public void GetBase_ReturnsBaseCard()
     {
         var card = Card();
-        var physical = new MagicCardPhysical(card);
+        var physical = new MyCard(card);
         Assert.That(physical.GetBase(), Is.SameAs(card));
     }
 
@@ -111,7 +111,7 @@ public class MagicCardPhysicalTests
     [Test]
     public void ToString_ContainsCardNameAndCount()
     {
-        var physical = new MagicCardPhysical(Card()) { Count = 3 };
+        var physical = new MyCard(Card()) { Count = 3 };
         var str = physical.ToString();
         Assert.That(str, Does.Contain("Test Card"));
         Assert.That(str, Does.Contain("3"));

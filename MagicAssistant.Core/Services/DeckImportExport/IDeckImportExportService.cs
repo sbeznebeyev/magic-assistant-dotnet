@@ -86,7 +86,7 @@ public interface IDeckImportExportService
     /// <paramref name="cardOverrides"/> (key "OriginalName|SetCode").
     /// Throws when any card is neither resolved nor mapped — the commit invariant.
     /// </summary>
-    Task<IReadOnlyList<MagicCardPhysical>> BuildLegacyImportCardsAsync(
+    Task<IReadOnlyList<MyCard>> BuildLegacyImportCardsAsync(
         string xmlContent,
         LegacyCardResolution resolution,
         IReadOnlyDictionary<string, Guid>? cardOverrides = null,
@@ -105,7 +105,7 @@ public interface IDeckImportExportService
         string deckName,
         int? parentId,
         int? targetCollectionId,
-        IReadOnlyList<MagicCardPhysical> cards,
+        IReadOnlyList<MyCard> cards,
         IReadOnlyDictionary<string, Guid>? cardOverrides = null,
         CancellationToken ct = default);
 
