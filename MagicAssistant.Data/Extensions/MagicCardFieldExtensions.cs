@@ -33,8 +33,6 @@ public static class MagicCardFieldExtensions
             MagicCardField.CollectorNumber => card.GetBase().CollectorNumber,
             MagicCardField.Cmc => card.CmcNumber,
             MagicCardField.ColorType => card.ColorType,
-            MagicCardField.Text => card.Text,
-            MagicCardField.Side => card.Side,
             MagicCardField.Edition => card.CardSet?.SetCode,
 
             // Extended fields — from properties
@@ -127,9 +125,6 @@ public static class MagicCardFieldExtensions
                 break;
 
             // Extended fields — direct property assignment
-            case MagicCardField.Side:
-                card.Side = CastToInt(value);
-                break;
             case MagicCardField.Legality:
                 if (value is Legality.LegalityMap lm)
                     card.LegalityMap = lm;

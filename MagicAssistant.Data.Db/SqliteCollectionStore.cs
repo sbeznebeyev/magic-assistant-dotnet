@@ -47,7 +47,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
                    d.DateAdded, d.ForTradeCount, d.Grade,
                    c.Name, c.ManaCost, c.Layout, c.Type, c.Power, c.Toughness,
                    c.SetCode, c.Rarity, c.OracleText, c.Rulings, c.Artist, c.Language,
-                   c.CollectorNumber, c.Text, c.CmcNumber, c.CmcText, c.ColorType, c.Side, c.CollectorNumberId,
+                   c.CollectorNumber, c.CmcNumber, c.CmcText, c.ColorType,
                    c.PrintedName, c.PrintedText, c.PrintedTypeLine,
                    d.MyPrice, c.LegalityFormats";
 
@@ -911,14 +911,11 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
             Artist = row.Artist,
             Language = row.Language,
             CollectorNumber = row.CollectorNumber,
-            Text = row.Text,
             PrintedName = row.PrintedName,
             PrintedText = row.PrintedText,
             PrintedTypeLine = row.PrintedTypeLine,
             CmcNumber = row.CmcNumber,
             CmcText = row.CmcText,
-            Side = row.Side,
-            CollectorNumberId = row.CollectorNumberId,
         };
 
         // Restore LegalityMap
@@ -1028,15 +1025,12 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
         public string? Artist { get; set; }
         public string? Language { get; set; }
         public string? CollectorNumber { get; set; }
-        public string? Text { get; set; }
         public string? PrintedName { get; set; }
         public string? PrintedText { get; set; }
         public string? PrintedTypeLine { get; set; }
         public int? CmcNumber { get; set; }
         public string? CmcText { get; set; }
         public string? ColorType { get; set; }
-        public int Side { get; set; }
-        public int CollectorNumberId { get; set; }
         public float MyPrice { get; set; }
         public string? LegalityFormats { get; set; }
     }

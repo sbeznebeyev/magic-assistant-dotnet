@@ -26,8 +26,6 @@ public static class ScryfallMapper
 
     public static Card ToMagicCard(ScryfallCardDto dto)
     {
-        var collectorNumberId = ParseCollectorNumberId(dto.CollectorNumber);
-
         var card = new Card
         {
             Id = dto.Id,
@@ -48,12 +46,7 @@ public static class ScryfallMapper
             CollectorNumber = dto.CollectorNumber,
             CmcText = dto.Cmc,
             CmcNumber = double.TryParse(dto.Cmc, CultureInfo.InvariantCulture, out var parsedCmcNum) ? (int?)Math.Floor(parsedCmcNum) : null,
-            Side = dto.Side ?? 0,
-            CollectorNumberId = collectorNumberId,
             Legal = ScryfallHelper.GetLegality(dto.Legalities, ScryfallLegalitiesEnum.legal),
-            NotLegal = ScryfallHelper.GetLegality(dto.Legalities, ScryfallLegalitiesEnum.not_legal),
-            Restricted = ScryfallHelper.GetLegality(dto.Legalities, ScryfallLegalitiesEnum.restricted),
-            Banned = ScryfallHelper.GetLegality(dto.Legalities, ScryfallLegalitiesEnum.banned),
             PrintedName = dto.PrintedName,
             PrintedText = dto.PrintedText,
             PrintedTypeLine = dto.PrintedTypeLine,
@@ -90,17 +83,7 @@ public static class ScryfallMapper
         if (dto.ColorIdentity is { Count: > 0 })
             card.ColorIdentity = dto.ColorIdentity.ToArray();
 
-        // Map ColorIndicator from Scryfall
-        if (dto.ColorIndicator is { Count: > 0 })
-            card.ColorIndicator = dto.ColorIndicator.ToArray();
-
         card.GameChanger = dto.GameChanger;
-
-        if (dto.Keywords is { Count: > 0 })
-            card.Keywords = dto.Keywords.ToArray();
-
-        if (dto.ProducedMana is { Count: > 0 })
-            card.ProducedMana = dto.ProducedMana.ToArray();
 
         // Map ImageUris directly from Scryfall DTO.
         if (dto.ImageUris != null)
@@ -193,36 +176,6 @@ public static class ScryfallMapper
     /// </summary>
     private static bool IsDoubleFacedLayout(string layout)
         => layout is "transform" or "modal_dfc" or "meld" or "reversible_card" or "double_faced_token";
-
-    /// <summary>
-    /// Parses collector number from Scryfall format: "1", "1/234", "1a", "A5", "42b".
-    /// </summary>
-    private static int ParseCollectorNumberId(string? collectorNumber)
-    {
-        if (string.IsNullOrEmpty(collectorNumber))
-            return 0;
-
-        // Remove side suffix (e.g. "42a" → "42")
-        var cleaned = collectorNumber.TrimEnd('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z');
-
-        // Handle formats like "1/234" — take the first number
-        var slashIdx = cleaned.IndexOf('/');
-        if (slashIdx > 0)
-            cleaned = cleaned[..slashIdx];
-
-        // Remove leading letters (e.g. "A5" → "5")
-        var numStart = 0;
-        while (numStart < cleaned.Length && char.IsLetter(cleaned[numStart]))
-            numStart++;
-
-        if (numStart >= cleaned.Length)
-            return 0;
-
-        if (int.TryParse(cleaned[numStart..], out var result))
-            return result;
-
-        return 0;
-    }
 
     private static LegalityMap MapLegality(Dictionary<string, string>? legalities)
     {

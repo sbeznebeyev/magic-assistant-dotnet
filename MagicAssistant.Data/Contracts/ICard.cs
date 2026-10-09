@@ -20,9 +20,6 @@ public interface ICard : ICardSimple
     string? CmcText { get; }
     string? ColorType { get; }
     Card GetBase();
-    string? Text { get; }
-    int Side { get; }
-    int CollectorNumberId { get; }
     Model.Legality.LegalityMap LegalityMap { get; }
     bool IsBasicLand();
     CardSet? CardSet { get; }

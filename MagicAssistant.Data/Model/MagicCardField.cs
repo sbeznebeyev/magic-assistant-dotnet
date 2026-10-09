@@ -20,8 +20,6 @@ public enum MagicCardField
     CollectorNumber,
     Cmc,
     ColorType,
-    Text,
-    Side,
     Edition,
 
     // === Extended base fields (stored as properties) ===

@@ -37,7 +37,6 @@ public class Card : ICard
     public string? Artist { get; set; }
     public string? Language { get; set; }
     public string? CollectorNumber { get; set; }
-    public string? Text { get; set; }
     public string? Rulings { get; set; }
 
     /// <summary>
@@ -85,29 +84,12 @@ public class Card : ICard
     public int? IdentityBits { get; set; }
 
     // === Additional fields ===
-    public int Side { get; set; }
-    public int CollectorNumberId { get; set; }
     public LegalityMap LegalityMap { get; set; } = LegalityMap.Empty;
 
     /// <summary>
     /// Legal formats
     /// </summary>
     public string Legal { get; set; }
-
-    /// <summary>
-    /// Not legal formats
-    /// </summary>
-    public string NotLegal { get; set; }
-
-    /// <summary>
-    /// Restricted formats
-    /// </summary>
-    public string Restricted { get; set; }
-
-    /// <summary>
-    /// Banned formats
-    /// </summary>
-    public string Banned { get; set; }
 
     /// <summary>
     /// USD price for this card (from Scryfall prices.usd).
@@ -142,27 +124,9 @@ public class Card : ICard
     public string[]? ColorIdentity { get; set; }
 
     /// <summary>
-    /// The colors in this card's color indicator, if any.
-    /// Stored as a comma-separated string (e.g. "W,U").
-    /// </summary>
-    public string[]? ColorIndicator { get; set; }
-
-    /// <summary>
     /// True if this card is on the Commander Game Changer list.
     /// </summary>
     public bool? GameChanger { get; set; }
-
-    /// <summary>
-    /// An array of keywords that this card uses (e.g. "Flying", "Cumulative upkeep").
-    /// Stored as a semicolon-separated string in the database.
-    /// </summary>
-    public string[]? Keywords { get; set; }
-
-    /// <summary>
-    /// Colors of mana that this card could produce (e.g. W, U, B, R, G).
-    /// Stored as a comma-separated string in the database.
-    /// </summary>
-    public string[]? ProducedMana { get; set; }
 
     // === Multifaced card support ===
     /// <summary>

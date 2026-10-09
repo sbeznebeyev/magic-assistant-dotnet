@@ -76,9 +76,6 @@ public class MyCard : IMyCard
     public CardGrade? Grade { get; set; }
 
     public Card GetBase() => Card;
-    public string? Text => Card.Text;
-    public int Side => Card.Side;
-    public int CollectorNumberId => Card.CollectorNumberId;
     public LegalityMap LegalityMap => Card.LegalityMap;
     public bool IsBasicLand() => Card.IsBasicLand();
     public CardSet? CardSet => Card.CardSet;

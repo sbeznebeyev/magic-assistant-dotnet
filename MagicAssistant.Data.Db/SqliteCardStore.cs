@@ -37,8 +37,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         await conn.OpenAsync(ct);
 
         var sql = @"
-            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, LegalityFormats, Colors, ColorIdentity, GameChanger, Legal, Usd, UsdFoil, ColorBits, IdentityBits)
+            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @LegalityFormats, @Colors, @ColorIdentity, @GameChanger, @Legal, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
         var result = await conn.ExecuteAsync(sql, new
         {
@@ -59,26 +59,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             card.Artist,
             card.Language,
             card.CollectorNumber,
-            card.Text,
             card.PrintedName,
             card.PrintedText,
             card.PrintedTypeLine,
             card.CmcNumber,
             card.CmcText,
             card.ColorType,
-            card.Side,
-            card.CollectorNumberId,
             LegalityFormats = card.LegalityMap.IsEmpty ? null : string.Join(',', card.LegalityMap.LegalFormats.Select(f => f.ToString())),
             Colors = card.Colors is { Length: > 0 } ? string.Join(',', card.Colors) : (string?)null,
             ColorIdentity = card.ColorIdentity is { Length: > 0 } ? string.Join(',', card.ColorIdentity) : (string?)null,
-            ColorIndicator = card.ColorIndicator is { Length: > 0 } ? string.Join(',', card.ColorIndicator) : (string?)null,
             GameChanger = card.GameChanger,
-            Keywords = card.Keywords is { Length: > 0 } ? string.Join(';', card.Keywords) : (string?)null,
-            ProducedMana = card.ProducedMana is { Length: > 0 } ? string.Join(',', card.ProducedMana) : (string?)null,
             Legal = card.Legal,
-            NotLegal = card.NotLegal,
-            Restricted = card.Restricted,
-            Banned = card.Banned,
             Usd = card.Usd,
             UsdFoil = card.UsdFoil,
             ColorBits = card.ColorBits,
@@ -108,8 +99,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         try
         {
             var sql = @"
-                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, LegalityFormats, Colors, ColorIdentity, GameChanger, Legal, Usd, UsdFoil, ColorBits, IdentityBits)
+                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @LegalityFormats, @Colors, @ColorIdentity, @GameChanger, @Legal, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
             await conn.ExecuteAsync(sql, list.Select(c => new
             {
@@ -130,26 +121,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 c.Artist,
                 c.Language,
                 c.CollectorNumber,
-                c.Text,
                 c.PrintedName,
                 c.PrintedText,
                 c.PrintedTypeLine,
                 c.CmcNumber,
                 c.CmcText,
                 c.ColorType,
-                c.Side,
-                c.CollectorNumberId,
                 LegalityFormats = c.LegalityMap.IsEmpty ? null : string.Join(',', c.LegalityMap.LegalFormats.Select(f => f.ToString())),
                 Colors = c.Colors is { Length: > 0 } ? string.Join(',', c.Colors) : (string?)null,
                 ColorIdentity = c.ColorIdentity is { Length: > 0 } ? string.Join(',', c.ColorIdentity) : (string?)null,
-                ColorIndicator = c.ColorIndicator is { Length: > 0 } ? string.Join(',', c.ColorIndicator) : (string?)null,
                 GameChanger = c.GameChanger,
-                Keywords = c.Keywords is { Length: > 0 } ? string.Join(';', c.Keywords) : (string?)null,
-                ProducedMana = c.ProducedMana is { Length: > 0 } ? string.Join(',', c.ProducedMana) : (string?)null,
                 Legal = c.Legal,
-                NotLegal = c.NotLegal,
-                Restricted = c.Restricted,
-                Banned = c.Banned,
                 Usd = c.Usd,
                 UsdFoil = c.UsdFoil,
                 ColorBits = c.ColorBits,
@@ -255,10 +237,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 case MagicCardField.Language:
                     setClauses.Add("Language = @Language");
                     parameters.Add("@Language", card.Language);
-                    break;
-                case MagicCardField.Text:
-                    setClauses.Add("Text = @Text");
-                    parameters.Add("@Text", card.Text);
                     break;
                 case MagicCardField.Set:
                     setClauses.Add("SetCode = @SetCode");
@@ -1589,14 +1567,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             Artist = row.Artist,
             Language = row.Language,
             CollectorNumber = row.CollectorNumber,
-            Text = row.Text,
             PrintedName = row.PrintedName,
             PrintedText = row.PrintedText,
             PrintedTypeLine = row.PrintedTypeLine,
             CmcNumber = row.CmcNumber,
             CmcText = row.CmcText,
-            Side = row.Side,
-            CollectorNumberId = row.CollectorNumberId,
         };
 
         // Restore LegalityMap from comma-separated formats
@@ -1619,26 +1594,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         if (!string.IsNullOrEmpty(row.ColorIdentity))
             card.ColorIdentity = row.ColorIdentity.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        // Restore ColorIndicator from comma-separated string
-        if (!string.IsNullOrEmpty(row.ColorIndicator))
-            card.ColorIndicator = row.ColorIndicator.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
         // Restore GameChanger
         card.GameChanger = row.GameChanger;
 
-        // Restore Keywords from semicolon-separated string
-        if (!string.IsNullOrEmpty(row.Keywords))
-            card.Keywords = row.Keywords.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        // Restore ProducedMana from comma-separated string
-        if (!string.IsNullOrEmpty(row.ProducedMana))
-            card.ProducedMana = row.ProducedMana.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        // Restore legality strings
+        // Restore legality string
         card.Legal = row.Legal;
-        card.NotLegal = row.NotLegal;
-        card.Restricted = row.Restricted;
-        card.Banned = row.Banned;
 
         // Restore price info
         card.Usd = row.Usd;
@@ -2110,26 +2070,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         public string? Artist { get; set; }
         public string? Language { get; set; }
         public string? CollectorNumber { get; set; }
-        public string? Text { get; set; }
         public string? PrintedName { get; set; }
         public string? PrintedText { get; set; }
         public string? PrintedTypeLine { get; set; }
         public int? CmcNumber { get; set; }
         public string? CmcText { get; set; }
         public string? ColorType { get; set; }
-        public int Side { get; set; }
-        public int CollectorNumberId { get; set; }
         public string? LegalityFormats { get; set; }
         public string? Colors { get; set; }
         public string? ColorIdentity { get; set; }
-        public string? ColorIndicator { get; set; }
         public bool? GameChanger { get; set; }
-        public string? Keywords { get; set; }
-        public string? ProducedMana { get; set; }
         public string? Legal { get; set; }
-        public string? NotLegal { get; set; }
-        public string? Restricted { get; set; }
-        public string? Banned { get; set; }
         public string? Usd { get; set; }
         public string? UsdFoil { get; set; }
         public int? ColorBits { get; set; }
