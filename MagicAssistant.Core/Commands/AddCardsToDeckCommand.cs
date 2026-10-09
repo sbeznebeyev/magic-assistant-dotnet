@@ -3,7 +3,7 @@ using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Core.Commands;
 
-public record AddCardsToDeckCommand(int DeckId, ICollection<IMagicCard> Cards);
+public record AddCardsToDeckCommand(int DeckId, ICollection<ICard> Cards);
 
 public class AddCardsToDeckCommandHandler
 {

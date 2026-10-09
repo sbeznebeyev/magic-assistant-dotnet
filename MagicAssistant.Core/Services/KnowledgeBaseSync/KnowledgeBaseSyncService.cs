@@ -101,7 +101,7 @@ public class KnowledgeBaseSyncService : IKnowledgeBaseSyncService
             state.PhaseName = "Mapping";
             state.Message = "Mapping cards...";
 
-            var magicCards = new List<MagicCard>(dtoCards.Count);
+            var magicCards = new List<Card>(dtoCards.Count);
             for (var i = 0; i < dtoCards.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();

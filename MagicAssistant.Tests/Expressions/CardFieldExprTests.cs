@@ -11,20 +11,20 @@ public class CardFieldExprTests
     {
         var field = (ICardField)new CardFieldExpr(MagicCardField.Name);
         Assert.That(field.Name, Is.EqualTo("Name"));
-        Assert.That(field.Get(new MagicCard { Name = "Lightning Bolt" }), Is.EqualTo("Lightning Bolt"));
-        Assert.That(field.Get(new MagicCard()), Is.EqualTo(string.Empty)); // default empty name
+        Assert.That(field.Get(new Card { Name = "Lightning Bolt" }), Is.EqualTo("Lightning Bolt"));
+        Assert.That(field.Get(new Card()), Is.EqualTo(string.Empty)); // default empty name
     }
 
     [Test]
     public void ICardField_Set_UpdatesCard()
     {
         var field = (ICardField)new CardFieldExpr(MagicCardField.Name);
-        var card = new MagicCard();
+        var card = new Card();
         field.Set(card, "New Name");
         Assert.That(card.Name, Is.EqualTo("New Name"));
 
         // Works on physical too
-        var phys = new MyCard(new MagicCard());
+        var phys = new MyCard(new Card());
         ((ICardField)new CardFieldExpr(MagicCardField.Comment)).Set(phys, "comment");
         Assert.That(phys.Comment, Is.EqualTo("comment"));
     }
@@ -33,7 +33,7 @@ public class CardFieldExprTests
     public void GetFieldValue_ExtractsFromCard()
     {
         var expr = new CardFieldExpr(MagicCardField.Name);
-        Assert.That(expr.GetFieldValue(new MagicCard { Name = "Test" }), Is.EqualTo("Test"));
+        Assert.That(expr.GetFieldValue(new Card { Name = "Test" }), Is.EqualTo("Test"));
     }
 
     [Test]

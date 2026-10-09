@@ -20,7 +20,7 @@ public enum LastActionOperationEnum
 /// </summary>
 public record CardOperationRecord(
     int TargetCollectionId,
-    MagicCard Card,
+    Card Card,
     int Count,
     LastActionOperationEnum Operation);
 
@@ -32,6 +32,6 @@ public record CardOperationRecord(
 public record LastActionItem(
     int LocationId,
     string Location,
-    MagicCard Card,
+    Card Card,
     int Count,
     LastActionOperationEnum Operation);

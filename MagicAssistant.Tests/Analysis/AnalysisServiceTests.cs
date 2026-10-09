@@ -216,7 +216,7 @@ public class AnalysisServiceTests
     [Test]
     public void Analyze_MultiColorCard_CountsInBothColors()
     {
-        var card = new MagicCard
+        var card = new Card
         {
             Id = Guid.NewGuid(),
             Name = "Twincast",
@@ -520,10 +520,10 @@ public class AnalysisServiceTests
     [Test]
     public void IsLand_DetectsLandSupertypeTokens()
     {
-        Assert.That(AnalysisService.IsLand(new MagicCard { Type = "Basic Land — Forest" }), Is.True);
-        Assert.That(AnalysisService.IsLand(new MagicCard { Type = "Land" }), Is.True);
-        Assert.That(AnalysisService.IsLand(new MagicCard { Type = "Creature - Human Soldier" }), Is.False);
-        Assert.That(AnalysisService.IsLand(new MagicCard { Type = null }), Is.False);
+        Assert.That(AnalysisService.IsLand(new Card { Type = "Basic Land — Forest" }), Is.True);
+        Assert.That(AnalysisService.IsLand(new Card { Type = "Land" }), Is.True);
+        Assert.That(AnalysisService.IsLand(new Card { Type = "Creature - Human Soldier" }), Is.False);
+        Assert.That(AnalysisService.IsLand(new Card { Type = null }), Is.False);
     }
 
     // ─── Helper ────────────────────────────────────────────
@@ -531,7 +531,7 @@ public class AnalysisServiceTests
     private MyCard CreatePhysicalCard(string name, string cost, string type, int count)
     {
         var cmc = ColorTypes.GetConvertedManaCost(cost);
-        var card = new MagicCard
+        var card = new Card
         {
             Id = Guid.NewGuid(),
             Name = name,

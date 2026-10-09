@@ -244,7 +244,7 @@
     private int _pageSize = 50; // cards per page (adjustable from the gallery view)
 
     // Data
-    private List<MagicCard> _displayCards = new();
+    private List<Card> _displayCards = new();
 
     /// <summary>Direct DB check (HasCardsQuery): does the selected set have cards in the KB?
     /// Only meaningful when the displayed list is empty and exactly a set scope is active.</summary>
@@ -881,7 +881,7 @@
             };
 
             var result = await CardSearch!.GetPagedAsync(filter);
-            _displayCards = result.Cards.Cast<MagicCard>().ToList();
+            _displayCards = result.Cards.Cast<Card>().ToList();
             _totalCount = result.TotalCount;
             _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
@@ -894,7 +894,7 @@
         }
         catch
         {
-            _displayCards = new List<MagicCard>();
+            _displayCards = new List<Card>();
             _totalCount = 0;
             _totalPages = 0;
         }
@@ -986,7 +986,7 @@
     }
 
     /// <summary>One grouped query over Deck: total copies of each displayed card in the pinned collection.</summary>
-    private async Task<Dictionary<Guid, int>> LoadPinnedCountsAsync(List<MagicCard> cards)
+    private async Task<Dictionary<Guid, int>> LoadPinnedCountsAsync(List<Card> cards)
     {
         if (cards.Count == 0 || PinnedCollectionId is null)
             return new Dictionary<Guid, int>();
@@ -999,7 +999,7 @@
     }
 
     /// <summary>KB mode: add one copy of the card to the pinned collection (merge semantics if already present).</summary>
-    private async Task AddCardToPinned(MagicCard card)
+    private async Task AddCardToPinned(Card card)
     {
         if (!PinnedCollectionId.HasValue) return;
 
@@ -1014,7 +1014,7 @@
     }
 
     /// <summary>KB mode: remove one copy of the card from the pinned collection (full removal when the count hits 0).</summary>
-    private async Task RemoveCardFromPinned(MagicCard card)
+    private async Task RemoveCardFromPinned(Card card)
     {
         if (!PinnedCollectionId.HasValue) return;
 
@@ -1157,7 +1157,7 @@
     // ── Selection ───────────────────────────────────────
     private Guid? _selectedCardId;
 
-    private async Task SelectCard(MagicCard card)
+    private async Task SelectCard(Card card)
     {
         _selectedCardId = card.Id;
         await OnCardSelected.InvokeAsync(card.Id);

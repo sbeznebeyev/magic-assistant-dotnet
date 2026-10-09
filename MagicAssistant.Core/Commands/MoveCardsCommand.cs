@@ -8,7 +8,7 @@ namespace MagicAssistant.Core.Commands;
 /// Mirrors Java: DataManager.moveCards() + MoveToActiveDeckHandler
 /// </summary>
 public record MoveCardsCommand(
-    ICollection<IMagicCard> Cards,
+    ICollection<ICard> Cards,
     int SourceDeckId,
     int TargetDeckId);
 

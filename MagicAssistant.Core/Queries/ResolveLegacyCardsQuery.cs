@@ -29,7 +29,7 @@ public class LegacyCardResolution
 ///      fields (Cards.Name/PrintedName, CardFaces.Name/PrintedName), so localized names work
 /// Unresolved cards are reported in <see cref="LegacyCardResolution.Unresolved"/>.
 /// </summary>
-public record ResolveLegacyCardsQuery(IReadOnlyList<IMagicCard> Cards);
+public record ResolveLegacyCardsQuery(IReadOnlyList<ICard> Cards);
 
 public class ResolveLegacyCardsQueryHandler
 {
@@ -73,7 +73,7 @@ public class ResolveLegacyCardsQueryHandler
         // Step 3: batch (Name, SetCode) → Scryfall UUID
         var pairs = matchNames.Zip(matchSets, (name, set) => (Name: name, Set: set)).Distinct().ToList();
 
-        Dictionary<string, MagicCard> cardMap = new(StringComparer.Ordinal);
+        Dictionary<string, Card> cardMap = new(StringComparer.Ordinal);
         if (pairs.Count > 0)
             cardMap = await _kbStore.ResolveCardsByNameAndSetAsync(pairs, ct);
 
@@ -95,7 +95,7 @@ public class ResolveLegacyCardsQueryHandler
                 {
                     // Raw (non-physical) cards are not produced by XmlImport, but stay supported:
                     // wrap into a physical with the resolved ID; collection is stamped at commit.
-                    var baseCopy = new MagicCard { Id = kbCard.Id, Name = card.Name, SetCode = card.SetCode };
+                    var baseCopy = new Card { Id = kbCard.Id, Name = card.Name, SetCode = card.SetCode };
                     result.Resolved.Add(new MyCard(baseCopy, null, true));
                 }
             }

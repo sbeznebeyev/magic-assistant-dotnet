@@ -89,7 +89,7 @@ public class BinaryExpr : Expr
         if (x == null || y == null) return false;
 
         // Card field matching: use CardMatcher with full TextValue flags
-        if (Left is CardFieldExpr { Field: var field } && o is IMagicCard card && Right is TextValue textValue)
+        if (Left is CardFieldExpr { Field: var field } && o is ICard card && Right is TextValue textValue)
         {
             return CardMatcher.Matches(card, field, textValue);
         }

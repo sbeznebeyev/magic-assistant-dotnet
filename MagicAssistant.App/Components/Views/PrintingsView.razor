@@ -123,14 +123,14 @@
 </div>
 
 @code {
-    private List<MagicCard> _printings = new();
-    private List<MagicCard> _displayPrintings = new();
+    private List<Card> _printings = new();
+    private List<Card> _displayPrintings = new();
     private bool _loading;
     private string? _cardName;
     private string _filterText = "";
 
     [Parameter] public Guid? CardId { get; set; }
-    [Parameter] public EventCallback<MagicCard> OnPrintingSelected { get; set; }
+    [Parameter] public EventCallback<Card> OnPrintingSelected { get; set; }
     [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnPrintingSideChanged { get; set; }
 
     protected override async Task OnParametersSetAsync()
@@ -226,12 +226,12 @@
         }
     }
 
-    private async Task SelectPrinting(MagicCard card)
+    private async Task SelectPrinting(Card card)
     {
         await OnPrintingSelected.InvokeAsync(card);
     }
 
-    private async Task SelectPrintingSide(MagicCard card, bool showBack)
+    private async Task SelectPrintingSide(Card card, bool showBack)
     {
         // Выбираем печать + передаём сторону в CardDescriptionView
         await OnPrintingSelected.InvokeAsync(card);

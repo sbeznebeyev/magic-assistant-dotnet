@@ -469,7 +469,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveCardsByNameAndSetAsync_ReturnsEmpty_WhenNoInput()
     {
-        await _store.AddAsync(new MagicCard { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
 
         var result = await _store.ResolveCardsByNameAndSetAsync(Array.Empty<(string, string?)>());
 
@@ -480,7 +480,7 @@ public class SqliteCardStoreTests
     public async Task ResolveCardsByNameAndSetAsync_ResolvesSingleCard()
     {
         var cardId = Guid.NewGuid();
-        await _store.AddAsync(new MagicCard { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" });
 
         var pairs = new (string, string?)[] { ("Lightning Bolt", "m19") };
         var result = await _store.ResolveCardsByNameAndSetAsync(pairs);
@@ -498,9 +498,9 @@ public class SqliteCardStoreTests
 
         await _store.AddAllAsync(new[]
         {
-            new MagicCard { Id = cardId1, Name = "Lightning Bolt", SetCode = "m19" },
-            new MagicCard { Id = cardId2, Name = "Island", SetCode = "m19" },
-            new MagicCard { Id = cardId3, Name = "Counterspell", SetCode = "wot" },
+            new Card { Id = cardId1, Name = "Lightning Bolt", SetCode = "m19" },
+            new Card { Id = cardId2, Name = "Island", SetCode = "m19" },
+            new Card { Id = cardId3, Name = "Counterspell", SetCode = "wot" },
         });
 
         var pairs = new (string, string?)[]
@@ -527,8 +527,8 @@ public class SqliteCardStoreTests
         // "Island" exists in both M19 and M20 with different UUIDs
         await _store.AddAllAsync(new[]
         {
-            new MagicCard { Id = cardId1, Name = "Island", SetCode = "m19" },
-            new MagicCard { Id = cardId2, Name = "Island", SetCode = "m20" },
+            new Card { Id = cardId1, Name = "Island", SetCode = "m19" },
+            new Card { Id = cardId2, Name = "Island", SetCode = "m20" },
         });
 
         var pairs = new (string, string?)[]
@@ -549,7 +549,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveCardsByNameAndSetAsync_PartialMatch_OnlyKnownCardsReturned()
     {
-        await _store.AddAsync(new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" });
 
         var pairs = new (string, string?)[]
         {
@@ -571,7 +571,7 @@ public class SqliteCardStoreTests
     {
         var cardId = Guid.NewGuid();
         // Cards table has Set TEXT NOT NULL — empty string is the closest to "no set"
-        await _store.AddAsync(new MagicCard { Id = cardId, Name = "Token", SetCode = "" });
+        await _store.AddAsync(new Card { Id = cardId, Name = "Token", SetCode = "" });
 
         var pairs = new (string, string?)[] { ("Token", "") };
         var result = await _store.ResolveCardsByNameAndSetAsync(pairs);
@@ -584,7 +584,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveCardsByNameAndSetAsync_DeduplicatesSamePair()
     {
-        await _store.AddAsync(new MagicCard { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
 
         // Same pair repeated — result should still have only one entry per composite key
         var pairs = new (string, string?)[]
@@ -606,9 +606,9 @@ public class SqliteCardStoreTests
         // Performance test: batch resolution should use a single SQL query,
         // not N queries. We verify by checking that all results are returned
         // and the method doesn't throw or hang with many pairs.
-        var cards = new List<MagicCard>();
+        var cards = new List<Card>();
         for (int i = 0; i < 50; i++)
-            cards.Add(new MagicCard { Id = Guid.NewGuid(), Name = $"Card {i}", SetCode = "m19" });
+            cards.Add(new Card { Id = Guid.NewGuid(), Name = $"Card {i}", SetCode = "m19" });
 
         await _store.AddAllAsync(cards);
 
@@ -684,9 +684,9 @@ public class SqliteCardStoreTests
             "SetType must be persisted as the wire string in the TEXT column, not an enum ordinal.");
     }
 
-    private MagicCard CreateTestCard(Guid cardId, string name)
+    private Card CreateTestCard(Guid cardId, string name)
     {
-        return new MagicCard
+        return new Card
         {
             Id = cardId,
             Name = name,

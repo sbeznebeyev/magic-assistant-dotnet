@@ -10,7 +10,7 @@ public class ServiceTests
 {
     private static MyCard CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
-        var card = new MagicCard { Id = cardId, Name = "Test" };
+        var card = new Card { Id = cardId, Name = "Test" };
         return new MyCard(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
     }
 
@@ -152,7 +152,7 @@ public class ServiceTests
 
         // Sideboard node 99 (child of deck 1) holds 4 copies.
         var sbNode = new Collection(99, "sideboard", 1, NodeType.Sideboard, 0);
-        var sbPhysical = new MyCard(new MagicCard { Id = cardId, Name = "Test" }, sbNode, true) { Count = 4 };
+        var sbPhysical = new MyCard(new Card { Id = cardId, Name = "Test" }, sbNode, true) { Count = 4 };
 
         coll.Setup(s => s.GetByParentIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(sbNode);
@@ -182,10 +182,10 @@ public class ServiceTests
     public void CardResolve_ExpandGroups_ReturnsSameList_ForNonGroupCards()
     {
         var service = new CardResolveService(new Mock<IDbCardStore>().Object, new Mock<ICollectionStore>().Object);
-        var cards = new List<IMagicCard>
+        var cards = new List<ICard>
         {
-            new MagicCard { Id = Guid.Parse("00000000-0000-0000-0000-000000000001") },
-            new MagicCard { Id = Guid.Parse("00000000-0000-0000-0000-000000000002") },
+            new Card { Id = Guid.Parse("00000000-0000-0000-0000-000000000001") },
+            new Card { Id = Guid.Parse("00000000-0000-0000-0000-000000000002") },
         };
 
         var result = service.ExpandGroups(cards);
@@ -201,7 +201,7 @@ public class ServiceTests
         var service = new CardResolveService(new Mock<IDbCardStore>().Object, new Mock<ICollectionStore>().Object);
 
         var col1 = new Collection(1, "deck-1", null, NodeType.Deck, 0);
-        var cards = new List<IMagicCard>
+        var cards = new List<ICard>
         {
             CreatePhysical(cardId1, col1),
             CreatePhysical(cardId2, col1),
@@ -209,7 +209,7 @@ public class ServiceTests
         Assert.That(service.GetCollection(cards)?.Id, Is.EqualTo(1));
 
         // Different collections → null
-        var diffCards = new List<IMagicCard>
+        var diffCards = new List<ICard>
         {
             CreatePhysical(cardId1, new Collection(10, string.Empty, null, NodeType.Deck, 0)),
             CreatePhysical(cardId2, new Collection(20, string.Empty, null, NodeType.Deck, 0)),
@@ -219,7 +219,7 @@ public class ServiceTests
 
     private static MyCard CreatePhysical(Guid cardId, Collection? collection)
     {
-        var card = new MagicCard { Id = cardId, Name = "Test" };
+        var card = new Card { Id = cardId, Name = "Test" };
         return new MyCard(card, collection, true) { Count = 1 };
     }
 
@@ -232,7 +232,7 @@ public class ServiceTests
     {
         var db = new Mock<IDbCardStore>();
         db.Setup(s => s.SearchAsync("trimmed", 100, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<MagicCard>());
+            .ReturnsAsync(Array.Empty<Card>());
 
         var service = new CardSearchService(db.Object, new Mock<ICollectionStore>().Object);
 
@@ -248,9 +248,9 @@ public class ServiceTests
     {
         var service = new CardSearchService(new Mock<IDbCardStore>().Object, new Mock<ICollectionStore>().Object);
         Assert.That(service.ApplyFilter(null!, new MagicCardFilter()), Is.Empty);
-        Assert.That(service.ApplyFilter(Array.Empty<IMagicCard>(), new MagicCardFilter()), Is.Empty);
+        Assert.That(service.ApplyFilter(Array.Empty<ICard>(), new MagicCardFilter()), Is.Empty);
 
-        var cards = new[] { (IMagicCard)new MagicCard() };
+        var cards = new[] { (ICard)new Card() };
         Assert.That(service.ApplyFilter(cards, null!), Has.Count.EqualTo(1));
     }
 
@@ -317,7 +317,7 @@ public class ServiceTests
             .ReturnsAsync(new[] { SetDto("m19", "Magic 2019", 5) });
         scryfall.Setup(s => s.GetCardsAsync("m19", It.IsAny<bool>(), It.IsAny<Action<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(cards);
-        kb.Setup(s => s.AddAllAsync(It.IsAny<IEnumerable<MagicCard>>(), It.IsAny<CancellationToken>()))
+        kb.Setup(s => s.AddAllAsync(It.IsAny<IEnumerable<Card>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var logger = new Mock<ILogger<KnowledgeBaseSyncService>>().Object;

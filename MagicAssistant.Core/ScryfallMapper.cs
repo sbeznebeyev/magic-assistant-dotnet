@@ -24,11 +24,11 @@ public static class ScryfallMapper
         ["pauper"] = Format.Pauper,
     };
 
-    public static MagicCard ToMagicCard(ScryfallCardDto dto)
+    public static Card ToMagicCard(ScryfallCardDto dto)
     {
         var collectorNumberId = ParseCollectorNumberId(dto.CollectorNumber);
 
-        var card = new MagicCard
+        var card = new Card
         {
             Id = dto.Id,
             OracleId = dto.OracleId,

@@ -48,10 +48,10 @@ public class SqliteCardStoreFtsTests
         await _store.AddAsync(CreateCard(id, name, type, oracleText, artist));
     }
 
-    private static MagicCard CreateCard(string id, string name, string type,
+    private static Card CreateCard(string id, string name, string type,
         string? oracleText = null, string? artist = null)
     {
-        return new MagicCard
+        return new Card
         {
             Id = S2G(id),
             Name = name,

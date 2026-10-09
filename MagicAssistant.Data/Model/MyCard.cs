@@ -11,27 +11,27 @@ public class MyCard : IMyCard
     private string? _comment;
     private int? _forTradeCount;
 
-    public MyCard(MagicCard card)
+    public MyCard(Card card)
     {
         Card = card ?? throw new ArgumentNullException(nameof(card));
         Count = 1;
         DateAdded = DateTimeOffset.Now;
     }
 
-    public MyCard(MagicCard card, Collection? collection, bool isOwn) : this(card)
+    public MyCard(Card card, Collection? collection, bool isOwn) : this(card)
     {
         Collection = collection;
         IsOwn = isOwn;
     }
 
     // === Core reference ===
-    public MagicCard Card { get; private set; }
+    public Card Card { get; private set; }
 
     /// <summary>
     /// Replace the base card reference (used during reconciliation).
     /// Mirrors Java: MagicCardPhysical.setMagicCard()
     /// </summary>
-    public void SetBaseCard(MagicCard card)
+    public void SetBaseCard(Card card)
     {
         Card = card ?? throw new ArgumentNullException(nameof(card));
     }
@@ -75,7 +75,7 @@ public class MyCard : IMyCard
     /// </summary>
     public CardGrade? Grade { get; set; }
 
-    public MagicCard GetBase() => Card;
+    public Card GetBase() => Card;
     public string? Text => Card.Text;
     public int Side => Card.Side;
     public int CollectorNumberId => Card.CollectorNumberId;

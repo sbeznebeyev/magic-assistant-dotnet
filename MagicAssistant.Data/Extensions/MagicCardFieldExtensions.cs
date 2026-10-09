@@ -13,7 +13,7 @@ public static class MagicCardFieldExtensions
     /// Gets the value of this field from a MagicCard.
     /// Mirrors Java MagicCardField.get(IMagicCard).
     /// </summary>
-    public static object? Get(this MagicCardField field, IMagicCard card)
+    public static object? Get(this MagicCardField field, ICard card)
     {
         return field switch
         {
@@ -76,7 +76,7 @@ public static class MagicCardFieldExtensions
     /// Sets the value of this field on a MagicCard.
     /// Mirrors Java MagicCardField.setM(MagicCard, Object).
     /// </summary>
-    public static void SetM(this MagicCardField field, MagicCard card, object? value)
+    public static void SetM(this MagicCardField field, Card card, object? value)
     {
         switch (field)
         {
@@ -279,15 +279,15 @@ public static class MagicCardFieldExtensions
     }
 
     // === Helper methods for physical card fields ===
-    private static float GetMyPrice(IMagicCard card) => card is MyCard p ? p.MyPrice : 0f;
-    private static int GetOwnCount(IMagicCard card) => card is MyCard p ? p.OwnCount : 0;
-    private static int GetPhysicalCount(IMagicCard card) => card.IsPhysical ? card.Count : 1;
-    private static bool GetIsOwn(IMagicCard card) => card is MyCard pcp ? pcp.IsOwn : false;
-    private static string? GetComment(IMagicCard card) => card is MyCard pcp ? pcp.Comment : null;
-    private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MyCard pcp ? pcp.DateAdded : null;
-    private static int GetForTradeCount(IMagicCard card) => card is MyCard pcp ? pcp.GetForTradeCount() : 0;
-    private static object? GetGrade(IMagicCard card) => card is MyCard p ? (object?)p.Grade : null;
-    private static int GetCreatureCount(IMagicCard card)
+    private static float GetMyPrice(ICard card) => card is MyCard p ? p.MyPrice : 0f;
+    private static int GetOwnCount(ICard card) => card is MyCard p ? p.OwnCount : 0;
+    private static int GetPhysicalCount(ICard card) => card.IsPhysical ? card.Count : 1;
+    private static bool GetIsOwn(ICard card) => card is MyCard pcp ? pcp.IsOwn : false;
+    private static string? GetComment(ICard card) => card is MyCard pcp ? pcp.Comment : null;
+    private static DateTimeOffset? GetDateAdded(ICard card) => card is MyCard pcp ? pcp.DateAdded : null;
+    private static int GetForTradeCount(ICard card) => card is MyCard pcp ? pcp.GetForTradeCount() : 0;
+    private static object? GetGrade(ICard card) => card is MyCard p ? (object?)p.Grade : null;
+    private static int GetCreatureCount(ICard card)
     {
         if (card.Power == null || string.IsNullOrEmpty(card.Power)) return 0;
         return card.IsPhysical ? Math.Max(1, card.Count) : 1;
@@ -297,7 +297,7 @@ public static class MagicCardFieldExtensions
     /// Returns the number of parts this card has (1 for normal, 2+ for split/flip/adventure).
     /// Mirrors Java MagicCard.getSize().
     /// </summary>
-    private static int GetSize(IMagicCard card)
+    private static int GetSize(ICard card)
     {
         // Split/flip cards have multiple faces via CardFaces array.
         // Single-faced cards return 1.
@@ -312,7 +312,7 @@ public static class MagicCardFieldExtensions
     /// Mirrors Java MagicCard.getPercentComplete().
     /// Returns 0-100 float.
     /// </summary>
-    private static float ComputePercentComplete(IMagicCard card)
+    private static float ComputePercentComplete(ICard card)
     {
         var ownCount = GetOwnCount(card);
         if (ownCount == 0)
@@ -327,7 +327,7 @@ public static class MagicCardFieldExtensions
     /// Each copy contributes 25%, capped at 100% (4 copies).
     /// Mirrors Java MagicCard.getPercent4Complete().
     /// </summary>
-    private static float ComputePercent4Complete(IMagicCard card)
+    private static float ComputePercent4Complete(ICard card)
     {
         var ownCount = GetOwnCount(card);
         return Math.Min(ownCount, 4) * 25f;

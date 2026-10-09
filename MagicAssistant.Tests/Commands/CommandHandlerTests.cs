@@ -21,7 +21,7 @@ public class CommandHandlerTests
         bool exceptionThrown = false;
         try
         {
-            await handler.Handle(new AddCardsToDeckCommand(999, new[] { (IMagicCard)new MagicCard() }));
+            await handler.Handle(new AddCardsToDeckCommand(999, new[] { (ICard)new Card() }));
         }
         catch (InvalidOperationException ex)
         {
@@ -45,7 +45,7 @@ public class CommandHandlerTests
             .ReturnsAsync(true);
 
         var handler = new AddCardsToDeckCommandHandler(cardStore.Object, coll.Object);
-        await handler.Handle(new AddCardsToDeckCommand(1, new[] { (IMagicCard)new MagicCard { Id = Guid.NewGuid()} }));
+        await handler.Handle(new AddCardsToDeckCommand(1, new[] { (ICard)new Card { Id = Guid.NewGuid()} }));
 
         cardStore.Verify(s => s.AddAllAsync(
             It.Is<IEnumerable<MyCard>>(cards =>
@@ -155,7 +155,7 @@ public class CommandHandlerTests
 
         var handler = new MoveCardsCommandHandler(cardStore.Object, coll.Object);
         await handler.Handle(new MoveCardsCommand(
-            new[] { (IMagicCard)new MagicCard { Id = cardId } }, 1, 2));
+            new[] { (ICard)new Card { Id = cardId } }, 1, 2));
 
         cardStore.Verify(s => s.AddAsync(
             It.Is<MyCard>(p => !p.IsOwn), It.IsAny<CancellationToken>()));
@@ -175,7 +175,7 @@ public class CommandHandlerTests
         try
         {
             await handler.Handle(new MoveCardsCommand(
-                new[] { (IMagicCard)new MagicCard { Id = Guid.NewGuid() } }, 1, 2));
+                new[] { (ICard)new Card { Id = Guid.NewGuid() } }, 1, 2));
         }
         catch (InvalidOperationException ex)
         {
@@ -204,7 +204,7 @@ public class CommandHandlerTests
         try
         {
             await handler.Handle(new MoveCardsCommand(
-                new[] { (IMagicCard)new MagicCard { Id = Guid.NewGuid() } }, 1, 2));
+                new[] { (ICard)new Card { Id = Guid.NewGuid() } }, 1, 2));
         }
         catch (InvalidOperationException ex)
         {
@@ -305,7 +305,7 @@ public class CommandHandlerTests
 
     private static MyCard CreatePhysical(Guid cardId, int deckId, int count = 1, bool isOwn = true)
     {
-        var card = new MagicCard { Id = cardId, Name = "Test" };
+        var card = new Card { Id = cardId, Name = "Test" };
         return new MyCard(card, new Collection(deckId, string.Empty, null, NodeType.Deck, 0), isOwn) { Count = count };
     }
 }

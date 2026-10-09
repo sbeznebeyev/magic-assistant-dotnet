@@ -73,7 +73,7 @@ public interface IDeckImportExportService
     /// <summary>
     /// Searches the knowledge base by card name — candidates for mapping an unresolved card.
     /// </summary>
-    Task<IReadOnlyList<MagicCard>> SearchCardMatchesAsync(string query, CancellationToken ct = default);
+    Task<IReadOnlyList<Card>> SearchCardMatchesAsync(string query, CancellationToken ct = default);
 
     // ═══════════════════════════════════════════════════════
     //  Import collection assembly (legacy)

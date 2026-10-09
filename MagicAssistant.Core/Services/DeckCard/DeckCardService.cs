@@ -37,7 +37,7 @@ public class DeckCardService : IDeckCardService
 
     /// <inheritdoc />
     public async Task<bool> CopyCardsAsync(
-        int deckId, ICollection<IMagicCard> cards, CancellationToken ct = default)
+        int deckId, ICollection<ICard> cards, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
@@ -274,7 +274,7 @@ public class DeckCardService : IDeckCardService
 
     /// <inheritdoc />
     public async Task<ICollection<MyCard>> SplitCardsAsync(
-        ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default)
+        ICollection<ICard> cards, int rightCount, CancellationToken ct = default)
     {
         var expanded = _resolveService.ExpandGroups(cards);
         var result = new List<MyCard>();
@@ -288,11 +288,11 @@ public class DeckCardService : IDeckCardService
                 if (split != null)
                     result.Add(split);
             }
-            else if (card is MagicCard mc)
+            else if (card is Card mc)
             {
                 for (var i = 0; i < rightCount; i++)
                 {
-                    var clone = (MagicCard)mc.Clone();
+                    var clone = (Card)mc.Clone();
                     result.Add(new MyCard(clone, null, true));
                 }
             }

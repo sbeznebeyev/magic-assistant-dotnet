@@ -7,10 +7,10 @@ namespace MagicAssistant.App.Services;
 
 public interface ICardImageLoader
 {
-    bool FrontExists(MagicCard card);
-    bool BackExists(MagicCard card);
-    bool Failed(MagicCard card);
-    Task EnsureAsync(MagicCard card);
+    bool FrontExists(Card card);
+    bool BackExists(Card card);
+    bool Failed(Card card);
+    Task EnsureAsync(Card card);
 }
 
 /// <summary>
@@ -35,16 +35,16 @@ public class CardImageLoader : ICardImageLoader
         _imageCache = imageCache ?? throw new ArgumentNullException(nameof(imageCache));
     }
 
-    public bool FrontExists(MagicCard card) => _imageCache.FrontImageExists(card);
-    public bool BackExists(MagicCard card) => _imageCache.BackImageExists(card);
+    public bool FrontExists(Card card) => _imageCache.FrontImageExists(card);
+    public bool BackExists(Card card) => _imageCache.BackImageExists(card);
 
-    public bool Failed(MagicCard card)
+    public bool Failed(Card card)
     {
         if (card is null) return false;
         lock (_failedLock) return _failed.Contains(card.Id);
     }
 
-    public async Task EnsureAsync(MagicCard card)
+    public async Task EnsureAsync(Card card)
     {
         if (card is null) return;
         var id = card.Id;

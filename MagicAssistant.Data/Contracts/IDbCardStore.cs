@@ -2,17 +2,17 @@
 
 namespace MagicAssistant.Data.Contracts;
 
-public interface IDbCardStore : ICardStore<MagicCard>
+public interface IDbCardStore : ICardStore<Card>
 {
-    Task<ICollection<MagicCard>> SearchAsync(string query, int limit = 100, CancellationToken ct = default);
-    Task<ICollection<MagicCard>> GetBySetAsync(string setCode, CancellationToken ct = default);
+    Task<ICollection<Card>> SearchAsync(string query, int limit = 100, CancellationToken ct = default);
+    Task<ICollection<Card>> GetBySetAsync(string setCode, CancellationToken ct = default);
 
     /// <summary>
     /// Returns true if the knowledge base contains at least one card for the given set code.
     /// Direct DB check — no filter inference. Drives the KB empty-state sync button visibility.
     /// </summary>
     Task<bool> HasCardsForSetAsync(string setCode, CancellationToken ct = default);
-    Task<ICollection<MagicCard>> GetPrintingsAsync(string name, CancellationToken ct = default);
+    Task<ICollection<Card>> GetPrintingsAsync(string name, CancellationToken ct = default);
 
     // Edition methods
     Task AddSetAsync(CardSet cardSet, CancellationToken ct = default);
@@ -65,7 +65,7 @@ public interface IDbCardStore : ICardStore<MagicCard>
     /// Returns a dictionary keyed by CardId for O(1) lookup.
     /// Used by CardResolveService for efficient batch resolution.
     /// </summary>
-    Task<Dictionary<Guid, MagicCard>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default);
+    Task<Dictionary<Guid, Card>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default);
 
     /// <summary>
     /// Collector progress for all sets — single SQL query.
@@ -95,7 +95,7 @@ public interface IDbCardStore : ICardStore<MagicCard>
     /// Used by ResolveLegacyCardsQuery to replace Gatherer IDs with Scryfall UUIDs.
     /// Returns a dictionary: "{Name}|{Set}" → MagicCard. Only matched pairs are included.
     /// </summary>
-    Task<Dictionary<string, MagicCard>> ResolveCardsByNameAndSetAsync(ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default);
+    Task<Dictionary<string, Card>> ResolveCardsByNameAndSetAsync(ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default);
 
     /// <summary>
     /// Sync status of the given full set names in a single SQL query (CardSet + Cards counts).

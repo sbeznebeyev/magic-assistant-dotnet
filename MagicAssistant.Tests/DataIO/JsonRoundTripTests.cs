@@ -17,7 +17,7 @@ public class JsonRoundTripTests
         var cardId = Guid.NewGuid();
 
         var physical = new MyCard(
-            new MagicCard { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" },
+            new Card { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 4,
@@ -49,7 +49,7 @@ public class JsonRoundTripTests
     {
         // Borrowed card (IsOwn = false) — "own": false must survive the round-trip.
         var physical = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m20" },
+            new Card { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m20" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), false)
         {
             Count = 1,
@@ -66,16 +66,16 @@ public class JsonRoundTripTests
     [Test]
     public void RoundTrip_MultipleCards_PreservesAll()
     {
-        var cards = new IMagicCard[]
+        var cards = new ICard[]
         {
             new MyCard(
-                new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
+                new Card { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
                 new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 4, MyPrice = 2.5f },
             new MyCard(
-                new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+                new Card { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
                 new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 24 },
             new MyCard(
-                new MagicCard { Id = Guid.NewGuid(), Name = "Counterspell", SetCode = "m20" },
+                new Card { Id = Guid.NewGuid(), Name = "Counterspell", SetCode = "m20" },
                 new Collection(1, string.Empty, null, NodeType.Deck, 0), false) { Count = 1, Comment = "Borrowed" },
         };
 
@@ -95,7 +95,7 @@ public class JsonRoundTripTests
     [Test]
     public void RoundTrip_EmptyDeck_PreservesMetadata()
     {
-        var json = JsonExport.ExportToJson("Empty Deck", "No cards", "deck", Array.Empty<IMagicCard>());
+        var json = JsonExport.ExportToJson("Empty Deck", "No cards", "deck", Array.Empty<ICard>());
         var result = JsonImport.ImportFromJson(json);
 
         Assert.That(result.Name, Is.EqualTo("Empty Deck"));
@@ -107,7 +107,7 @@ public class JsonRoundTripTests
     public void RoundTrip_SpecialCharactersInComment_EscapedCorrectly()
     {
         var physical = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
+            new Card { Id = Guid.NewGuid(), Name = "Test", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Comment = "Tags: <foil> & \"signed\" card — кириллица",
@@ -125,7 +125,7 @@ public class JsonRoundTripTests
     {
         // Unlike the legacy XML format, count is part of the reference core and always written.
         var physical = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+            new Card { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 1,
@@ -145,7 +145,7 @@ public class JsonRoundTripTests
     public void RoundTrip_PriceZero_NotWritten_StillImportsAsZero()
     {
         var physical = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+            new Card { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             MyPrice = 0f,
@@ -165,7 +165,7 @@ public class JsonRoundTripTests
     public void RoundTrip_ForTradeCount_Preserved()
     {
         var physical = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+            new Card { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 3,
@@ -186,7 +186,7 @@ public class JsonRoundTripTests
     {
         var sbId = Guid.NewGuid();
         var sideboardCard = new MyCard(
-            new MagicCard { Id = sbId, Name = "Liliana, the Wicked", SetCode = "mh3" },
+            new Card { Id = sbId, Name = "Liliana, the Wicked", SetCode = "mh3" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), false)
         {
             Count = 2,
@@ -195,7 +195,7 @@ public class JsonRoundTripTests
         };
 
         var mainCard = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
+            new Card { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 4,
@@ -227,7 +227,7 @@ public class JsonRoundTripTests
     {
         // A deck without a sideboard must round-trip WITHOUT the node — it is optional.
         var physical = new MyCard(
-            new MagicCard { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
+            new Card { Id = Guid.NewGuid(), Name = "Mountain", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 24,

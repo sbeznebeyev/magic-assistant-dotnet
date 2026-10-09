@@ -177,7 +177,7 @@
             _ = EnsureImageAsync(card.Card);
     }
 
-    private async Task EnsureImageAsync(MagicCard card)
+    private async Task EnsureImageAsync(Card card)
     {
         await ImageLoader.EnsureAsync(card);
         // Re-render only if this card is still the one being edited.

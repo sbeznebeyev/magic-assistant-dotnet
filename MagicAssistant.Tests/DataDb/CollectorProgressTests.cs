@@ -100,9 +100,9 @@ public class CollectorProgressTests
         var deck = await _collectionStore.CreateDeckAsync("Test Deck");
         // Own c1 (common R) and c3 (mythic colorless); c2 stays unowned
         await _collectionStore.AddAsync(
-            new MyCard(new MagicCard { Id = c1.Id, Name = "Bolt" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
+            new MyCard(new Card { Id = c1.Id, Name = "Bolt" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
         await _collectionStore.AddAsync(
-            new MyCard(new MagicCard { Id = c3.Id, Name = "Legend" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
+            new MyCard(new Card { Id = c3.Id, Name = "Legend" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var details = await _cardStore.GetSetProgressDetailsAsync("m19");
 
@@ -164,13 +164,13 @@ public class CollectorProgressTests
         // Add owned card
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId1, Name = "Lightning Bolt" },
+                new Card { Id = cardId1, Name = "Lightning Bolt" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         // Add borrowed card
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId2, Name = "Mountain" },
+                new Card { Id = cardId2, Name = "Mountain" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), false) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
@@ -218,12 +218,12 @@ public class CollectorProgressTests
 
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId, Name = "Lightning Bolt" },
+                new Card { Id = cardId, Name = "Lightning Bolt" },
                 new Collection(deck1.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 });
 
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId, Name = "Lightning Bolt" },
+                new Card { Id = cardId, Name = "Lightning Bolt" },
                 new Collection(deck2.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
@@ -253,12 +253,12 @@ public class CollectorProgressTests
         // Own both printings
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId1, Name = "Lightning Bolt" },
+                new Card { Id = cardId1, Name = "Lightning Bolt" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId2, Name = "Lightning Bolt" },
+                new Card { Id = cardId2, Name = "Lightning Bolt" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
@@ -289,12 +289,12 @@ public class CollectorProgressTests
         // Own both language variants of the same printing
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardIdEn, Name = "Lightning Bolt" },
+                new Card { Id = cardIdEn, Name = "Lightning Bolt" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardIdRu, Name = "Lightning Bolt" },
+                new Card { Id = cardIdRu, Name = "Lightning Bolt" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
@@ -319,7 +319,7 @@ public class CollectorProgressTests
         var sbId = await GetSideboardIdAsync(deck.Id);
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId, Name = "Lightning Bolt" },
+                new Card { Id = cardId, Name = "Lightning Bolt" },
                 new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), true) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
@@ -370,14 +370,14 @@ public class CollectorProgressTests
         // Owned in main deck
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId1, Name = "Lightning Bolt" },
+                new Card { Id = cardId1, Name = "Lightning Bolt" },
                 new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 });
 
         // Borrowed in sideboard — query sideboard directly since GetChildrenAsync filters them out
         var sbId = await GetSideboardIdAsync(deck.Id);
         await _collectionStore.AddAsync(
             new MyCard(
-                new MagicCard { Id = cardId2, Name = "Mountain" },
+                new Card { Id = cardId2, Name = "Mountain" },
                 new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), false) { Count = 1 });
 
         var progress = await _cardStore.GetCollectorProgressRawAsync();
@@ -396,9 +396,9 @@ public class CollectorProgressTests
         return sbRows[0];
     }
 
-    private static MagicCard CreateCard(Guid cardId, string name, string setCode, string? collectorNumber = null)
+    private static Card CreateCard(Guid cardId, string name, string setCode, string? collectorNumber = null)
     {
-        return new MagicCard
+        return new Card
         {
             Id = cardId,
             Name = name,

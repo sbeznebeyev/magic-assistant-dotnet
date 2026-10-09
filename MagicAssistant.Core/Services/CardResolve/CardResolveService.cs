@@ -27,26 +27,26 @@ public class CardResolveService : ICardResolveService
     /// Resolve card references to KB cards. Expands CardGroup hierarchies first.
     /// Uses batch SQL query (WHERE Id IN @ids) for efficiency — one round-trip instead of N.
     /// </summary>
-    public async Task<ICollection<IMagicCard>> ResolveCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default)
+    public async Task<ICollection<ICard>> ResolveCardsAsync(ICollection<ICard> cards, CancellationToken ct = default)
     {
         if (cards == null || !cards.Any())
-            return Array.Empty<IMagicCard>();
+            return Array.Empty<ICard>();
 
         var expanded = ExpandGroups(cards);
 
         // Collect all unique card IDs for batch lookup
         var ids = expanded
-            .Select(c => c is MagicCard mc ? mc.Id : c.Id)
+            .Select(c => c is Card mc ? mc.Id : c.Id)
             .Distinct()
             .ToList();
 
         if (ids.Count == 0)
-            return Array.Empty<IMagicCard>();
+            return Array.Empty<ICard>();
 
         // Single batch query instead of N individual queries
         var kbMap = await _kb.GetCardsByIdsAsync(ids, ct);
 
-        var output = new List<IMagicCard>(expanded.Count);
+        var output = new List<ICard>(expanded.Count);
         foreach (var card in expanded)
         {
             var resolved = ResolveSingle(card, kbMap);
@@ -57,9 +57,9 @@ public class CardResolveService : ICardResolveService
         return output;
     }
 
-    private static IMagicCard? ResolveSingle(IMagicCard card, Dictionary<Guid, MagicCard> kbMap)
+    private static ICard? ResolveSingle(ICard card, Dictionary<Guid, Card> kbMap)
     {
-        if (card is MagicCard mc)
+        if (card is Card mc)
         {
             return kbMap.TryGetValue(mc.Id, out var kb) ? kb : mc; // fall back to stub
         }
@@ -80,7 +80,7 @@ public class CardResolveService : ICardResolveService
     /// Borrowed cards → resolve from collection store, filling remaining count.
     /// Single query for all physical cards + O(1) dictionary lookup.
     /// </summary>
-    public async Task<ICollection<MyCard>> MaterializeCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> MaterializeCardsAsync(ICollection<ICard> cards, CancellationToken ct = default)
     {
         var expanded = ExpandGroups(cards);
         var result = new List<MyCard>();
@@ -143,14 +143,14 @@ public class CardResolveService : ICardResolveService
     /// Expand CardGroup hierarchies — flatten all nested groups into a flat list.
     /// Synchronous — no I/O involved.
     /// </summary>
-    public ICollection<IMagicCard> ExpandGroups(ICollection<IMagicCard> cards)
+    public ICollection<ICard> ExpandGroups(ICollection<ICard> cards)
     {
-        var result = new List<IMagicCard>(cards.Count);
+        var result = new List<ICard>(cards.Count);
         ExpandRecursive(cards, result);
         return result;
     }
 
-    private static void ExpandRecursive(IEnumerable<IMagicCard> cards, List<IMagicCard> result)
+    private static void ExpandRecursive(IEnumerable<ICard> cards, List<ICard> result)
     {
         foreach (var card in cards)
         {
@@ -165,7 +165,7 @@ public class CardResolveService : ICardResolveService
     /// Returns null if cards have different or no locations.
     /// Synchronous — no I/O involved.
     /// </summary>
-    public Collection? GetCollection(ICollection<IMagicCard> cards)
+    public Collection? GetCollection(ICollection<ICard> cards)
     {
         if (cards == null || !cards.Any())
             return null;

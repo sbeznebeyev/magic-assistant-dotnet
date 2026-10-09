@@ -68,7 +68,7 @@
 
 @code {
     /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
-    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+    [Parameter] public IReadOnlyList<Card> Cards { get; set; } = Array.Empty<Card>();
 
     /// <summary>1-based index of the current page.</summary>
     [Parameter] public int CurrentPage { get; set; } = 1;
@@ -82,7 +82,7 @@
     [Parameter] public Guid? SelectedCardId { get; set; }
 
     /// <summary>Card row clicked.</summary>
-    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+    [Parameter] public EventCallback<Card> OnCardClicked { get; set; }
 
     /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
     [Parameter] public EventCallback OnPrevPage { get; set; }
@@ -97,10 +97,10 @@
     [Parameter] public Dictionary<Guid, int>? Counts { get; set; }
 
     // Grouping state (display-only — grouping is applied to the current page)
-    private Dictionary<string, List<MagicCard>> _groups = new();
+    private Dictionary<string, List<Card>> _groups = new();
     private HashSet<string> _expandedGroups = new();
     private string _groupBy = "color";
-    private IReadOnlyList<MagicCard>? _lastCards;
+    private IReadOnlyList<Card>? _lastCards;
 
     private bool HasPrev => CurrentPage > 1;
     private bool HasNext => CurrentPage < TotalPages;
@@ -115,7 +115,7 @@
         }
     }
 
-    private async Task SelectCard(MagicCard card)
+    private async Task SelectCard(Card card)
     {
         await OnCardClicked.InvokeAsync(card);
     }
@@ -124,12 +124,12 @@
     {
         if (Cards.Count == 0)
         {
-            _groups = new Dictionary<string, List<MagicCard>>();
+            _groups = new Dictionary<string, List<Card>>();
             _expandedGroups = new HashSet<string>();
             return;
         }
 
-        var dict = new Dictionary<string, List<MagicCard>>(StringComparer.OrdinalIgnoreCase);
+        var dict = new Dictionary<string, List<Card>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var card in Cards)
         {
@@ -143,7 +143,7 @@
 
             if (!dict.TryGetValue(key, out var list))
             {
-                list = new List<MagicCard>();
+                list = new List<Card>();
                 dict[key] = list;
             }
             list.Add(card);

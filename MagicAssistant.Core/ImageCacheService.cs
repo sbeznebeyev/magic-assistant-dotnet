@@ -32,8 +32,8 @@ public class ImageCacheService : IImageCacheService
     /// <summary>
     /// Builds the local file name for a card image.
     /// </summary>
-    public static string GetRelativeFrontFilePath(MagicCard card) => $"{card.SetCode}/{card.Language ?? "en"}/{FRONT}/{card.Id}.png";
-    public static string GetRelativeBackFilePath(MagicCard card) => $"{card.SetCode}/{card.Language ?? "en"}/{BACK}/{card.Id}.png";
+    public static string GetRelativeFrontFilePath(Card card) => $"{card.SetCode}/{card.Language ?? "en"}/{FRONT}/{card.Id}.png";
+    public static string GetRelativeBackFilePath(Card card) => $"{card.SetCode}/{card.Language ?? "en"}/{BACK}/{card.Id}.png";
 
     /// <summary>
     /// Returns the directory path for a specific set's images.
@@ -54,23 +54,23 @@ public class ImageCacheService : IImageCacheService
     /// <summary>
     /// Returns the full local file path for a card image.
     /// </summary>
-    public string BuildFrontFullPath(MagicCard card) => Path.Combine(_imagesDir, GetRelativeFrontFilePath(card));
+    public string BuildFrontFullPath(Card card) => Path.Combine(_imagesDir, GetRelativeFrontFilePath(card));
 
-    public string BuildBackFullPath(MagicCard card) => Path.Combine(_imagesDir, GetRelativeBackFilePath(card));
+    public string BuildBackFullPath(Card card) => Path.Combine(_imagesDir, GetRelativeBackFilePath(card));
 
     /// <summary>
     /// Returns the relative file name (set/sanitized-num_uid.png).
     /// </summary>
-    public string GetFrontFileName(MagicCard card) => GetRelativeFrontFilePath(card);
+    public string GetFrontFileName(Card card) => GetRelativeFrontFilePath(card);
 
-    public string GetBackFileName(MagicCard card) => GetRelativeBackFilePath(card);
+    public string GetBackFileName(Card card) => GetRelativeBackFilePath(card);
 
     /// <summary>
     /// Checks if an image file already exists locally.
     /// </summary>
-    public bool FrontImageExists(MagicCard card) => File.Exists(BuildFrontFullPath(card));
+    public bool FrontImageExists(Card card) => File.Exists(BuildFrontFullPath(card));
 
-    public bool BackImageExists(MagicCard card) => File.Exists(BuildBackFullPath(card));
+    public bool BackImageExists(Card card) => File.Exists(BuildBackFullPath(card));
 
     /// <summary>
     /// Returns the set of Scryfall card IDs that already have images downloaded for a given set.
@@ -98,7 +98,7 @@ public class ImageCacheService : IImageCacheService
     /// Tries normal quality first, falls back to png, art_crop, then small.
     /// Returns true if the image was downloaded (or already existed).
     /// </summary>
-    public async Task<bool> DownloadAsync(MagicCard card, CancellationToken ct = default)
+    public async Task<bool> DownloadAsync(Card card, CancellationToken ct = default)
     {
         if (card is null || card.ImageUris is null && card.CardFaces is null) return false;
 

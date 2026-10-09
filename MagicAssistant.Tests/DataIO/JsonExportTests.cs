@@ -11,7 +11,7 @@ public class JsonExportTests
     public void ExportToJson_ContainsReferenceCore()
     {
         var cardId = Guid.NewGuid();
-        var card = new MagicCard { Id = cardId, Name = "Card", SetCode = "m19" };
+        var card = new Card { Id = cardId, Name = "Card", SetCode = "m19" };
         var physical = new MyCard(card) { Count = 3 };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
@@ -26,7 +26,7 @@ public class JsonExportTests
     public void ExportToJson_CountOne_IsAlwaysWritten()
     {
         // Unlike the legacy XML format, count is part of the reference core and never omitted.
-        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
+        var card = new Card { Id = Guid.NewGuid(), Name = "Card" };
         var physical = new MyCard(card) { Count = 1 };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
@@ -37,7 +37,7 @@ public class JsonExportTests
     [Test]
     public void ExportToJson_OmitsOptionalFields_AtDefaults()
     {
-        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
+        var card = new Card { Id = Guid.NewGuid(), Name = "Card" };
         var physical = new MyCard(card)
         {
             Count = 1,
@@ -60,7 +60,7 @@ public class JsonExportTests
     [Test]
     public void ExportToJson_WritesOwnFalse_WhenBorrowed()
     {
-        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
+        var card = new Card { Id = Guid.NewGuid(), Name = "Card" };
         var physical = new MyCard(card) { Count = 1, IsOwn = false };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
@@ -71,7 +71,7 @@ public class JsonExportTests
     [Test]
     public void ExportToJson_WritesPrice_WhenNonZero()
     {
-        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
+        var card = new Card { Id = Guid.NewGuid(), Name = "Card" };
         var physical = new MyCard(card) { Count = 1, MyPrice = 5.0f };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
@@ -82,7 +82,7 @@ public class JsonExportTests
     [Test]
     public void ExportToJson_Price_UsesShortestRoundTrippableRepresentation()
     {
-        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Card" };
+        var card = new Card { Id = Guid.NewGuid(), Name = "Card" };
         var physical = new MyCard(card) { Count = 1, MyPrice = 0.1f };
 
         var json = JsonExport.ExportToJson("Deck", null, "deck", new[] { physical });
@@ -95,9 +95,9 @@ public class JsonExportTests
     [Test]
     public void ExportToJson_ThrowsForNonPhysicalCard()
     {
-        var card = new MagicCard { Id = Guid.NewGuid(), Name = "Base Card" };
+        var card = new Card { Id = Guid.NewGuid(), Name = "Base Card" };
 
-        Assert.Throws<Exception>(() => JsonExport.ExportToJson("Deck", null, "deck", new IMagicCard[] { card }));
+        Assert.Throws<Exception>(() => JsonExport.ExportToJson("Deck", null, "deck", new ICard[] { card }));
     }
 
     [Test]
@@ -105,7 +105,7 @@ public class JsonExportTests
     {
         var sbId = Guid.NewGuid();
         var sbCard = new MyCard(
-            new MagicCard { Id = sbId, Name = "Sideboard Card", SetCode = "m19" },
+            new Card { Id = sbId, Name = "Sideboard Card", SetCode = "m19" },
             new Collection(1, string.Empty, null, NodeType.Deck, 0), true)
         {
             Count = 2,
@@ -114,7 +114,7 @@ public class JsonExportTests
 
         var json = JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new[] { new MyCard(new Card { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
             new[] { sbCard });
 
         Assert.That(json, Does.Contain("\"sideboard\""));
@@ -132,7 +132,7 @@ public class JsonExportTests
     {
         var json = JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new[] { new MyCard(new Card { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
             sideboardCards: null);
 
         Assert.That(json, Does.Not.Contain("\"sideboard\""));
@@ -144,8 +144,8 @@ public class JsonExportTests
         // An empty sideboard list must not produce an empty "sideboard": [] node — the field is optional.
         var json = JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
-            Array.Empty<IMagicCard>());
+            new[] { new MyCard(new Card { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            Array.Empty<ICard>());
 
         Assert.That(json, Does.Not.Contain("\"sideboard\""));
     }
@@ -153,11 +153,11 @@ public class JsonExportTests
     [Test]
     public void ExportToJson_ThrowsForNonPhysicalSideboardCard()
     {
-        var baseCard = new MagicCard { Id = Guid.NewGuid(), Name = "Base SB Card" };
+        var baseCard = new Card { Id = Guid.NewGuid(), Name = "Base SB Card" };
 
         Assert.Throws<Exception>(() => JsonExport.ExportToJson(
             "Deck", null, "deck",
-            new[] { new MyCard(new MagicCard { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
-            new IMagicCard[] { baseCard }));
+            new[] { new MyCard(new Card { Id = Guid.NewGuid(), Name = "Main" }, new Collection(1, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 } },
+            new ICard[] { baseCard }));
     }
 }

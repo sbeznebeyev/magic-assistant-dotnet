@@ -6,12 +6,12 @@ namespace MagicAssistant.Tests.Model;
 [TestFixture]
 public class MagicCardPhysicalTests
 {
-    private static MagicCard Card(Guid id = default) {
+    private static Card Card(Guid id = default) {
         if (id == Guid.Empty) id = Guid.Parse("00000000-0000-0000-0000-000000000001");
         return new() { Id = id, Name = "Test Card" };
     }
 
-    private static MagicCard CardWithId(string hex) => new() { Id = Guid.Parse(hex), Name = "Test Card" };
+    private static Card CardWithId(string hex) => new() { Id = Guid.Parse(hex), Name = "Test Card" };
 
     /* ─── Constructor & defaults ──────────────────────────── */
 

@@ -188,7 +188,7 @@ public class AnalysisService : IAnalysisService
     // === Helpers ===
 
     /// <summary>True when the card's type line carries a land supertype token ("land" / "basic").</summary>
-    public static bool IsLand(MagicCard card)
+    public static bool IsLand(Card card)
     {
         var type = card.Type;
         if (type == null) return false;

@@ -3,7 +3,7 @@ using MagicAssistant.Data.Model.Enums;
 
 namespace MagicAssistant.Data.Contracts;
 
-public interface IMagicCard : ICardSimple
+public interface ICard : ICardSimple
 {
     Guid Id { get; }
     string? ManaCost { get; }
@@ -19,7 +19,7 @@ public interface IMagicCard : ICardSimple
     int? CmcNumber { get; }
     string? CmcText { get; }
     string? ColorType { get; }
-    MagicCard GetBase();
+    Card GetBase();
     string? Text { get; }
     int Side { get; }
     int CollectorNumberId { get; }

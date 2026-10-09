@@ -2,7 +2,7 @@ using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Data.Contracts;
 
-public interface ICardStore<T> where T : IMagicCard
+public interface ICardStore<T> where T : ICard
 {
     Task InitializeAsync(CancellationToken ct = default);
     Task<bool> AddAsync(T card, CancellationToken ct = default);

@@ -175,10 +175,10 @@ public class MagicCardFilter : ICloneable
         return filtered.ToArray();
     }
 
-    private IEnumerable<IMagicCard> RemoveSetDuplicates(IEnumerable<ICardSimple> cards)
+    private IEnumerable<ICard> RemoveSetDuplicates(IEnumerable<ICardSimple> cards)
     {
-        var unique = new Dictionary<Guid, IMagicCard>();
-        foreach (var card in cards.OfType<IMagicCard>())
+        var unique = new Dictionary<Guid, ICard>();
+        foreach (var card in cards.OfType<ICard>())
         {
             if (card.Id != Guid.Empty && !unique.ContainsKey(card.Id))
                 unique[card.Id] = card;

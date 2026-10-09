@@ -18,7 +18,7 @@ public class GetCardByIdQueryHandler
         _dbStore = dbStore;
     }
 
-    public async Task<MagicCard?> Handle(GetCardByIdQuery query, CancellationToken ct = default)
+    public async Task<Card?> Handle(GetCardByIdQuery query, CancellationToken ct = default)
     {
         return await _dbStore.GetCardAsync(query.CardId, ct);
     }

@@ -107,7 +107,7 @@
 
 @code {
     /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
-    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+    [Parameter] public IReadOnlyList<Card> Cards { get; set; } = Array.Empty<Card>();
 
     /// <summary>1-based index of the current page.</summary>
     [Parameter] public int CurrentPage { get; set; } = 1;
@@ -121,7 +121,7 @@
     [Parameter] public Guid? SelectedCardId { get; set; }
 
     /// <summary>Card tile (or its side tab) clicked.</summary>
-    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+    [Parameter] public EventCallback<Card> OnCardClicked { get; set; }
 
     /// <summary>Card selected together with the currently shown side (front/back).</summary>
     [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnCardSideChanged { get; set; }
@@ -183,14 +183,14 @@
         }
     }
 
-    private async Task SelectCard(MagicCard card, string cardKey)
+    private async Task SelectCard(Card card, string cardKey)
     {
         var showBack = _sideState.GetValueOrDefault<string, bool>(cardKey);
         await OnCardClicked.InvokeAsync(card);
         await OnCardSideChanged.InvokeAsync((card.Id, showBack));
     }
 
-    private async Task ToggleSide(MagicCard card, bool showBack)
+    private async Task ToggleSide(Card card, bool showBack)
     {
         var cardKey = card.Id.ToString();
         if (_sideState.TryGetValue(cardKey, out var current) && current == showBack)
@@ -227,7 +227,7 @@
     }
 
     /// <summary>Composite CSS class for the card tile: selection + side (double-sided only).</summary>
-    private string GetCardClass(MagicCard card, bool showBack)
+    private string GetCardClass(Card card, bool showBack)
     {
         var cls = new StringBuilder("gallery-card");
         if (SelectedCardId == card.Id) cls.Append(" selected");

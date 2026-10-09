@@ -105,7 +105,7 @@ public class CardListFilter
 /// Result of a paginated card list query.
 /// </summary>
 public record CardListResult(
-    ICollection<MagicCard> Cards,
+    ICollection<Card> Cards,
     int TotalCount);
 
 /// <summary>

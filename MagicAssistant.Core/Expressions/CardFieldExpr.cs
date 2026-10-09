@@ -25,13 +25,13 @@ public class CardFieldExpr : Expr, ICardField
 
     object? ICardField.Get(ICardSimple card)
     {
-        if (card is not IMagicCard magicCard) return null;
+        if (card is not ICard magicCard) return null;
         return _field.Get(magicCard);
     }
 
     void ICardField.Set(ICardSimple card, object? value)
     {
-        if (card is MagicCard mc)
+        if (card is Card mc)
             _field.SetM(mc, value);
         else if (card is MyCard mcp)
             _field.SetM(mcp, value);

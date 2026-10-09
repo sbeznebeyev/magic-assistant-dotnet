@@ -75,9 +75,9 @@ public static class XmlImport
         }
     }
 
-    static List<IMagicCard> ReadCardList(XmlReader reader)
+    static List<ICard> ReadCardList(XmlReader reader)
     {
-        var cards = new List<IMagicCard>();
+        var cards = new List<ICard>();
 
         while (reader.Read())
         {
@@ -129,7 +129,7 @@ public static class XmlImport
         }
 
     Build:
-        var baseCard = new MagicCard
+        var baseCard = new Card
         {
             Id = ParseCardId(fields.GetValueOrDefault("id")),
             Name = fields.GetValueOrDefault("name") ?? string.Empty,

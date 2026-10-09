@@ -32,8 +32,8 @@ public class BinaryExprTests
     public void Evaluate_Equals_SameValues_ReturnsTrue()
     {
         var expr = new BinaryExpr(new CardFieldExpr(MagicCardField.Name), Operation.EQUALS, new Value("test"));
-        Assert.That(expr.Evaluate(new MagicCard { Name = "test" }), Is.True);
-        Assert.That(expr.Evaluate(new MagicCard { Name = "other" }), Is.False);
+        Assert.That(expr.Evaluate(new Card { Name = "test" }), Is.True);
+        Assert.That(expr.Evaluate(new Card { Name = "other" }), Is.False);
     }
 
     [Test]
@@ -41,25 +41,25 @@ public class BinaryExprTests
     {
         var expr = new BinaryExpr(new CardFieldExpr(MagicCardField.Name), Operation.MATCHES,
             new TextValue("lightning", false, false, false));
-        Assert.That(expr.Evaluate(new MagicCard { Name = "Lightning Bolt" }), Is.True);
-        Assert.That(expr.Evaluate(new MagicCard { Name = "Fireball" }), Is.False);
+        Assert.That(expr.Evaluate(new Card { Name = "Lightning Bolt" }), Is.True);
+        Assert.That(expr.Evaluate(new Card { Name = "Fireball" }), Is.False);
     }
 
     [Test]
     public void Evaluate_GE_LE_EQ_CompareNumerically()
     {
         var ge = new BinaryExpr(new CardFieldExpr(MagicCardField.Cmc), Operation.GE, new Value("3"));
-        Assert.That(ge.Evaluate(new MagicCard { CmcNumber = 3 }), Is.True);
-        Assert.That(ge.Evaluate(new MagicCard { CmcNumber = 4 }), Is.True);
-        Assert.That(ge.Evaluate(new MagicCard { CmcNumber = 2 }), Is.False);
+        Assert.That(ge.Evaluate(new Card { CmcNumber = 3 }), Is.True);
+        Assert.That(ge.Evaluate(new Card { CmcNumber = 4 }), Is.True);
+        Assert.That(ge.Evaluate(new Card { CmcNumber = 2 }), Is.False);
 
         var le = new BinaryExpr(new CardFieldExpr(MagicCardField.Cmc), Operation.LE, new Value("3"));
-        Assert.That(le.Evaluate(new MagicCard { CmcNumber = 2 }), Is.True);
-        Assert.That(le.Evaluate(new MagicCard { CmcNumber = 4 }), Is.False);
+        Assert.That(le.Evaluate(new Card { CmcNumber = 2 }), Is.True);
+        Assert.That(le.Evaluate(new Card { CmcNumber = 4 }), Is.False);
 
         var eq = new BinaryExpr(new CardFieldExpr(MagicCardField.Cmc), Operation.EQ, new Value("3"));
-        Assert.That(eq.Evaluate(new MagicCard { CmcNumber = 3 }), Is.True);
-        Assert.That(eq.Evaluate(new MagicCard { CmcNumber = 4 }), Is.False);
+        Assert.That(eq.Evaluate(new Card { CmcNumber = 3 }), Is.True);
+        Assert.That(eq.Evaluate(new Card { CmcNumber = 4 }), Is.False);
     }
 
     /* ─── Static factories ────────────────────────────────── */

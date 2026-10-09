@@ -19,7 +19,7 @@ public interface IDeckCardService
     /// <summary>
     /// Copy cards to a target deck. Creates new MagicCardPhysical instances with target location.
     /// </summary>
-    Task<bool> CopyCardsAsync(int deckId, ICollection<IMagicCard> cards, CancellationToken ct = default);
+    Task<bool> CopyCardsAsync(int deckId, ICollection<ICard> cards, CancellationToken ct = default);
 
     /// <summary>
     /// Add cards to a deck by resolving card IDs from KB and creating physical instances.
@@ -72,7 +72,7 @@ public interface IDeckCardService
     /// <summary>
     /// Split cards from a collection into two parts.
     /// </summary>
-    Task<ICollection<MyCard>> SplitCardsAsync(ICollection<IMagicCard> cards, int rightCount, CancellationToken ct = default);
+    Task<ICollection<MyCard>> SplitCardsAsync(ICollection<ICard> cards, int rightCount, CancellationToken ct = default);
 
     // ═══════════════════════════════════════════════════════════
     //  Read operations

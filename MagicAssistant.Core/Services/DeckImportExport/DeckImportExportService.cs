@@ -61,7 +61,7 @@ public class DeckImportExportService : IDeckImportExportService
 
         // Optional sideboard node — only deck nodes have a sideboard child; the array is
         // omitted entirely when it has no cards (JsonExport skips empty lists).
-        IEnumerable<IMagicCard>? sideboard = null;
+        IEnumerable<ICard>? sideboard = null;
         if (deckNode?.NodeType == NodeType.Deck)
         {
             var sbId = await _collectionStore.GetSideboardIdAsync(deckId, ct);
@@ -232,7 +232,7 @@ public class DeckImportExportService : IDeckImportExportService
     // ═══════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<MagicCard>> SearchCardMatchesAsync(
+    public async Task<IReadOnlyList<Card>> SearchCardMatchesAsync(
         string query, CancellationToken ct = default)
     {
         var result = await _searchService.GetPagedAsync(

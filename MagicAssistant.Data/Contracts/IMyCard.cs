@@ -8,7 +8,7 @@ namespace MagicAssistant.Data.Contracts;
 /// </summary>
 public interface IMyCard : ICardModifiable
 {
-    MagicCard Card { get; }
+    Card Card { get; }
     void SetCollection(Collection? collection);
     int GetForTradeCount();
 }

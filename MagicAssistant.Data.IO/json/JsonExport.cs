@@ -29,7 +29,7 @@ namespace MagicAssistant.Data.IO.json;
 /// simply ignore it — version stays 1). Output is pretty-printed with 2-space indent.
 ///
 /// Only <see cref="MyCard"/> cards are supported for export.
-/// Base <see cref="MagicCard"/> cards cannot be exported directly.
+/// Base <see cref="Card"/> cards cannot be exported directly.
 /// </summary>
 public static class JsonExport
 {
@@ -48,8 +48,8 @@ public static class JsonExport
         string? name,
         string? comment,
         string? type,
-        IEnumerable<IMagicCard> cards,
-        IEnumerable<IMagicCard>? sideboardCards = null)
+        IEnumerable<ICard> cards,
+        IEnumerable<ICard>? sideboardCards = null)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
@@ -81,7 +81,7 @@ public static class JsonExport
             writer.WriteEndArray();
 
             // Sideboard — optional; omitted when empty so the node stays absent by default.
-            var sideboard = sideboardCards?.ToList() ?? new List<IMagicCard>();
+            var sideboard = sideboardCards?.ToList() ?? new List<ICard>();
             if (sideboard.Count > 0)
             {
                 writer.WritePropertyName("sideboard");

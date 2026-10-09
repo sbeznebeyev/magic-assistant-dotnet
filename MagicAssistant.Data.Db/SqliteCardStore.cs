@@ -13,7 +13,7 @@ namespace MagicAssistant.Data.Db;
 public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 {
     private readonly string _dbPath;
-    private readonly ConcurrentDictionary<Guid, MagicCard> _cache = new();
+    private readonly ConcurrentDictionary<Guid, Card> _cache = new();
 
     private static readonly string ConnectionStringTemplate = "Data Source={0};Default Timeout=30";
 
@@ -28,7 +28,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// </summary>
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-    public async Task<bool> AddAsync(MagicCard card, CancellationToken ct = default)
+    public async Task<bool> AddAsync(Card card, CancellationToken ct = default)
     {
         if (card.Id == Guid.Empty || card.Id == default)
             throw new ArgumentException("Card ID can't be a default guid");
@@ -95,7 +95,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return result > 0;
     }
 
-    public async Task<bool> AddAllAsync(IEnumerable<MagicCard> cards, CancellationToken ct = default)
+    public async Task<bool> AddAllAsync(IEnumerable<Card> cards, CancellationToken ct = default)
     {
 
         var list = cards.ToList();
@@ -181,21 +181,21 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return true;
     }
 
-    public async Task<bool> RemoveAsync(MagicCard card, CancellationToken ct = default)
+    public async Task<bool> RemoveAsync(Card card, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         throw new NotSupportedException("Cannot remove cards from knowledge base directly.");
     }
 
-    public async Task<bool> RemoveAllAsync(IEnumerable<MagicCard> cards, CancellationToken ct = default)
+    public async Task<bool> RemoveAllAsync(IEnumerable<Card> cards, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         throw new NotSupportedException("Cannot remove cards from knowledge base directly.");
     }
 
-    public async Task<bool> UpdateAsync(MagicCard card, ICollection<MagicCardField> fields, CancellationToken ct = default)
+    public async Task<bool> UpdateAsync(Card card, ICollection<MagicCardField> fields, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -278,7 +278,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return result > 0;
     }
 
-    public async Task<MagicCard?> GetCardAsync(Guid cardId, CancellationToken ct = default)
+    public async Task<Card?> GetCardAsync(Guid cardId, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(cardId, out var cached))
             return cached;
@@ -312,10 +312,10 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return card;
     }
 
-    public async Task<ICollection<MagicCard>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
     {
         var card = await GetCardAsync(cardId, ct);
-        return card != null ? new[] { card } : Array.Empty<MagicCard>();
+        return card != null ? new[] { card } : Array.Empty<Card>();
     }
 
     public async Task<int> TotalUniqueCardsAsync(CancellationToken ct = default)
@@ -325,7 +325,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return await conn.QuerySingleAsync<int>("SELECT COUNT(*) FROM Cards");
     }
 
-    public async Task<IEnumerable<MagicCard>> GetAllDeckCardsAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<Card>> GetAllDeckCardsAsync(CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -364,7 +364,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// Gets up to <paramref name="limit"/> cards from the knowledge base.
     /// Uses SQL LIMIT for efficiency — does not load all cards into memory.
     /// </summary>
-    public async Task<ICollection<MagicCard>> GetAllAsync(int limit, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetAllAsync(int limit, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -399,7 +399,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
-    public async Task<ICollection<MagicCard>> SearchAsync(string query, int limit = 100, CancellationToken ct = default)
+    public async Task<ICollection<Card>> SearchAsync(string query, int limit = 100, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -457,7 +457,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             new { SetCode = setCode });
     }
 
-    public async Task<ICollection<MagicCard>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -494,7 +494,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
-    public async Task<ICollection<MagicCard>> GetPrintingsAsync(string name, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetPrintingsAsync(string name, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -1051,7 +1051,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     ///   - DELETE removed rows (FaceIndex in DB but not in incoming data)
     /// If the card has no faces, only DELETE is executed — cleaning up stale data.
     /// </summary>
-    private static async Task SaveCardFacesAsync(SqliteConnection conn, MagicCard card)
+    private static async Task SaveCardFacesAsync(SqliteConnection conn, Card card)
     {
         var cardId = card.Id;
 
@@ -1280,7 +1280,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     ///   - DELETE removed rows (PartIndex in DB but not in incoming data)
     /// If the card has no related parts, only DELETE is executed — cleaning up stale data.
     /// </summary>
-    private static async Task SaveAllPartsAsync(SqliteConnection conn, MagicCard card)
+    private static async Task SaveAllPartsAsync(SqliteConnection conn, Card card)
     {
         var cardId = card.Id;
 
@@ -1357,7 +1357,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// Saves ImageUris for a card to CardsImageUris table.
     /// Uses INSERT OR REPLACE for upsert semantics.
     /// </summary>
-    private static async Task SaveCardsImageUrisAsync(SqliteConnection conn, MagicCard card)
+    private static async Task SaveCardsImageUrisAsync(SqliteConnection conn, Card card)
     {
         if (card.ImageUris == null)
         {
@@ -1568,9 +1568,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return face;
     }
 
-    private static MagicCard MapToMagicCard(MagicCardRow row)
+    private static Card MapToMagicCard(MagicCardRow row)
     {
-        var card = new MagicCard
+        var card = new Card
         {
             Id = row.Id,
             OracleId = row.OracleId,
@@ -1683,9 +1683,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// Returns a dictionary keyed by CardId for O(1) lookup.
     /// First checks the cache for each ID, then queries DB only for missing ones.
     /// </summary>
-    public async Task<Dictionary<Guid, MagicCard>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default)
+    public async Task<Dictionary<Guid, Card>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default)
     {
-        var result = new Dictionary<Guid, MagicCard>();
+        var result = new Dictionary<Guid, Card>();
 
         if (ids == null || !ids.Any())
             return result;
@@ -1917,10 +1917,10 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<Dictionary<string, MagicCard>> ResolveCardsByNameAndSetAsync(
+    public async Task<Dictionary<string, Card>> ResolveCardsByNameAndSetAsync(
         ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default)
     {
-        if (pairs.Count == 0) return new Dictionary<string, MagicCard>();
+        if (pairs.Count == 0) return new Dictionary<string, Card>();
 
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -1959,7 +1959,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         var rows = await conn.QueryAsync<ResolveMatchRow>(sql, paramObj);
 
         // Build requested-pair key → card mapping (first match wins per pair)
-        var result = new Dictionary<string, MagicCard>();
+        var result = new Dictionary<string, Card>();
         foreach (var row in rows)
         {
             var pair = pairsList[row.__m];

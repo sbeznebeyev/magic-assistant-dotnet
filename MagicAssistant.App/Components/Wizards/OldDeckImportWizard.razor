@@ -268,7 +268,7 @@
         public required string? SetCode { get; init; }
         public string Key => $"{Name}|{SetCode}";
         public string SearchText { get; set; } = "";
-        public IReadOnlyList<MagicCard>? Results { get; set; }
+        public IReadOnlyList<Card>? Results { get; set; }
         public Guid? SelectedId { get; set; }
         public string? SelectedLabel { get; set; }
     }
@@ -303,7 +303,7 @@
     /// </summary>
     private IReadOnlyList<MyCard>? _importCards;
 
-    private MagicCard? _hoverCard;
+    private Card? _hoverCard;
     private readonly Dictionary<string, CancellationTokenSource> _searchCts = new();
 
     /// <summary>
@@ -578,7 +578,7 @@
         catch (OperationCanceledException) { /* superseded by a newer input */ }
     }
 
-    private async Task OnSelectMatch(UnresolvedRow row, MagicCard card)
+    private async Task OnSelectMatch(UnresolvedRow row, Card card)
     {
         row.SelectedId = card.Id;
         row.SelectedLabel = $"{(card.PrintedName ?? card.Name)} ({(string.IsNullOrEmpty(card.SetCode) ? "?" : card.SetCode)})";
@@ -613,7 +613,7 @@
         }
     }
 
-    private void OnHoverResult(MagicCard card)
+    private void OnHoverResult(Card card)
     {
         if (ReferenceEquals(_hoverCard, card)) return;
         _hoverCard = card;
@@ -624,7 +624,7 @@
             _ = EnsureHoverImageAsync(card);
     }
 
-    private async Task EnsureHoverImageAsync(MagicCard card)
+    private async Task EnsureHoverImageAsync(Card card)
     {
         await ImageLoader.EnsureAsync(card);
         // Re-render only if this card is still the hovered one.

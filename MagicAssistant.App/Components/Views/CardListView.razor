@@ -132,7 +132,7 @@
 
 @code {
     /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
-    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+    [Parameter] public IReadOnlyList<Card> Cards { get; set; } = Array.Empty<Card>();
 
     /// <summary>1-based index of the current page (used for the global row number in "#").</summary>
     [Parameter] public int CurrentPage { get; set; } = 1;
@@ -145,7 +145,7 @@
     [Parameter] public Guid? SelectedCardId { get; set; }
 
     /// <summary>Card row clicked.</summary>
-    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+    [Parameter] public EventCallback<Card> OnCardClicked { get; set; }
 
     /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
     [Parameter] public EventCallback OnPrevPage { get; set; }
@@ -187,10 +187,10 @@
     [Parameter] public EventCallback<string> OnSortColumnClicked { get; set; }
 
     /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
-    [Parameter] public EventCallback<MagicCard> OnKbAddRequested { get; set; }
+    [Parameter] public EventCallback<Card> OnKbAddRequested { get; set; }
 
     /// <summary>(−) pressed in KB mode — remove one copy of the card from the fixed collection.</summary>
-    [Parameter] public EventCallback<MagicCard> OnKbRemoveRequested { get; set; }
+    [Parameter] public EventCallback<Card> OnKbRemoveRequested { get; set; }
 
     /// <summary>Deck/location mode — physical instances are provided for every displayed card.</summary>
     private bool IsDeckMode => Physicals is not null;
@@ -198,7 +198,7 @@
     private bool HasPrev => CurrentPage > 1;
     private bool HasNext => CurrentPage < TotalPages;
 
-    private async Task SelectCard(MagicCard card)
+    private async Task SelectCard(Card card)
     {
         await OnCardClicked.InvokeAsync(card);
     }
@@ -231,12 +231,12 @@
 
     private async Task SplitCard(MyCard card) => await OnSplitRequested.InvokeAsync(card);
 
-    private async Task AddToFixed(MagicCard card) => await OnKbAddRequested.InvokeAsync(card);
+    private async Task AddToFixed(Card card) => await OnKbAddRequested.InvokeAsync(card);
 
-    private async Task RemoveFromFixed(MagicCard card) => await OnKbRemoveRequested.InvokeAsync(card);
+    private async Task RemoveFromFixed(Card card) => await OnKbRemoveRequested.InvokeAsync(card);
 
     /// <summary>Mana cost for the Cost column; double-sided cards show "front // back".</summary>
-    private static string ManaCost(MagicCard magicCard)
+    private static string ManaCost(Card magicCard)
     {
         if (!string.IsNullOrWhiteSpace(magicCard.ManaCost))
             return magicCard.ManaCost;

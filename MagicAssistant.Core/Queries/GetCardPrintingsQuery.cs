@@ -21,7 +21,7 @@ public class GetCardPrintingsQueryHandler
     /// <summary>
     /// Returns all known printings of a card across different sets.
     /// </summary>
-    public async Task<ICollection<MagicCard>> Handle(GetCardPrintingsQuery query, CancellationToken ct = default)
+    public async Task<ICollection<Card>> Handle(GetCardPrintingsQuery query, CancellationToken ct = default)
     {
         return await _dbStore.GetPrintingsAsync(query.CardName, ct);
     }

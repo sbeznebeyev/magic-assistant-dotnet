@@ -17,7 +17,7 @@ public interface ICardResolveService
     /// For MagicCardPhysical: updates base card reference via SetBaseCard().
     /// Uses batch SQL query (WHERE Id IN @ids) for efficiency.
     /// </summary>
-    Task<ICollection<IMagicCard>> ResolveCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default);
+    Task<ICollection<ICard>> ResolveCardsAsync(ICollection<ICard> cards, CancellationToken ct = default);
 
     /// <summary>
     /// Materialize borrowed cards to real physical instances.
@@ -25,20 +25,20 @@ public interface ICardResolveService
     /// Borrowed cards → resolve from collection store, filling remaining count.
     /// Single query for all physical cards + O(1) dictionary lookup.
     /// </summary>
-    Task<ICollection<MyCard>> MaterializeCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default);
+    Task<ICollection<MyCard>> MaterializeCardsAsync(ICollection<ICard> cards, CancellationToken ct = default);
 
     /// <summary>
     /// Expand CardGroup hierarchies — flatten all nested groups into a flat list.
     /// Synchronous — no I/O involved.
     /// </summary>
-    ICollection<IMagicCard> ExpandGroups(ICollection<IMagicCard> cards);
+    ICollection<ICard> ExpandGroups(ICollection<ICard> cards);
 
     /// <summary>
     /// Find common collection from a set of cards (all must share the same collection).
     /// Returns null if cards have different or no collections.
     /// Synchronous — no I/O involved.
     /// </summary>
-    Collection? GetCollection(ICollection<IMagicCard> cards);
+    Collection? GetCollection(ICollection<ICard> cards);
 
     /// <summary>
     /// Resolve card IDs from KB into MagicCardPhysical instances with a specific deck location.

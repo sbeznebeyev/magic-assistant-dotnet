@@ -8,9 +8,9 @@ namespace MagicAssistant.Data.Model;
 /// <summary>
 /// TODO: rename to ReferenceCard
 /// </summary>
-public class MagicCard : IMagicCard
+public class Card : ICard
 {
-    public MagicCard() { }
+    public Card() { }
 
     // === Basic fields ===
     public Guid Id { get; set; }
@@ -198,12 +198,12 @@ public class MagicCard : IMagicCard
     public bool IsPhysical => false;
 
     // === IMagicCard implementation ===
-    public IMagicCard Clone()
+    public ICard Clone()
     {
-        return (MagicCard)MemberwiseClone();
+        return (Card)MemberwiseClone();
     }
 
-    public MagicCard GetBase() => this;
+    public Card GetBase() => this;
 
     public bool Has2Faces => Layout is LayoutEnum.transform or LayoutEnum.modal_dfc or LayoutEnum.meld or LayoutEnum.double_faced_token or LayoutEnum.reversible_card;
 
@@ -219,7 +219,7 @@ public class MagicCard : IMagicCard
 
     public override bool Equals(object? obj)
     {
-        if (obj is not MagicCard other) return false;
+        if (obj is not Card other) return false;
         if (ReferenceEquals(this, other)) return true;
 
         // If both have non-empty CardId, compare by Id

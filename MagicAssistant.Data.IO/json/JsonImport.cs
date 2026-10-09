@@ -102,7 +102,7 @@ public static class JsonImport
             throw new FormatException($"Card '{name}': count must be >= 1.");
 
         var physical = new MyCard(
-            new MagicCard { Id = cardId, Name = name, SetCode = setCode })
+            new Card { Id = cardId, Name = name, SetCode = setCode })
         {
             Count = count,
             // Optional fields — defaults when absent

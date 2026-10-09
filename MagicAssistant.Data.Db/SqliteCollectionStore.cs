@@ -895,7 +895,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
     /// </summary>
     private MyCard? MapToFullPhysical(FullDeckCardRow row)
     {
-        var baseCard = new MagicCard
+        var baseCard = new Card
         {
             Id = row.CardId,
             Name = row.Name ?? string.Empty,
