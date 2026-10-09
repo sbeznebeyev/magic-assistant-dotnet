@@ -31,8 +31,8 @@ public class MagicCardPhysicalTests
     [Test]
     public void Constructor_WithLocation_SetsValues()
     {
-        var physical = new MagicCardPhysical(Card(), Location.FromPath("deck-123"), false);
-        Assert.That(physical.Location.Id, Is.EqualTo("deck-123"));
+        var physical = new MagicCardPhysical(Card(), Location.FromId(123), false);
+        Assert.That(physical.Location.Id, Is.EqualTo(123));
         Assert.That(physical.IsOwn, Is.False);
     }
 
@@ -41,39 +41,39 @@ public class MagicCardPhysicalTests
     [Test]
     public void OwnCount_ReturnsCount_WhenOwned()
     {
-        var physical = new MagicCardPhysical(Card(), Location.FromPath("deck"), true) { Count = 3 };
+        var physical = new MagicCardPhysical(Card(), Location.FromId(1), true) { Count = 3 };
         Assert.That(physical.OwnCount, Is.EqualTo(3));
     }
 
     [Test]
     public void OwnCount_ReturnsZero_WhenBorrowed()
     {
-        var physical = new MagicCardPhysical(Card(), Location.FromPath("deck"), false) { Count = 3 };
+        var physical = new MagicCardPhysical(Card(), Location.FromId(1), false) { Count = 3 };
         Assert.That(physical.OwnCount, Is.EqualTo(0));
     }
 
     [Test]
     public void OwnUnique_ReturnsOneOrZero_BasedOnOwnership()
     {
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("d"), true).OwnUnique, Is.EqualTo(1));
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("d"), false).OwnUnique, Is.EqualTo(0));
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), true).OwnUnique, Is.EqualTo(1));
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), false).OwnUnique, Is.EqualTo(0));
     }
 
     [Test]
     public void Count4_CapsAtFour_ForOwnedCards()
     {
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("d"), true) { Count = 2 }.Count4, Is.EqualTo(2));
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("d"), true) { Count = 5 }.Count4, Is.EqualTo(4));
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("d"), false) { Count = 3 }.Count4, Is.EqualTo(0));
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), true) { Count = 2 }.Count4, Is.EqualTo(2));
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), true) { Count = 5 }.Count4, Is.EqualTo(4));
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1), false) { Count = 3 }.Count4, Is.EqualTo(0));
     }
 
-    /* ─── Sideboard detection ─────────────────────────────── */
+    /* ─── Sideboard flag ──────────────────────────────────── */
 
     [Test]
-    public void IsSideboard_DetectsSbSuffix()
+    public void IsSideboard_ReflectsLocationFlag()
     {
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("deck-1_sb"), true).IsSideboard, Is.True);
-        Assert.That(new MagicCardPhysical(Card(), Location.FromPath("deck-1"), true).IsSideboard, Is.False);
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1, "deck-1", true), true).IsSideboard, Is.True);
+        Assert.That(new MagicCardPhysical(Card(), Location.FromId(1, "deck-1"), true).IsSideboard, Is.False);
     }
 
     /* ─── Special tags ────────────────────────────────────── */

@@ -171,7 +171,7 @@
             {
                 // Every physical card carries its owning collection in Location — the deck's own
                 // cards vs. the sideboard child's. Main-only series = everything but the sideboard.
-                var mainCards = cards.Where(c => c.Location.RawId == DeckId).ToList();
+                var mainCards = cards.Where(c => c.Location.Id == DeckId).ToList();
                 _hasSideboard = cards.Count != mainCards.Count;
 
                 // True non-land card counts (deck-level fact — must match the Colors tab).

@@ -15,6 +15,7 @@ public interface ICollectionStore
     Task<ICollection<Collection>> GetAllCollectionsAsync(CancellationToken ct = default);
 
     Task<Collection?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<Collection?> GetByParentIdAsync(int id, CancellationToken ct = default);
 
     /// <summary>
     /// Create a deck (NodeType=2) with an automatically created sideboard child (NodeType=3).

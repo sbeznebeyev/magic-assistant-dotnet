@@ -186,8 +186,12 @@ public static class MagicCardFieldExtensions
             case MagicCardField.Location:
                 if (value is Location loc)
                     physical.Location = loc;
+                else if (value is int id)
+                    physical.Location = Location.FromId(id);
+                else if (value is string s && int.TryParse(s, out var parsedId))
+                    physical.Location = Location.FromId(parsedId);
                 else
-                    physical.Location = Location.FromPath(value?.ToString() ?? string.Empty);
+                    physical.Location = Location.NoWhere;
                 break;
             case MagicCardField.Comment:
                 physical.Comment = value?.ToString();

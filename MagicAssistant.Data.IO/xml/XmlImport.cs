@@ -152,8 +152,8 @@ public static class XmlImport
         if (int.TryParse(ftVal, out var ft) && ft > 0)
             physical.SetForTradeCount(ft);
         var loc = fields.GetValueOrDefault("location");
-        if (!string.IsNullOrEmpty(loc))
-            physical.Location = Location.ValueOf(loc);
+        if (int.TryParse(loc, out var locId) && locId > 0)
+            physical.Location = Location.FromId(locId);
 
         return physical;
     }

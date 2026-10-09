@@ -148,7 +148,7 @@ public class DeckCardService : IDeckCardService
             return false;
 
         var existing = await _collectionStore.GetCardsAsync(cardId, ct);
-        var matching = existing.FirstOrDefault(e => e.Location.RawId == deckId && e.Card.Id == cardId);
+        var matching = existing.FirstOrDefault(e => e.Location.Id == deckId && e.Card.Id == cardId);
         if (matching == null)
             return false;
 
@@ -208,9 +208,8 @@ public class DeckCardService : IDeckCardService
         if (rightCount <= 0)
             return null;
 
-        var deckIdStr = deckId.ToString();
         var existing = await _collectionStore.GetCardsAsync(cardId, ct);
-        var matching = existing.FirstOrDefault(e => e.Location.Id == deckIdStr && e.Card.Id == cardId);
+        var matching = existing.FirstOrDefault(e => e.Location.Id == deckId && e.Card.Id == cardId);
         if (matching == null)
             return null;
 
@@ -219,10 +218,15 @@ public class DeckCardService : IDeckCardService
             return null; // nothing to split
 
         var leftCount = total - rightCount;
-        var location = Location.FromId(deckId, deckIdStr, false);
+        var sideboard = await _collectionStore.GetByParentIdAsync(deckId);
+
+        if (sideboard is null)
+            throw new InvalidOperationException("sideboard is not exists");
+
+        var sideboardLocation = Location.FromCollection(sideboard);
 
         // Create right part FIRST (before modifying original count)
-        var rightPart = new MagicCardPhysical(matching.Card, location, matching.IsOwn)
+        var rightPart = new MagicCardPhysical(matching.Card, sideboardLocation, matching.IsOwn)
         {
             Count = rightCount,
             MyPrice = matching.MyPrice,
@@ -250,14 +254,12 @@ public class DeckCardService : IDeckCardService
 
         foreach (var card in expanded)
         {
-            if (card is MagicCardPhysical mcp && !string.IsNullOrEmpty(mcp.Location.Id))
+            if (card is MagicCardPhysical mcp && mcp.Location.Id > 0)
             {
-                if (int.TryParse(mcp.Location.Id, out var locId))
-                {
-                    var split = await SplitCardAsync(locId, mcp.Id, rightCount, ct);
-                    if (split != null)
-                        result.Add(split);
-                }
+                var locId = mcp.Location.Id;
+                var split = await SplitCardAsync(locId, mcp.Id, rightCount, ct);
+                if (split != null)
+                    result.Add(split);
             }
             else if (card is MagicCard mc)
             {
@@ -311,6 +313,6 @@ public class DeckCardService : IDeckCardService
 
         // All physical rows of this card across the DB — filter to the given deck and owned copies only.
         var rows = await _collectionStore.GetCardsAsync(cardId, ct);
-        return rows.Where(r => r.Location.RawId == deckId && r.IsOwn).Sum(r => r.Count);
+        return rows.Where(r => r.Location.Id == deckId && r.IsOwn).Sum(r => r.Count);
     }
 }

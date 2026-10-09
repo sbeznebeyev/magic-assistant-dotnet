@@ -119,6 +119,21 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         return list.FirstOrDefault();
     }
 
+    public async Task<Collection?> GetByParentIdAsync(int id, CancellationToken ct = default)
+    {
+        if (id <= 0) return null;
+
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        var row = await conn.QuerySingleOrDefaultAsync<CollectionRow>(
+            "SELECT Id, Name, ParentId, NodeType, Locked FROM Collection WHERE ParentId = @Id",
+            new { Id = id });
+
+        if (row == null) return null;
+        var list = await AttachCardCountsAsync(conn, new List<CollectionRow> { row });
+        return list.FirstOrDefault();
+    }
+
     public async Task<Collection> CreateDeckAsync(string name, int? parentId = null, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
@@ -353,19 +368,21 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
 
     public async Task<bool> AddAsync(MagicCardPhysical card, CancellationToken ct = default)
     {
-        var locationId = card.Location.RawId;
-        if (locationId <= 0)
+        var collectionId = card.Location.Id;
+        if (collectionId <= 0)
             throw new ArgumentException("Card must have a valid location", nameof(card));
 
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
 
-        // Locked nodes (Collection/Deck/Sideboard: NodeType 1-3) block card operations
-        var locked = await conn.QuerySingleOrDefaultAsync<bool>(
+        // Locked nodes (Collection/Deck/Sideboard: NodeType 1-3) block card removal; the node must exist.
+        var locked = await conn.QuerySingleOrDefaultAsync<bool?>(
             "SELECT Locked FROM Collection WHERE Id = @Id AND NodeType IN (1,2,3)",
-            new { Id = locationId });
-        if (locked)
-            throw new InvalidOperationException($"Cannot add cards to a locked node (Id={locationId})");
+            new { Id = collectionId });
+        if (locked == null)
+            throw new InvalidOperationException($"Deck '{collectionId}' not found");
+        if (locked == true)
+            throw new InvalidOperationException($"Cannot remove cards from a locked node (Id={collectionId})");
 
         await conn.ExecuteAsync(@"
             INSERT INTO Deck (CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade)
@@ -379,7 +396,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
                 Grade = COALESCE(excluded.Grade, Grade)",
             new
             {
-                CollectionId = locationId,
+                CollectionId = collectionId,
                 CardId = card.Card.Id,
                 Count = card.Count,
                 IsOwn = card.IsOwn,
@@ -405,19 +422,28 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
         try
         {
             // Check all target locations for locked status (NodeType 1-3)
-            var locationIds = list.Select(c => c.Location.RawId).Distinct().ToList();
+            var locationIds = list.Select(c => c.Location.Id).Distinct().ToList();
             if (locationIds.Any(id => id > 0))
             {
+                var allExistedLocationIds = (await conn.QueryAsync<int>(
+                    "SELECT Id FROM Collection WHERE Id IN @Ids;", new { Ids = locationIds }, tx)).ToList();
+
+                if (locationIds.Except(allExistedLocationIds).Any())
+                {
+                    throw new InvalidOperationException($"Some locations are not exist");
+                }
+
                 var lockedIds = (await conn.QueryAsync<int>(
                     "SELECT Id FROM Collection WHERE Id IN @Ids AND NodeType IN (1,2,3) AND Locked = 1",
                     new { Ids = locationIds }, tx)).ToList();
+
                 if (lockedIds.Any())
                     throw new InvalidOperationException($"Cannot add cards to locked nodes: [{string.Join(", ", lockedIds)}]");
             }
 
             foreach (var card in list)
             {
-                var locationId = card.Location.RawId;
+                var locationId = card.Location.Id;
                 if (locationId <= 0)
                     throw new ArgumentException($"Card '{card.Name}' has no valid location", nameof(card));
 
@@ -457,32 +483,34 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
 
     public async Task<bool> RemoveAsync(MagicCardPhysical card, CancellationToken ct = default)
     {
-        var locationId = card.Location.RawId;
-        if (locationId <= 0) return false;
+        var collectionId = card.Location.Id;
+        if (collectionId <= 0) return false;
 
         using var conn = CreateConnection();
         await conn.OpenAsync(ct);
 
-        // Locked nodes (Collection/Deck/Sideboard: NodeType 1-3) block card removal
-        var locked = await conn.QuerySingleOrDefaultAsync<bool>(
+        // Locked nodes (Collection/Deck/Sideboard: NodeType 1-3) block card removal; the node must exist.
+        var locked = await conn.QuerySingleOrDefaultAsync<bool?>(
             "SELECT Locked FROM Collection WHERE Id = @Id AND NodeType IN (1,2,3)",
-            new { Id = locationId });
-        if (locked)
-            throw new InvalidOperationException($"Cannot remove cards from a locked node (Id={locationId})");
+            new { Id = collectionId });
+        if (locked == null)
+            throw new InvalidOperationException($"Deck '{collectionId}' not found");
+        if (locked == true)
+            throw new InvalidOperationException($"Cannot remove cards from a locked node (Id={collectionId})");
 
         // If requested count >= stored count, remove the row entirely.
         // Otherwise decrease the count (never below 0).
         var removed = await conn.ExecuteAsync(@"
             DELETE FROM Deck
             WHERE CollectionId = @CollectionId AND CardId = @CardId AND Count <= @Count",
-            new { CollectionId = locationId, CardId = card.Card.Id, Count = card.Count });
+            new { CollectionId = collectionId, CardId = card.Card.Id, Count = card.Count });
 
         if (removed == 0)
         {
             await conn.ExecuteAsync(@"
                 UPDATE Deck SET Count = MAX(0, Count - @Count)
                 WHERE CollectionId = @CollectionId AND CardId = @CardId",
-                new { CollectionId = locationId, CardId = card.Card.Id, Count = card.Count });
+                new { CollectionId = collectionId, CardId = card.Card.Id, Count = card.Count });
         }
 
         return true;
@@ -524,7 +552,7 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MagicCardPhysi
 
     public async Task<bool> UpdateAsync(MagicCardPhysical card, ICollection<MagicCardField> fields, CancellationToken ct = default)
     {
-        var locationId = card.Location.RawId;
+        var locationId = card.Location.Id;
         if (locationId <= 0) return false;
 
         using var conn2 = CreateConnection();

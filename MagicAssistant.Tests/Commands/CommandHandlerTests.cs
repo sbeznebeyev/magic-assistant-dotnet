@@ -49,7 +49,7 @@ public class CommandHandlerTests
 
         cardStore.Verify(s => s.AddAllAsync(
             It.Is<IEnumerable<MagicCardPhysical>>(cards =>
-                cards.Cast<MagicCardPhysical>().All(p => p.Location.Id == "1" && p.IsOwn)),
+                cards.Cast<MagicCardPhysical>().All(p => p.Location.Id == 1 && p.IsOwn)),
             It.IsAny<CancellationToken>()));
     }
 
@@ -242,7 +242,7 @@ public class CommandHandlerTests
             });
 
         var handler = new UpdateCardCommandHandler(cardStore.Object);
-        await handler.Handle(new UpdateCardCommand("1", cardId, new Dictionary<MagicCardField, object?>
+        await handler.Handle(new UpdateCardCommand(1, cardId, new Dictionary<MagicCardField, object?>
         {
             [MagicCardField.Count] = 4,
             [MagicCardField.IsOwn] = false,
@@ -279,7 +279,7 @@ public class CommandHandlerTests
             .ReturnsAsync(Array.Empty<MagicCardPhysical>());
 
         var handler = new UpdateCardCommandHandler(cardStore.Object);
-        var result = await handler.Handle(new UpdateCardCommand("1", cardId, new Dictionary<MagicCardField, object?>()));
+        var result = await handler.Handle(new UpdateCardCommand(1, cardId, new Dictionary<MagicCardField, object?>()));
 
         Assert.That(result, Is.False);
     }
@@ -297,7 +297,7 @@ public class CommandHandlerTests
             .ReturnsAsync(new[] { physical });
 
         var handler = new UpdateCardCommandHandler(cardStore.Object);
-        var result = await handler.Handle(new UpdateCardCommand("1", cardId, new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = 5 }));
+        var result = await handler.Handle(new UpdateCardCommand(1, cardId, new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = 5 }));
 
         Assert.That(result, Is.False,
             "Хендлер ищет карту по CardId И Location.Id. Карта в deck-2, запрос для deck-1 → не найдена");

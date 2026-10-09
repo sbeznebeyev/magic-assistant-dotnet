@@ -167,13 +167,13 @@ public class ServiceTests
 
         var service = new CardResolveService(new Mock<IDbCardStore>().Object, new Mock<ICollectionStore>().Object);
 
-        var loc1 = Location.FromPath("deck-1");
+        var loc1 = Location.FromId(1);
         var cards = new List<IMagicCard>
         {
             CreatePhysical(cardId1, loc1),
             CreatePhysical(cardId2, loc1),
         };
-        Assert.That(service.GetLocation(cards)?.Id, Is.EqualTo("deck-1"));
+        Assert.That(service.GetLocation(cards)?.Id, Is.EqualTo(1));
 
         // Different locations → null
         var diffCards = new List<IMagicCard>

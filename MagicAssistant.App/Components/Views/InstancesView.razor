@@ -129,16 +129,15 @@
 
     private async Task SelectInstance(MagicCardPhysical instance)
     {
-        if (int.TryParse(instance.Location.Id, out var locId))
+        var locId = instance.Location.Id;
+        if (locId > 0)
             await OnDeckSelected.InvokeAsync(locId);
     }
 
     private static string GetDeckName(MagicCardPhysical instance)
     {
-        var id = instance.Location.Id;
-        // Remove sideboard suffix for display
-        if (id.EndsWith("_sb"))
-            id = id[..^3];
-        return id.Length > 20 ? id[..17] + "…" : id;
+        // Location.Id is now an int collection ID; the sideboard marker is a separate bool
+        // (rendered as the "SB" tag), so there's no suffix to strip or length to truncate.
+        return instance.Location.Id.ToString();
     }
 }

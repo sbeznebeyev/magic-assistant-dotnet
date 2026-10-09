@@ -172,7 +172,7 @@ public class CardResolveService : ICardResolveService
         Location? common = null;
         foreach (var card in cards)
         {
-            if (card is MagicCardPhysical mcp && !string.IsNullOrEmpty(mcp.Location.Id))
+            if (card is MagicCardPhysical mcp && mcp.Location.Id > 0)
             {
                 if (common == null)
                     common = mcp.Location;

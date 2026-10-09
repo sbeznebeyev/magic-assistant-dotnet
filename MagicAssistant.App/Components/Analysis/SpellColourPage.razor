@@ -135,9 +135,9 @@
         {
             var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
             // Each physical card carries its owning collection in Location: the deck's own
-            // cards (RawId == DeckId) vs. the sideboard child's (everything else).
-            var mainCards = cards.Where(c => c.Location.RawId == DeckId).ToList();
-            var sideCards = cards.Where(c => c.Location.RawId != DeckId).ToList();
+            // cards (Id == DeckId) vs. the sideboard child's (everything else).
+            var mainCards = cards.Where(c => c.Location.Id == DeckId).ToList();
+            var sideCards = cards.Where(c => c.Location.Id != DeckId).ToList();
             _hasSideboard = sideCards.Count > 0;
 
             // Shared color list: union of both columns, ordered by combined count descending.

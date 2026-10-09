@@ -8,7 +8,7 @@ namespace MagicAssistant.Core.Commands;
 /// Mirrors Java: DataManager.updateMCP() + EditMagicCardPhysicalDialog
 /// </summary>
 public record UpdateCardCommand(
-    string DeckId,
+    int DeckId,
     Guid CardId,
     Dictionary<MagicCardField, object?> Updates);
 
@@ -28,8 +28,6 @@ public class UpdateCardCommandHandler
     /// </summary>
     public async Task<bool> Handle(UpdateCardCommand command, CancellationToken ct = default)
     {
-        var location = Location.FromPath(command.DeckId);
-
         // Get existing instance
         var existing = await _cardStore.GetCardsAsync(command.CardId, ct);
         var matching = existing.FirstOrDefault(e => e.Location.Id == command.DeckId && e.Card.Id == command.CardId);
