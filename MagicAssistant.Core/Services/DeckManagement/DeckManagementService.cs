@@ -1,6 +1,6 @@
 using MagicAssistant.Core.Commands;
 using MagicAssistant.Core.Queries;
-using MagicAssistant.Data.DbModel;
+using MagicAssistant.Data.Model;
 using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Core.Services.DeckManagement;

@@ -5,7 +5,6 @@ using MagicAssistant.Data.Model;
 using MagicAssistant.Data.Model.Enums;
 using MagicAssistant.Data.Model.Legality;
 using MagicAssistant.Data.Model.NavigatorNodes;
-using MagicAssistant.Data.DbModel;
 
 namespace MagicAssistant.Data.Db;
 

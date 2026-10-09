@@ -1,6 +1,6 @@
 using MagicAssistant.Data.Model.NavigatorNodes;
 
-namespace MagicAssistant.Data.DbModel;
+namespace MagicAssistant.Data.Model;
 
 /// <summary>
 /// Represents a node in the collection/deck tree hierarchy.

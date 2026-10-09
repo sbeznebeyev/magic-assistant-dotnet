@@ -1,4 +1,3 @@
-using MagicAssistant.Data.DbModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace MagicAssistant.Data.Model;

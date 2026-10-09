@@ -1,5 +1,5 @@
 using MagicAssistant.Data.Contracts;
-using MagicAssistant.Data.DbModel;
+using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Core.Commands;
 

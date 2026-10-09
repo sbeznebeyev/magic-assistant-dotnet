@@ -1,5 +1,4 @@
 using MagicAssistant.Data.Contracts;
-using MagicAssistant.Data.DbModel;
 using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Core.Commands;

@@ -1,4 +1,3 @@
-using MagicAssistant.Data.DbModel;
 using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Data.Contracts;

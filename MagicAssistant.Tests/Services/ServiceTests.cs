@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MagicAssistant.Core;
-using MagicAssistant.Data.DbModel;
+using MagicAssistant.Data.Model;
 using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Tests.Services;
