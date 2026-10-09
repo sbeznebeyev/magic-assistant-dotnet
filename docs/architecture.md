@@ -64,7 +64,7 @@ DeckAnalysis           → IAnalysisService (существующий серви
 │           (KB-режим и deck-режим через CurrentCollectionId) │
 │  CardDescriptionView → ICardSearchService                  │
 │  PrintingsView     → ICardSearchService                    │
-│  InstancesView     → ICardStore<MagicCardPhysical>         │
+│  InstancesView     → ICardStore<MyCard>                    │
 │  Analysis pages    → IAnalysisService + ICollectionStore   │
 │  CollectorView     → IDeckAnalysisService                  │
 │  SyncKnowledgeBase → IKnowledgeBaseSyncService             │
@@ -146,21 +146,20 @@ MagicAssistant.slnx (net10.0)
 │   │   ├── SearchStringTokenizer.cs← Парсер строки поиска (!, quotes, \regex:)
 │   │   └── Abilities.cs            ← способности MTG с regex-паттернами
 │   ├── MagicCardFilter.cs          ← Главный класс фильтра: AST, сортировка, группировка
-│   ├── ScryfallMapper.cs           ← DTO → MagicCard маппинг
+│   ├── ScryfallMapper.cs           ← DTO → Card маппинг
 │   ├── ImageCacheService.cs        ← Скачивание + кэширование картинок карт
 │   └── SyncSetState.cs             ← Thread-safe прогресс-трекер синхронизации
 │
 ├── MagicAssistant.Data             ← Контракты доступа к локальным данным + Model (net10.0)
-│   ├── Contracts/                  ← интерфейсы хранилищ
+│   ├── Contracts/                  ← интерфейсы хранилищ + иерархия карт (ICardSimple → ICard → ICardModifiable → IMyCard)
 │   │   └── ICardStore.cs           ← ICardStore<T>, IDbCardStore, ICollectionStore
 │   └── Model/                      ← доменные модели
-│       ├── Interfaces/             ← ICard, IMagicCard, ICardModifiable, IMagicCardPhysical
-│       ├── Enums/                  ← Rarity, CardType
+│       ├── Enums/                  ← Rarity, CardType, Layout, LanguageCode
 │       ├── Legality/               ← Format, LegalityMap
-│       ├── MagicCard.cs            ← Базовая карта из БД
-│       ├── MagicCardPhysical.cs    ← Физический экземпляр карты
+│       ├── Card.cs                 ← Базовая карта из БД (реализует ICard)
+│       ├── MyCard.cs               ← Физический экземпляр карты (ссылка на базовую Card)
 │       ├── MagicCardField.cs       ← Enum + extension методы для полей
-│       ├── Edition.cs              ← Сет/издание (STH, M19)
+│       ├── CardSet.cs              ← Сет/издание (STH, M19)
 │       ├── Collection.cs           ← Узел дерева коллекции (deck/sideboard/collection/folder)
 │       ├── CardGroup.cs            ← Группа карт
 │       └── ColorTypes.cs           ← Статический класс цветов
@@ -168,16 +167,16 @@ MagicAssistant.slnx (net10.0)
 ├── MagicAssistant.Data.Db          ← Инфраструктурный слой: SQLite + Dapper (net10.0)
 │   ├── InitializeDb.cs             ← Статический метод создания всех таблиц и индексов
 │   ├── SqliteCardStore.cs          ← Реализация IDbCardStore (База знаний карт)
-│   └── SqliteCollectionStore.cs    ← Реализация ICollectionStore + ICardStore<MagicCardPhysical>
+│   └── SqliteCollectionStore.cs    ← Реализация ICollectionStore + ICardStore<MyCard>
 │                                   ← JOIN-запросы к Cards для подтягивания полной информации
 │
 ├── MagicAssistant.Data.IO          ← Экспорт/импорт форматов (net10.0)
 │   ├── CardCollectionImportResult.cs ← Общий результат парсинга (XML и JSON)
 │   ├── json/                       ← Нативный формат Magic Assistant JSON (v1)
-│   │   ├── JsonImport.cs           ← Парсинг JSON → IMagicCard[] (reference-ядро id/name/set/count обязательно)
-│   │   └── JsonExport.cs           ← IMagicCard[] → JSON (omit-по-умолчанию, pretty)
+│   │   ├── JsonImport.cs           ← Парсинг JSON → List<ICard> (reference-ядро id/name/set/count обязательно)
+│   │   └── JsonExport.cs           ← MyCard[] → JSON (omit-по-умолчанию, pretty)
 │   └── xml/                        ← Legacy XML формат Magic Assistant
-│       └── XmlImport.cs            ← Парсинг legacy XML (Gatherer ID + полные имена сетов) → IMagicCard[]
+│       └── XmlImport.cs            ← Парсинг legacy XML (Gatherer ID + полные имена сетов) → List<ICard>
 │
 ├── MagicAssistant.Http             ← Контракты доступа к внешним данным + DTOs (net10.0)
 │   ├── Contracts/                  ← IScrayfallClient
@@ -239,12 +238,12 @@ MagicAssistant.Http (контракты + DTOs)
 
 | Таблица | PK | Описание |
 |---------|----|----------|
-| **Cards** | `Id` (uniqueidentifier) | База знаний карт (синхронизируется из Scryfall). 30+ колонок: Name, ManaCost, Type, OracleText, Rulings, Artist, SetCode, Rarity, Cmc, ColorType, LegalityFormats и др. |
+| **Cards** | `Id` (uniqueidentifier) | База знаний карт (синхронизируется из Scryfall). 40+ колонок: Name, ManaCost, Type, OracleText, Rulings, Artist, SetCode, Rarity, Cmc, ColorType, LegalityFormats и др. |
 | **CardsFts** | FTS5 rowid | Виртуальная FTS5 таблица для полнотекстового поиска (CardId UNINDEXED, Name, Type, OracleText, Artist). Триггеры `cards_fts_ai/ad/ud` синхронизируют индекс при INSERT/UPDATE/DELETE в Cards. |
 | **CardSet** | `Id` (uniqueidentifier) | Справочник сетов: Name, SetCode, Uri, CardCount, ReleaseDate, SetType, Digital/NonfoilOnly/FoilOnly флаги. |
 | **Collection** | `Id` (INTEGER AUTOINCREMENT) | Узлы навигации дерева. NodeType: 0=Folder, 1=Collection, 2=Deck, 3=Sideboard. Locked: BOOLEAN DEFAULT 0. FK ParentId → Collection(Id) ON DELETE CASCADE. Sideboard — дочерний узел колоды (ParentId = deckId). |
-| **Deck** | `CollectionId` + `CardId` (composite PK) | Физические карты внутри колод/папок. Count, IsOwn, Comment, DateAdded, ForTradeCount. FK CollectionId → Collection(Id), FK CardId → Cards(Id), оба ON DELETE CASCADE. |
-| **OwnCounts** | `CardId` (uniqueidentifier) | Ownership stats: OwnCount, TotalCount, OwnUnique. FK CardId → Cards(Id) ON DELETE CASCADE. |
+| **Deck** | `CollectionId` + `CardId` (composite PK) | Физические карты внутри колод/папок. Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade. FK CollectionId → Collection(Id), FK CardId → Cards(Id), оба ON DELETE CASCADE. |
+| **UserSettings** | `Key` (TEXT) | Пользовательские настройки UI: Key/Value пары (splitter, view mode, page size, set-type filter). |
 | **CardFaces** | `Id` (INTEGER AUTOINCREMENT) | Лица многогранных карт (transform/split/flip/mdfc): FaceIndex, Name, ManaCost, TypeLine, OracleText, Power/Toughness, Cmc, Colors, ColorBits, IdentityBits. FK CardId → Cards(Id). |
 | **CardAllParts** | `Id` (INTEGER AUTOINCREMENT) | Части составных карт (split/meld): PartIndex, RelatedCardId, Component, Name, TypeLine, Uri. FK CardId → Cards(Id) ON DELETE CASCADE |
 | **CardsImageUris** | `CardId` (uniqueidentifier) | Scryfall image URIs для карт: Small, Normal, Large, Png. FK CardId → Cards(Id). |
@@ -275,21 +274,21 @@ await InitializeDb.EnsureCreatedAsync(cardsDb);
 
 ## Модель данных
 
-### MagicCard — базовая карта из БД
+### Card — базовая карта из БД
 
-Один экземпляр = одна уникальная карта (конкретная печать). `CardId` = Scryfall card ID.
+Один экземпляр = одна уникальная карта (конкретная печать). `Id` = Scryfall card ID.
 
-### MagicCardPhysical — физический экземпляр карты в коллекции/колоде
+### MyCard — физический экземпляр карты в коллекции/колоде
 
-Ссылается на базовую MagicCard. `Collection` (nullable) — ссылка на узел коллекции/колоты/сайдборда; `null` = неразрешённая карта, ещё не привязанная к узлу. `IsSideboard` выводится из `Collection.NodeType == NodeType.Sideboard`.
+Ссылается на базовую `Card` (свойство `Card`). `Collection` (nullable) — ссылка на узел коллекции/колоты/сайдборда; `null` = неразрешённая карта, ещё не привязанная к узлу. `IsSideboard` выводится из `Collection.NodeType == NodeType.Sideboard`. Свойства экземпляра: `Count`, `IsOwn`, `DateAdded`, `Comment`, `MyPrice` (цена за экземпляр), `Grade` (`CardGrade?` — состояние карты); `OwnCount` вычисляется (`IsOwn ? Count : 0`).
 
 
 ### MagicCardField — перечисление всех полей карты
 
 Extension методы:
-- `field.Get(card)` → получение значения любого поля из `IMagicCard`
-- `field.SetM(card, value)` → установка на `MagicCard`
-- `field.SetM(physical, value)` → установка на `MagicCardPhysical` (не-physical поля делегируются в базовую карту)
+- `field.Get(card)` → получение значения любого поля из `ICard`
+- `field.SetM(card, value)` → установка на `Card`
+- `field.SetM(physical, value)` → установка на `MyCard` (не-physical поля делегируются в базовую карту)
 - `field.IsPhysical()` → проверка physical-поля
 - `field.IsTransient()` → проверка временного поля (не сохраняется)
 - `MagicCardFieldExtensions.AllNonTransientFields(bool physical)` → список полей для итерации
@@ -311,7 +310,7 @@ Extension методы:
 POCO узла навигации (таблица `Collection`, PK: `Id` autoincrement, FK: `ParentId`):
 - `NodeType`: 0=Folder, 1=Collection, 2=Deck, 3=Sideboard; сайдборд — скрытый ребёнок ровно одного Deck
 - `CardCount`, `Locked` — служебные поля узла
-- Физический экземпляр карты держит ссылку на свой узел (`MagicCardPhysical.Collection`, nullable); «unresolved»-карты при импорте несут `null` и штампуются узлом только в момент коммита
+- Физический экземпляр карты держит ссылку на свой узел (`MyCard.Collection`, nullable); «unresolved»-карты при импорте несут `null` и штампуются узлом только в момент коммита
 
 ## Контракты доступа к данным
 
@@ -329,7 +328,7 @@ POCO узла навигации (таблица `Collection`, PK: `Id` autoincr
 Хранит карты MTG и сеты в таблицах `Cards` и `CardSet`.
 
 **Особенности:**
-- `ConcurrentDictionary<string, MagicCard>` — L1-кэш для `GetCardAsync()`
+- `ConcurrentDictionary<Guid, Card>` — L1-кэш для `GetCardAsync()`
 - `INSERT OR REPLACE` — UPSERT при синхронизации
 - Транзакции для batch-операций (`AddAllAsync`)
 - `SearchAsync` — FTS5 full-text search с ранжированием по релевантности
@@ -338,7 +337,7 @@ POCO узла навигации (таблица `Collection`, PK: `Id` autoincr
 
 ### SqliteCollectionStore — Коллекции и колоды
 
-Реализация `ICollectionStore` + `ICardStore<MagicCardPhysical>` на SQLite + Dapper.  
+Реализация `ICollectionStore` + `ICardStore<MyCard>` на SQLite + Dapper.  
 Работает с той же БД (`cards.db`), таблицы `Collection` и `Deck`.
 
 **Особенности:**
@@ -346,7 +345,7 @@ POCO узла навигации (таблица `Collection`, PK: `Id` autoincr
 - `AttachFacesAsync(conn, physicals, ct)` — батч-подтягивание CardFaces одним запросом после каждого чтения, возвращающего physicals; в `GetAllDeckCardsAsync` (reconciliation) намеренно не вызывается
 - `ON CONFLICT(CollectionId, CardId) DO UPDATE SET Count = Count + excluded.Count` — автоматический merge при добавлении дублей
 - Транзакции для batch-операций (`AddAllAsync`, `CreateDeckAsync`)
-- **JOIN-запросы** ко всем методам чтения: `GetDeckCardsAsync()`, `GetAllAsync()`, `GetCardAsync()` делают `LEFT JOIN Cards` и возвращают `MagicCardPhysical` с полной информацией о базовой карте (имя, манакост, тип, легальность, свойства)
+- **JOIN-запросы** ко всем методам чтения: `GetDeckCardsAsync()`, `GetAllAsync()`, `GetCardAsync()` делают `LEFT JOIN Cards` и возвращают `MyCard` с полной информацией о базовой карте (имя, манакост, тип, легальность, свойства)
 - `GetDeckWithSideboardAsync(deckId)` — включает sideboard (находит дочерний узел NodeType=3 через SQL)
 - `CreateDeckAsync()` — создаёт основную колоду (NodeType=2) + sideboard (NodeType=3, ParentId=deckId) в одной транзакции
 
@@ -361,10 +360,10 @@ HTTP-клиент для `https://api.scryfall.com`.
 
 ### ScryfallMapper (бизнес-логика в Core)
 
-Маппит Scryfall DTOs → MagicCard:
+Маппит Scryfall DTOs → Card:
 - Парсит коллекторские номера из форматов: `"1"`, `"1/234"`, `"42a"`, `"A5"`
 - Маппит легальность из Scryfall legalities → LegalityMap (через `FormatMap` dictionary)
-- Сохраняет URL изображения в `MagicCard.ImageUrl` свойство
+- Сохраняет image URIs в `Card.ImageUris` (персистится в таблицу CardsImageUris)
 
 ## ImageCacheService — кэширование картинок карт
 
@@ -409,10 +408,10 @@ UI не требует заранее скачанных картинок: ес�
 | Команда | Описание | Делегирует в сервис |
 |---------|----------|---------------------|
 | `CreateNodeCommand` | Унифицированное создание узла (Folder/Collection/Deck; Deck → + sideboard в одной транзакции) | — |
-| `AddCardsToDeckCommand` | Добавление карт в колоду (конвертация IMagicCard → MagicCardPhysical) | — |
+| `AddCardsToDeckCommand` | `(int DeckId, ICollection<ICard> Cards)` — добавление карт в колоду (конвертация ICard → MyCard) | — |
 | `RemoveCardsFromDeckCommand` | `(int DeckId, ICollection<Guid> CardIds)` — DeckId = ID самого узла; делегирует в `ICollectionStore.RemoveCardsAsync`: 1 SQL-запрос (`DELETE ... RETURNING Count`, результат = сумма возвращённых копий, а не число строк), непустой список: удаление ВСЕХ копий карт, пустой: чистка всех карт узла (узел остаётся). Используется `DeckCardService.RemoveCardsAsync` / `ClearNodeAsync(nodeId)` (CQRS) | — |
 | `MoveCardsCommand` | Перемещение карт между коллекциями: удаление из источника + добавление в цель (merge-семантика ON CONFLICT) | — |
-| `UpdateCardCommand` | Обновление свойств карты (count, ownership, price, comment, tags) | — |
+| `UpdateCardCommand` | `(int DeckId, Guid CardId, Dictionary<MagicCardField, object?> Updates)` — обновление свойств экземпляра: count, ownership, price (`MyPrice`), comment, grade, forTradeCount | — |
 | `ImportResolvedCardsCommand` | Атомарный коммит полностью зарезолленного импорта: new-режим → `CreateDeckWithCardsAsync` (одна транзакция), existing-режим → merge. CardOverrides — выборы из таблицы нераспознанных карт |
 | `SyncKBCommand` | Полная синхронизация сета из Scryfall (оркестрирующая команда) | `IKnowledgeBaseSyncService` |
 | `SaveUserSettingCommand` | Сохранение пользовательских настроек (splitter, view mode, page size) | — |
@@ -450,7 +449,7 @@ UI не требует заранее скачанных картинок: ес�
 
 1. **Phase 0: Resolve set** — поиск информации о сете в Scryfall
 2. **Phase 1: Download** — загрузка списка карт сета через `IScrayfallClient.GetCardsAsync(setCode, englishOnly)`
-3. **Phase 2: Map** — маппинг DTO → MagicCard через `ScryfallMapper`
+3. **Phase 2: Map** — маппинг DTO → Card через `ScryfallMapper`
 4. **Phase 3: Images** — скачивание картинок через `IImageCacheService.DownloadAsync()`, проверка существующих по UID
 5. **Phase 4: Save** — сохранение в KnowledgeBase через `IDbCardStore.AddAllAsync()`
 6. **Phase 5: Done** — завершение, отчёт
@@ -470,11 +469,11 @@ UI не требует заранее скачанных картинок: ес�
 ### JsonImport / JsonExport (нативный формат)
 - Обёртка: `format: "magic-assistant/deck"`, `version: 1`, `name`, `comment`, `type: "deck"`, `exportedAt` (ISO 8601) — всегда пишутся
 - Карта: reference-ядро `id` (Scryfall UUID), `name`, `set`, `count` — всегда; импорт требует все четыре (отсутствие = FormatException, дефолт для count не ставится)
-- Опциональные поля omit-по-умолчанию: `own` только false, `price` ≠0 (короткое round-trip представление float), `comment`/`custom`/`special` непустые, `forTrade` >0 и без тега fortrade
-- Pretty-print с отступом 2; неизвестные поля при импорте игнорируются (forward-compat); чужой format/несоответствующий version → FormatException
+- Опциональные поля omit-по-умолчанию: `own` только false, `price` ≠0 (короткое round-trip представление float), `comment` непустой, `forTrade` >0
+- Pretty-print с отступом 2; неизвестные поля при импорте игнорируются (forward-compat); legacy-мост: тег `fortrade` в поле `special` маппится в forTrade; чужой format/несоответствующий version → FormatException
 
 ### XmlImport (legacy)
-- Парсит legacy XML: `<cards>` → `<list>` → `<mcp>` (MagicCardPhysical); Gatherer ID + полные имена сетов
+- Парсит legacy XML: `<cards>` → `<list>` → `<mcp>` (MyCard); Gatherer ID + полные имена сетов
 - Поддерживает только физические карты (`<mcp>`); базовые карты `<mc>` не импортируются
 - `ReadElementValue()` — различает простые элементы и элементы с дочерними узлами
 
@@ -486,7 +485,7 @@ UI не требует заранее скачанных картинок: ес�
 |--------|-----------|
 | `IDbCardStore` | `SqliteCardStore` (`cards.db`) |
 | `ICollectionStore` | `SqliteCollectionStore` (`cards.db`) |
-| `ICardStore<MagicCardPhysical>` | `SqliteCollectionStore` (`cards.db`) |
+| `ICardStore<MyCard>` | `SqliteCollectionStore` (`cards.db`) |
 | `IUserSettingsStore` | `SqliteUserSettingsStore` (`cards.db`) |
 | `IImageCacheService` | ImageCacheService (factory) |
 | `ISetIconsCacheService` | SetIconsCacheService (factory) |
@@ -704,7 +703,7 @@ MagicCardFilter.FilterCards(cards) → root.Evaluate(card) для каждой �
 ```
 
 - `True`/`False`/`Empty` — оптимизация: `True.And(b)` → `b`, `False.Or(b)` → `b` (короткое замыкание)
-- `MATCHES` делегируется `card.Matches(field, pattern)` для полей Name/Type/Set/Rarity, иначе — regex на строковом представлении
+- `MATCHES` делегируется `CardMatcher.Matches(card, field, textValue)`: поле Type в non-regex режиме — проверка primary type (слово до « — »), остальные поля — regex из `TextValue` с флагами wordBoundary/caseSensitive/isRegex
 - `EQUALS` сравнивает значения полей (string equality + numeric с float tolerance `0.001f`)
 - `>=`, `<=`, `==` парсят float и сравнивают численно
 - `TextSearch` токенизирует ввод: `!word` → NOT, `\regex:...` → regex режим, пробелы → AND
@@ -722,16 +721,17 @@ public interface ISearchableProperty
 
 Реализации: `ColorTypesSearch` (W/U/B/R/G/Multicolor/Colorless), `Editions`, `Rarity`, `Locations`. Используются в `MagicCardFilter.CreateGroup()` для построения OR/AND-групп из карты параметров.
 
-### IMagicCard.Matches
+### CardMatcher
+
+Статический класс в Core (`Expressions/CardMatcher.cs`) — сопоставление поля карты с текстовым паттерном:
 
 ```csharp
-bool IMagicCard.Matches(ICardField field, string pattern);
+bool CardMatcher.Matches(ICard card, MagicCardField field, TextValue textValue);   // полный набор флагов
+bool CardMatcher.MatchesSimple(ICard card, MagicCardField field, string pattern);  // legacy: case-insensitive contains
 ```
 
-Делегирует специфичную логику сопоставления:
-- Name/Type → contains (case-insensitive)
-- Set/Rarity → exact match (case-insensitive)
-- Остальные поля → contains fallback
+- Поле Type в non-regex режиме — проверка primary type; остальные поля — regex из `TextValue` (wordBoundary/caseSensitive/isRegex).
+- Живёт в Core, потому что зависит от `TextValue` (система выражений); Data-слой не знает о семантике сопоставления.
 
 ## Агрегаторы (Analysis)
 
@@ -741,14 +741,14 @@ bool IMagicCard.Matches(ICardField field, string pattern);
 
 ```
 IAnalysisService
-├── Analyze(IEnumerable<MagicCardPhysical>) → DeckAnalysisResult
+├── Analyze(IEnumerable<MyCard>) → DeckAnalysisResult
 │   ├── ManaCurve (int[8]) — CMC 0-7+ для не-земель
 │   ├── ColorDistribution (Dictionary<string,int>) — W/U/B/R/G/Colorless
 │   ├── TypeDistribution — Land / Creature / NonCreature
 │   ├── CreatureSubtypes (Dictionary<string,int>) — подтипы существ
 │   ├── AbilityStats (Dictionary<string,int>) — keyword abilities
 │   └── BasicStats — TotalCards, TotalManaCost, MaxRepeats
-└── ComputeManaCurve(IEnumerable<MagicCardPhysical>) → int[8]
+└── ComputeManaCurve(IEnumerable<MyCard>) → int[8]
 ```
 
 ### Ключевые файлы
@@ -786,29 +786,26 @@ IAnalysisService
 
 **Контракты:**
 - `IDbCardStore.HasCardsForSetAsync(setCode)` — `SELECT EXISTS` по Cards (ведёт синк-кнопку пустого состояния)
-- `OwnCountStats` record — `{ CardId, OwnCount, TotalCount, OwnUnique }`
-- `ICollectionStore.GetOwnCountStatsAsync()` — один SQL GROUP BY для всех own_count
-- `IDbCardStore.BulkUpdateOwnCountAsync()` — bulk persist в OwnCounts table
 - `IDbCardStore.UpdateCardPropertyAsync()` — update отдельного свойства
 - `ICollectionStore.CreateCollectionAsync()` — создание коллекции (NodeType=1) без sideboard
 - `ICollectionStore.CreateFolderAsync()` — создание папки (NodeType=0) без sideboard
 - `ICollectionStore.GetCardsAsync()` / `GetAllAsync()` — чтение физических карт по всем коллекциям
-- `ICollectionStore.GetAllPhysicalCardsAsync()` — все физические карты (для ownership-статистики)
+- `ICollectionStore.GetAllPhysicalCardsAsync()` — все физические карты (`MyCard`)
 - `IDbCardStore.GetCardsByIdsAsync(ids)` — batch-запрос для эффективного разрешения карт
 - `ICollectionStore.GetCardCountsAsync(collectionIds, cardIds)` + `IDeckCardService.GetDeckCardCountsAsync(collectionIds, cardIds)` — точечная сумма счётчиков `(CollectionId, CardId) → SUM(Count)` для набора карт в наборе коллекций (один GROUP BY по Deck без JOIN к Cards; используется LastActions для totals вместо полной загрузки колоды)
 
 **Таблицы БД:**
-- `OwnCounts` — персистентность ownership stats (CardId PK, OwnCount, TotalCount, OwnUnique)
+- `UserSettings` — пользовательские настройки UI (Key/Value)
 
 ---
 
 ### ✅ Реализовано: Core Layer и инфраструктура
-- **Модель данных** — MagicCard, MagicCardPhysical, MagicCardField, Edition, Collection, CardGroup, ColorTypes, LegalityMap, Format
-- **Контракты** — ICardStore<T>, IDbCardStore (GetEditionsAsync, BulkUpdateOwnCountAsync, GetCardsByIdsAsync), ICollectionStore (CreateCollectionAsync, CreateFolderAsync, LockAsync, UnlockAsync, GetOwnCountStatsAsync), IScrayfallClient
+- **Модель данных** — Card, MyCard, MagicCardField, CardSet, Collection, CardGroup, ColorTypes, LegalityMap, Format
+- **Контракты** — иерархия ICardSimple → ICard → ICardModifiable → IMyCard, ICardStore<T>, IDbCardStore (HasCardsForSetAsync, GetCardsByIdsAsync, GetPagedAsync), ICollectionStore (CreateCollectionAsync, CreateFolderAsync, LockAsync, UnlockAsync, GetCardCountsAsync), IScrayfallClient
 - **Фильтры и выражения** — AST: Expr → BinaryExpr/NotExpr/CardFieldExpr/TextValue, MagicCardFilter с сортировкой/группировкой, SearchStringTokenizer, Abilities (regex), ISearchableProperty
 - **Агрегаторы** — `IAnalysisService` однопроходный анализ: mana curve, colors, types, creatures, abilities, basic stats. Analysis Blazor-компоненты.
 - **Коллекционер** — `GetCollectorProgressQuery`
-- **Единая БД `cards.db`** — таблицы (Cards, CardsFts, CardSet, Collection, Deck, OwnCounts, CardFaces, CardsImageUris, CardFacesImageUris) + CardAllParts, FTS5 триггеры, индексы, FK с ON DELETE CASCADE
+- **Единая БД `cards.db`** — таблицы (Cards, CardsFts, CardSet, Collection, Deck, UserSettings, CardFaces, CardsImageUris, CardFacesImageUris) + CardAllParts, FTS5 триггеры, индексы, FK с ON DELETE CASCADE
 - **SqliteCardStore** — CRUD, транзакции, FTS5-поиск, ConcurrentDictionary кэш, batch-запрос GetCardsByIdsAsync
 - **SqliteCollectionStore** — SQLite + Dapper, ON CONFLICT merge, JOIN-запросы к Cards
 - **ScryfallClient + ScryfallMapper** — авто-пагинация, маппинг legality

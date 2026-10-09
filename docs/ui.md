@@ -79,7 +79,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | DeckImportWizard | DecksNavigator add-node menu (`+` → Import; root or folder row) | Atomic modern import — validation of all card IDs against KB, then node creation + cards in one transaction |
 | OldDeckImportWizard | Header `Legacy Import` | Staged legacy import: missing-set sync prompt → unresolved-cards table with search → commit only when 100% mapped |
 | DeckExportWizard | DecksNavigator context menu (⋯ → Export; deck/collection nodes only) | Native JSON export + browser download of the clicked node |
-| EditMagicCardPhysicalDialog | CardsListControl ✎ (deck mode) | Edit card instance (count, ownership, price, tags) |
+| EditMagicCardPhysicalDialog | CardsListControl ✎ (deck mode) | Edit card instance (ownership, price, comment, grade, for trade; count — via list −/+) |
 | SplitDialog | CardsListControl ⫯ (deck mode, count > 1) | Split stack main/sideboard |
 | CardFilterDialog | CardsListControl `Filters` button | Central filter dialog: Sets (KB only)/Type/Rarity/Color/Properties; gold **Advanced** button opens the auxiliary dialog |
 | CardFilterAdvancedDialog | CardFilterDialog gold **Advanced** button | Auxiliary filter dialog: Artist/Layout/Legality/Other + Collection section (deck mode); single Close button, committed by the main dialog's Apply |
@@ -120,7 +120,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | **Dialogs** | | |
 | SyncKnowledgeBase | `Components/Dialogs/SyncKnowledgeBase.razor` | Диалог синхронизации, прогресс-бар, отмена |
 | SyncSelectedSetCards | `Components/Dialogs/SyncSelectedSetCards.razor` | Синхронизация конкретного сета (предвыбранный SetCode) |
-| EditMagicCardPhysicalDialog | `Components/Dialogs/EditMagicCardPhysicalDialog.razor` | Редактирование экземпляра: count, ownership, price, comment, tags, forTrade |
+| EditMagicCardPhysicalDialog | `Components/Dialogs/EditMagicCardPhysicalDialog.razor` | Редактирование экземпляра: ownership, price, comment, grade, forTrade (count — через −/+ списка) |
 | SplitDialog | `Components/Dialogs/SplitDialog.razor` | Разделение стопки deck/sideboard ползунком на прогресс-баре (0–total) |
 | CardFilterDialog | `Components/Dialogs/CardFilterDialog.razor` | Sets picker (только KB), Type/Rarity (MultiSelectList), color-чекбоксы + модификаторы, Properties (P/T/CMC); золотая кнопка Advanced открывает вспомогательный диалог |
 | CardFilterAdvancedDialog | `Components/Dialogs/CardFilterAdvancedDialog.razor` | Вспомогательные фильтры: Artist, Layout, Legality, Other (Game Changer), Collection (deck mode: ownership/count/price/tags — IsFoil disabled); единственная кнопка Close |
@@ -211,7 +211,7 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 
 **Queue semantics (`LastActionsQueue`, in-memory, owned by MainLayout):**
 - Fixed capacity `QueueLength = 3`; a new entry is appended to the tail, the oldest is evicted from the head. Re-enqueueing an existing `(LocationId, Card.Id)` pair replaces that entry with the incoming item at the tail — the row always shows the latest operation (Add/Sub) and count; `Changed` fires in both cases.
-- Entry type: `LastActionItem(int LocationId, string Location, MagicCard Card, int Count, LastActionOperationEnum Add | Sub)`.
+- Entry type: `LastActionItem(int LocationId, string Location, Card Card, int Count, LastActionOperationEnum Add | Sub)`.
 - Lifetime: entries live until evicted by capacity. The queue is never cleared — entries from different collections coexist, each carrying its own location label. Nothing is persisted anywhere.
 
 **Sources of entries (all via `MainLayout.RecordLastActionAsync(CardOperationRecord)`):**
@@ -300,10 +300,10 @@ Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` �
 | `OnOpenSync` | `EventCallback<string>` | Empty state → SyncSelectedSetCards (set code) |
 | `RefreshTrigger` | `int` | External reload trigger (after KB sync, after card move) |
 | `ActionsQueue` | `required LastActionsQueue` | Shared in-memory queue of last card actions — count changes, KB (+) adds and quick moves are recorded here for LastActions |
-| `OnEditCard` | `EventCallback<MagicCardPhysical>` | Deck mode: ✎ → EditMagicCardPhysicalDialog |
-| `OnSplitCard` | `EventCallback<MagicCardPhysical>` | Deck mode: ⫯ → SplitDialog (count > 1) |
+| `OnEditCard` | `EventCallback<MyCard>` | Deck mode: ✎ → EditMagicCardPhysicalDialog |
+| `OnSplitCard` | `EventCallback<MyCard>` | Deck mode: ⫯ → SplitDialog (count > 1) |
 | `PinnedCollectionId` | `int?` | Pinned operation target (`MainLayout._pinnedCollection.CollectionId`): KB-mode (+) and quick Move act against it |
-| `OnMoveToPinned` | `EventCallback<MagicCardPhysical>` | Quick move of the selected card (with all copies) to the pinned collection |
+| `OnMoveToPinned` | `EventCallback<MyCard>` | Quick move of the selected card (with all copies) to the pinned collection |
 | `CurrentCollectionLocked` | `bool` | The displayed collection is locked — its card-mutation controls (−/+, ✎, ⫯) are hidden |
 | `PinnedCollectionLocked` | `bool` | The pinned collection is locked — KB (+) and quick Move are hidden |
 
@@ -495,7 +495,7 @@ Three stacked components separated by `<hr class="divider">`. All triggered by `
 
 **Data flow:** CardId → `ICardSearchService.GetCardByIdAsync()` → card name → `GetPrintingsAsync(name)` → all printings sorted by SetCode.
 
-**Parameters:** `CardId (Guid?)`, `OnPrintingSelected(MagicCard)`, `OnPrintingSideChanged((Guid, bool))`.
+**Parameters:** `CardId (Guid?)`, `OnPrintingSelected(Card)`, `OnPrintingSideChanged((Guid, bool))`.
 
 **Display:**
 - Header: "Printings" + count badge.
@@ -512,7 +512,7 @@ Three stacked components separated by `<hr class="divider">`. All triggered by `
 
 **Purpose:** All physical instances of a selected card across all decks/collections/sideboards.
 
-**Data source:** `ICardStore<MagicCardPhysical>` (direct DI).
+**Data source:** `ICardStore<MyCard>` (direct DI).
 
 **Parameters:** `CardId (Guid?)`, `OnDeckSelected(int)`.
 
@@ -524,7 +524,7 @@ Three stacked components separated by `<hr class="divider">`. All triggered by `
 | Ownership | Green "Owned" / Orange "Borrowed" badge |
 | Deck name | Collection node ID |
 | Sideboard tag | "SB" if in sideboard |
-| Properties | Price ($), Special (★), Comment (📝) — shown if present |
+| Properties | Price ($), Comment (📝) — shown if present |
 
 **Summary:** Total copies, Owned, Borrowed, Decks count.
 
@@ -637,7 +637,7 @@ All dialogs are overlay-level. The MainLayout dialogs are managed by state flags
 **Sync phases:**
 0. Resolving — looking up set info
 1. Downloading — fetching card checklist
-2. Mapping — DTO → MagicCard conversion
+2. Mapping — DTO → Card conversion
 3. Images — downloading and caching card images
 4. Saving — batch UPSERT to Cards table
 5. Done — completion report
@@ -658,22 +658,21 @@ All dialogs are overlay-level. The MainLayout dialogs are managed by state flags
 
 **Triggered by:** ✎ button in CardsListControl (deck mode).
 
-**Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MagicCardPhysical?)`, `DeckId (int?)`, `OnSaved(MagicCardPhysical?)`.
+**Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MyCard?)`, `DeckId (int?)`, `OnSaved(MyCard?)`.
 
 **Card preview:** a separate 350×500 window docked to the right of the form (wizard pattern): card image only, name in `alt`. Double-sided cards show the front face (`CardFaces[0]`); the name prefers `PrintedName` over `Name`. The image loads lazily — placeholder until the front file lands on disk (`ICardImageLoader.EnsureAsync`; re-render guarded by `ReferenceEquals`, so a stale download never repaints another card).
 
-**Form fields:**
+**Form fields:** Count is **not editable here** — it is managed by the list's −/+ controls.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| Count | Number | Always saved |
-| Ownership | Select: Owned/Borrowed | Saved only if changed |
-| Price ($) | Float (step 0.01) | Optional, placeholder "0.00" |
+| Ownership | Toggle: Owned/Borrowed | Saved only if changed |
+| Price ($) | Float (step 0.01) | Optional, placeholder "0.00" → `MyPrice` |
 | Comment | Textarea | Optional |
-| Special Tags | Text (comma-separated) | e.g., "foil, premium, forTrade" |
-| For Trade Count | Number (0–count) | Creates trade split if 0 < count < total |
+| Grade | Single-select toggles (M/NM/SP/MP/HP/DMG) | Card condition (`CardGrade?`, persisted in `Deck.Grade`); clicking the active button clears it |
+| For trade | Toggle + count (1–owned) | → `ForTradeCount`; toggle disabled when owned = 0; count > owned → validation error line |
 
-**Save behavior:** Only non-null/non-default values persisted (smart update via `IDeckCardService.UpdateCardAsync`). For-trade: if 0 < fcount < total → `SplitCardAsync`; if fcount ≥ total → adds "fortrade" tag.
+**Save behavior:** Only changed values are persisted — a diff `Dictionary<MagicCardField, object?>` goes to `IDeckCardService.UpdateCardAsync` (smart update). For trade is validated against owned copies (count > owned → error); the value is stored directly in `Deck.ForTradeCount` — no split/tag logic anymore.
 
 ### 6.4 SplitDialog
 
@@ -683,7 +682,7 @@ All dialogs are overlay-level. The MainLayout dialogs are managed by state flags
 
 **Triggered by:** ⫯ button in CardsListControl (deck mode, only visible when count > 1).
 
-**Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MagicCardPhysical?)`, `DeckId (int?)`, `OnSplitDone`.
+**Parameters:** `IsOpen`, `IsOpenChanged`, `Card (MyCard?)`, `DeckId (int?)`, `OnSplitDone`.
 
 **Card preview:** compact block at the top of the dialog — card name + "× N in deck" (no image). The name is resolved exactly like EditMagicCardPhysicalDialog: for double-sided cards the front face's `PrintedName` (fallback `Name`, then base-card values); otherwise base-card `PrintedName ?? Name`.
 
