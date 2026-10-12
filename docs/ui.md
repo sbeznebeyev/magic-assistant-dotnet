@@ -41,12 +41,14 @@
 
 **Prerendering:** disabled in `App.razor` — one shared `InteractiveServerRenderMode(prerender: false)` instance applied to both `HeadOutlet` and `Routes` (mixing prerendered and non-prerendered interactive components in one tree is not allowed). The first HTML response is an empty shell; every component initializes exactly once after the SignalR circuit attaches — no double `OnInitializedAsync`, no duplicate data loading on startup. Intentional: the app is fully interactive (all content arrives from SQLite), so prerendering would only render "Loading" states.
 
+**Layout mode:** MainLayout has two modes, toggled by the `Showcase` / `Management` buttons in the header and persisted in user settings (`MainLayout.Mode`). **Management** — the three-panel grid below; **Showcase** — renders only `CollectorView` full-width (no navigator, no management UI).
+
 MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Header: "⚔ Magic Assistant — Card Organizer"                      │
-│          [Legacy Import] [Update DB]                                │
+│  [Showcase] [Management] ··· [Legacy Import] [Update DB]           │
 ├──────────┬──────────────────────────────────┬───────────────────────┤
 │ LEFT     │         CENTER                   │       RIGHT           │
 │ Panel    │         Panel                    │       Panel           │
@@ -92,17 +94,18 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 |-----------|------|----------|
 | **Layout** | | |
 | MainLayout | `Shared/MainLayout.razor` | Трёхпанельная раскладка, header-действия, рендер диалогов, RenderFragment для deck/KB контента, status bar |
-| TabBar | `Shared/TabBar.razor` | Вкладки: Cards, Mana Curve, Colors, Creatures, Types, Abilities, Info, Legality, Collector |
+| TabBar | `Shared/TabBar.razor` | Вкладки: Cards, Mana Curve, Colors, Creatures, Types, Abilities; Legality — только для deck-узлов (параметр `NodeKind`) |
 | **Left Panel** | | |
 | DecksNavigator | `Components/Views/DecksNavigator.razor` | Дерево навигации, CRUD колод, кнопки Pin/Lock, Import в add-node меню, Export в контекстном меню |
 | DecksNavigatorTreeItem | `Components/Views/DecksNavigatorTreeItem.razor` | Рекурсивный узел дерева (приватный) |
+| AddNodeRow | `Components/Views/AddNodeRow.razor` | Строка «+ add node» (root-level и под раскрытыми папками): меню создания Collection/Deck/Folder + Import |
 | LastActions | `Components/Views/LastActions.razor` | Панель последних операций: очередь (N=3), карточка слева, справа — метка локации над формулой before±N total |
 | **Center Panel — Views** | | |
 | CardsListControl | `Components/Views/CardsListControl.razor` | Единый браузер карт: KB-режим и deck-режим (`FilterViewModel.CurrentCollectionId`). Сайдбар сетов, splitter, toolbar (name filter, view mode, type/rarity, Filters, Move), пагинация |
 | CardListView | `Components/Views/CardListView.razor` | Табличный view: count −/+ / ✎ / ⫯ в deck-режиме, пагинация |
 | CardGalleryView | `Components/Views/CardGalleryView.razor` | Галерея карт с изображениями, lazy loading, page-size stepper (1–150) |
 | CardTreeView | `Components/Views/CardTreeView.razor` | Дерево карт: группировка Color/Type/Set, expand/collapse |
-| CollectorView | `Components/Views/CollectorView.razor` | Трекер прогресса по сетам с прогресс-барами |
+| CollectorView | `Components/Views/CollectorView.razor` | Трекер прогресса по сетам с прогресс-барами; рендерится в Showcase-режиме (не вкладка TabBar) |
 | SearchControl | `Components/Views/SearchControl.razor` | FTS5-поиск (вверху окна CardFilterDialog): ввод → `FilterViewModel.SearchQuery` + `Apply()` |
 | ContextStrip | `Shared/ContextStrip.razor` | Полоса из трёх секций вверху центральной панели: selected (слева) → золотая стрелка SVG (центр) → pinned (справа); «(x/y)» с тултипом через `IDeckCardService.GetDeckCardsAsync`; KB-вариант «KnowledgeBase Cards»; пустой pinned → «? (pin to set)» |
 | **Right Panel** | | |
@@ -115,7 +118,6 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 | CreaturePage | `Components/Analysis/CreaturePage.razor` | Горизонтальные бары подтипов существ |
 | TypePage | `Components/Analysis/TypePage.razor` | Сетка карточек типов с emoji-иконками |
 | AbilityPage | `Components/Analysis/AbilityPage.razor` | Горизонтальные бары keyword abilities |
-| InfoPage | `Components/Analysis/InfoPage.razor` | Stat-карточки, badge'и идентичности, прогресс-бары композиции |
 | DeckLegalityPage | `Components/Analysis/DeckLegalityPage.razor` | Summary banner legality, карточки форматов с expand/collapse |
 | **Dialogs** | | |
 | SyncKnowledgeBase | `Components/Dialogs/SyncKnowledgeBase.razor` | Диалог синхронизации, прогресс-бар, отмена |
@@ -145,9 +147,9 @@ MainLayout (`Shared/MainLayout.razor`) renders a three-panel grid:
 
 **Purpose:** Tree-view navigation of collections and decks.
 
-**Parameters:** `OnDeckSelected(LockableCollection)`, `OnPinToggled(LockableCollection)`, `OnNodeLockToggled((int Id, bool Locked))`, `OnShowAllCards`, `OnNodeDeleted(int)`, `OnImportRequested(int?)`, `OnExportRequested(int)`, `SelectedNodeId(int?)`, `PinnedNodeId(int?)`.
+**Parameters:** `OnDeckSelected(LockableCollection)`, `OnPinToggled(LockableCollection)`, `OnNodeLockToggled((int Id, bool Locked))`, `OnShowAllCards`, `OnNodeDeleted(int)`, `OnImportRequested(int?)`, `OnImportIntoRequested(int)`, `OnExportRequested(int)`, `OnClearRequested(int)`, `OnClearSideboardRequested(int)`, `SelectedNodeId(int?)`, `PinnedNodeId(int?)`.
 
-**States:** Loading / Error + Retry / Empty ("No collections yet." + "Create first deck" button) / Normal (recursive tree).
+**States:** Loading / Error + Retry / Normal (recursive tree; пустое дерево — add-node строка в root-level).
 
 **Key behavior:**
 
@@ -238,6 +240,7 @@ There is no separate Toolbar component. Action buttons live in the app header, r
 
 | Button | Action |
 |--------|--------|
+| `Showcase` / `Management` | Переключение layout-режима MainLayout (§1.1); активный режим подсвечен |
 | `Legacy Import` | Opens OldDeckImportWizard (Gatherer ID + full set names) |
 | `Update DB` | Opens SyncKnowledgeBase |
 
@@ -274,9 +277,9 @@ Visible only when a collection is displayed (`_currentCollectionId != null`). Ta
 | Creatures | `creatures` | CreaturePage |
 | Types | `types` | TypePage |
 | Abilities | `abilities` | AbilityPage |
-| Info | `info` | InfoPage |
-| Legality | `legality` | DeckLegalityPage |
-| Collector | `collector` | CollectorView |
+| Legality | `legality` (only for deck nodes) | DeckLegalityPage |
+
+`NodeKind` (`NodeType?`) determines tab visibility: the Legality tab renders only for deck nodes (format legality does not apply to collection/sideboard/folder). Collector is not a tab — `CollectorView` renders in Showcase mode (§3.8); `InfoPage.razor` exists in the code but is not rendered.
 
 Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` → MainLayout updates `ActiveTab`.
 
@@ -299,7 +302,7 @@ Active tab highlighted with `.active` class. Click → `OnTabSelected(value)` �
 | `OnOpenFilter` | `EventCallback` | Opens CardFilterDialog |
 | `OnOpenSync` | `EventCallback<string>` | Empty state → SyncSelectedSetCards (set code) |
 | `RefreshTrigger` | `int` | External reload trigger (after KB sync, after card move) |
-| `ActionsQueue` | `required LastActionsQueue` | Shared in-memory queue of last card actions — count changes, KB (+) adds and quick moves are recorded here for LastActions |
+| `OnCardOperation` | `EventCallback<CardOperationRecord>` | Card operations (count changes, KB (+) adds, quick moves) are recorded into MainLayout's `LastActionsQueue` for LastActions |
 | `OnEditCard` | `EventCallback<MyCard>` | Deck mode: ✎ → EditMagicCardPhysicalDialog |
 | `OnSplitCard` | `EventCallback<MyCard>` | Deck mode: ⫯ → SplitDialog (count > 1) |
 | `PinnedCollectionId` | `int?` | Pinned operation target (`MainLayout._pinnedCollection.CollectionId`): KB-mode (+) and quick Move act against it |
@@ -418,7 +421,7 @@ Grouped view of cards rendered by CardsListControl in tree mode.
 
 **File:** `Components/Views/CollectorView.razor`
 
-**Purpose:** Track collection progress across sets.
+**Purpose:** Track collection progress across sets. **Rendering:** Showcase layout mode only (MainLayout `LayoutMode.Showcase`, §1.1) — it is not a TabBar tab.
 
 **Data source:** `IDeckAnalysisService.GetCollectorProgressAsync(setTypes)` — single SQL query (direct DI, no HTTP); an active set-type filter adds `WHERE s.SetType IN (...)` to that same query.
 
@@ -590,21 +593,7 @@ Keyword ability frequency analysis from the `AbilityStats` dictionary (known abi
 
 - Horizontal bars sorted by count descending. Each row: ability name + bar + value with percentage of total cards.
 
-### 5.6 InfoPage
-
-**File:** `Components/Analysis/InfoPage.razor`
-
-Comprehensive deck summary dashboard.
-
-**Stat cards:** Total Cards, Total Mana Cost, Max Repeats, Colors (unique count).
-
-**Color identity:** MTG color-coded badges.
-
-**Composition bars:** Lands %, Creatures %, Non-Creatures %.
-
-**Additional info:** Average CMC, Land Percentage, Creature Percentage.
-
-### 5.7 DeckLegalityPage
+### 5.6 DeckLegalityPage
 
 **File:** `Components/Analysis/DeckLegalityPage.razor`
 
@@ -936,6 +925,7 @@ SearchControl → OnSearchCompleted(query) → CardFilterDialog → MainLayout._
 | `LegalityFilter` | `string` | Legality filter |
 | `GameChangerFilter` | `bool` | Game changer flag |
 | `CurrentCollectionId` | `int?` | Set by MainLayout on navigator selection (`OnDeckSelected`) or InstancesView jump; cleared on KB switch (`OnShowKB`) — **switches CardsListControl between KB and deck mode**. Navigation state, not a filter — excluded from `Clear()` |
+| `CurrentCollectionNodeType` | `NodeType?` | The node type of the displayed node; set/cleared together with `CurrentCollectionId` — drives the «All sets of collection/deck/sideboard» label and the location-mode empty-state wording |
 | `SortField` / `SortAsc` | `string` / `bool` | Sortable CardListView column headers (values match `CardListFilter.SortFields`: Name/CmcNumber/Type/SetCode/Rarity) |
 | `ClearGeneration` | `int` | Increments on every `Clear()` — CardsListControl uses it to reset local input buffers after an external Clear All |
 

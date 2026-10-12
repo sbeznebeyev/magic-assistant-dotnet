@@ -87,7 +87,13 @@ DeckAnalysis           → IAnalysisService (существующий серви
 ```
 MagicAssistant.slnx (net10.0)
 ├── MagicAssistant.App              ← ASP.NET Core, DI, Blazor Server UI (net10.0)
-│   └── Blazor-компоненты вызывают вертикальные сервисы из MagicAssistant.Core напрямую через DI
+│   ├── App.razor / Routes.razor    ← root: один общий InteractiveServerRenderMode(prerender: false)
+│   ├── Program.cs                  ← DI, SignalR circuit, `InitializeDb.EnsureCreatedAsync`
+│   ├── Controllers/                ← ImagesController: `GET /api/images/{set}/{lang}/front|back/{uid}.png` + иконки сетов (`/api/images/sets/{setCode}.svg`)
+│   ├── Services/                   ← CardImageLoader (ленивая загрузка картинок), KbRefreshService
+│   ├── Shared/                     ← MainLayout, TabBar, ContextStrip, FilterViewModel, FilteredCardSetsCollection, LastActionsQueue/LastActionItem (+ CardOperationRecord), LockableCollection, FilterInputSanitizer, MultiSelectViewModel/Item
+│   └── Components/                 ← Pages/, Views/, Dialogs/, Wizards/, Analysis/, Controls/, Shared/
+│       └── Blazor-компоненты вызывают вертикальные сервисы из MagicAssistant.Core напрямую через DI
 │
 ├── MagicAssistant.Core             ← Бизнес-логика (net10.0)
 │   ├── Services/                   ← Вертикальные срезы (доменные сервисы)
@@ -130,7 +136,7 @@ MagicAssistant.slnx (net10.0)
 │   │   ├── GetCardInstancesQuery.cs         ← физические экземпляры карты
 │   │   ├── GetCardSetQuery.cs               ← метаданные сета
 │   │   ├── GetDeckAnalysisQuery.cs          ← анализ колоды
-│   │   ├── GetCollectorProgressQuery.cs     ← прогресс коллекционера по сетам (Total из CardSet.CardCount, Collected/Owned — distinct CollectorNumber)
+│   │   ├── GetSetSyncStatusByCodesQuery.cs  ← статус синка по кодам сетов одним батч-SQL — pre-check native JSON импорта (файл несёт коды; код с CardCount == 0 требует синка)
 │   │   ├── GetUserSettingQuery.cs           ← чтение пользовательских настроек
 │   │   ├── GetSetSyncStatusQuery.cs         ← статус синка полных имён сетов одним SQL (в CardSet? сколько карт?)
 │   │   ├── ResolveLegacyCardsQuery.cs       ← батч-резолв legacy-карт: стрип face-суффикса, name→code, (name,set)→UUID по всем полям имени (Name/PrintedName + CardFaces); {Resolved, Unresolved}
@@ -151,24 +157,43 @@ MagicAssistant.slnx (net10.0)
 │   └── SyncSetState.cs             ← Thread-safe прогресс-трекер синхронизации
 │
 ├── MagicAssistant.Data             ← Контракты доступа к локальным данным + Model (net10.0)
+│   ├── Caches/                     ← CardSetsCache, AllCardSetsCache (singleton-кэши метаданных сетов, наследники MemoryCache)
 │   ├── Contracts/                  ← интерфейсы хранилищ + иерархия карт (ICardSimple → ICard → ICardModifiable → IMyCard)
-│   │   └── ICardStore.cs           ← ICardStore<T>, IDbCardStore, ICollectionStore
+│   │   ├── ICardStore.cs           ← ICardStore<T>, IDbCardStore, ICollectionStore
+│   │   ├── IUserSettingsStore.cs   ← UserSettings key/value
+│   │   └── ISearchableProperty.cs  ← контракт групповой фильтрации
+│   ├── Extensions/                 ← extension-методы (CardType/Format/Rarity/MagicCardField)
 │   └── Model/                      ← доменные модели
-│       ├── Enums/                  ← Rarity, CardType, Layout, LanguageCode
+│       ├── Enums/                  ← RarityEnum, CardTypeEnum, LayoutEnum, LanguageCodeEnum
 │       ├── Legality/               ← Format, LegalityMap
 │       ├── Card.cs                 ← Базовая карта из БД (реализует ICard)
 │       ├── MyCard.cs               ← Физический экземпляр карты (ссылка на базовую Card)
+│       ├── CardFace.cs             ← Лицо многогранной карты (таблица CardFaces)
+│       ├── RelatedCard.cs          ← Часть составной карты (таблица CardAllParts)
+│       ├── CardGrade.cs            ← Состояние карты (M/NM/SP/MP/HP/DMG)
 │       ├── MagicCardField.cs       ← Enum + extension методы для полей
+│       ├── ColorBitFlags.cs        ← Битовые флаги цветов (C/W/U/B/R/G + MULTI/MONO/HYBRID)
+│       ├── ColorFilter.cs          ← Цветовой фильтр: SQL-маски, DFC-поддержка
 │       ├── CardSet.cs              ← Сет/издание (STH, M19)
+│       ├── CardSetType.cs / CardSetTypes.cs ← Тип сета + статический список
 │       ├── Collection.cs           ← Узел дерева коллекции (deck/sideboard/collection/folder)
 │       ├── CardGroup.cs            ← Группа карт
-│       └── ColorTypes.cs           ← Статический класс цветов
+│       ├── ColorTypes.cs           ← Статический класс цветов
+│       ├── CardListFilter.cs       ← Фильтр серверной пагинации (CardListResult)
+│       ├── ImageUris.cs            ← Scryfall image URIs карты
+│       ├── SetSyncStatus.cs        ← Статус синка сета (в CardSet? сколько карт?)
+│       ├── SetProgressDetails.cs / CollectorProgressRaw.cs ← Данные прогресса коллекционера
+│       ├── NavigatorNodes/         ← NavigatorNodeBase/Folder/Collection/Deck/Sideboard + NodeType
+│       └── SearchableProperties/   ← ISearchableProperty: ColorTypesSearch, Rarity, Locations, Editions
 │
 ├── MagicAssistant.Data.Db          ← Инфраструктурный слой: SQLite + Dapper (net10.0)
 │   ├── InitializeDb.cs             ← Статический метод создания всех таблиц и индексов
 │   ├── SqliteCardStore.cs          ← Реализация IDbCardStore (База знаний карт)
-│   └── SqliteCollectionStore.cs    ← Реализация ICollectionStore + ICardStore<MyCard>
-│                                   ← JOIN-запросы к Cards для подтягивания полной информации
+│   ├── SqliteCollectionStore.cs    ← Реализация ICollectionStore + ICardStore<MyCard>
+│   │                                   ← JOIN-запросы к Cards для подтягивания полной информации
+│   ├── SqliteUserSettingsStore.cs  ← Реализация IUserSettingsStore (таблица UserSettings)
+│   ├── SqliteGuidHandler.cs        ← Dapper-обработчик Guid (само-регистрация)
+│   └── Migrations/README.md        ← Ручные SQL-миграции (скрипты: корневая Migrations/)
 │
 ├── MagicAssistant.Data.IO          ← Экспорт/импорт форматов (net10.0)
 │   ├── CardCollectionImportResult.cs ← Общий результат парсинга (XML и JSON)
@@ -183,8 +208,11 @@ MagicAssistant.slnx (net10.0)
 │   ├── Dtos/                       ← ScryfallCardDto, ScryfallSetDto, и т.д.
 │   └── JsonConverters.cs           ← Кастомные JSON-конвертеры
 │
-└── MagicAssistant.Http.Scryfall    ← Реализация контрактов под Scryfall API (net10.0)
-    └── ScryfallClient.cs           ← HTTP-клиент для Scryfall API
+├── MagicAssistant.Http.Scryfall    ← Реализация контрактов под Scryfall API (net10.0)
+│   └── ScryfallClient.cs           ← HTTP-клиент для Scryfall API
+│
+├── MagicAssistant.Tests            ← Тесты (NUnit): Core, Data.Db, Data.IO, Http, Analysis, UI
+└── Migrations/                     ← Ручные SQL-скрипты для cards.db (001, 002; порядок по номерам; см. Data.Db/Migrations/README.md)
 ```
 
 ## Зависимости между проектами
@@ -258,6 +286,11 @@ MagicAssistant.Http (контракты + DTOs)
 - `idx_deck_cardid` — `Deck(CardId)` — поиск экземпляров карты
 - `idx_cardfaces_cardid` — `CardFaces(CardId)` — лица карт
 - `idx_cardallparts_cardid` — `CardAllParts(CardId)` — части карт
+- `idx_cards_colorbits` — `Cards(ColorBits)` — цветовые фильтры
+- `idx_cards_identitybits` — `Cards(IdentityBits)` — фильтры по identity
+- `idx_cards_powernumber` — `Cards(PowerNumber)` — P/T/CMC-фильтры
+- `idx_cards_toughnessnumber` — `Cards(ToughnessNumber)` — P/T/CMC-фильтры
+- `idx_cards_cmcnumber` — `Cards(CmcNumber)` — P/T/CMC-фильтры
 
 ### Инициализация
 
@@ -435,7 +468,8 @@ UI не требует заранее скачанных картинок: ес�
 | `GetCardInstancesQuery` | Физические экземпляры карты по всем коллекциям |
 | `GetCardSetQuery` | Метаданные сета (полное имя, дата релиза) |
 | `GetDeckAnalysisQuery` | Однопроходный анализ колоды через `IAnalysisService` |
-| `GetCollectorProgressQuery` | Прогресс коллекционера по сетам (Total — `CardSet.CardCount`; Collected/Owned — distinct `CollectorNumber`, языковые дубли схлопнуты) |
+| `GetSetSyncStatusByCodesQuery` | Статус синка кодов сетов одним батч-SQL (в CardSet? сколько карт в Cards) — pre-check native JSON импорта: файл несёт коды сетов, код с CardCount == 0 требует синка из Scryfall |
+| (collector progress) | Прогресс коллекционера — не CQRS-запрос, а `IDeckAnalysisService.GetCollectorProgressAsync(setTypes)`: один SQL (Total — `CardSet.CardCount`; Collected/Owned — distinct `CollectorNumber`, языковые дубли схлопнуты; активный фильтр типов сетов добавляет `WHERE s.SetType IN (...)`) |
 | `GetUserSettingQuery` | Чтение пользовательских настроек (UI-параметры) |
 | `GetSetSyncStatusQuery` | Статус синка полных имён сетов одним SQL: в CardSet? сколько карт в Cards — детект «сет без карт» для legacy-предпроверки |
 | `ResolveLegacyCardsQuery` | Батч-резолв legacy-карт (read-only): стрип `(Face)` после `//`, имена сетов → коды, (Name, Set) → Scryfall UUID — точное совпадение по всем полям имени (Cards/CardsFaces: Name + PrintedName), локальные имена работают; результат {Resolved: physicals с реальными ID, Unresolved: строки для ручного сопоставления} |
@@ -495,7 +529,7 @@ UI не требует заранее скачанных картинок: ес�
 
 **Scoped:**
 
-- Все Command/Query handlers: `AddCardsToDeckCommandHandler`, `GetDeckCardsQueryHandler`, `SearchCardsQueryHandler`, `HasCardsQueryHandler`, `SyncKBCommandHandler`, `GetScryfallAvailableSetsQueryHandler`, `GetSyncProgressQueryHandler`, `GetSetSyncStatusQueryHandler`, `ResolveLegacyCardsQueryHandler`, `ValidateCardIdsQueryHandler`, `ImportResolvedCardsCommandHandler`, `RemoveCardsFromDeckCommandHandler`, `MoveCardsCommandHandler`, `UpdateCardCommandHandler`, `CreateNodeCommandHandler`, `DeleteNodeCommandHandler`, `RenameNodeCommandHandler`, `LockNodeCommandHandler`, `UnlockNodeCommandHandler`, `GetDeckAnalysisQueryHandler`, `GetNodesTreeQueryHandler`, `GetNodeByIdQueryHandler`, `GetNodesBranchQueryHandler`, `GetCardByIdQueryHandler`, `GetCardPrintingsQueryHandler`, `GetCardLanguagesQueryHandler`, `GetCardInstancesQueryHandler`, `GetKBAvailableSetsQueryHandler`, `GetCardSetQueryHandler`, `SyncCardSetsCommandHandler`, `GetCollectorProgressQueryHandler`, `SaveUserSettingCommandHandler`, `GetUserSettingQueryHandler`
+- Все Command/Query handlers: `AddCardsToDeckCommandHandler`, `GetDeckCardsQueryHandler`, `SearchCardsQueryHandler`, `HasCardsQueryHandler`, `SyncKBCommandHandler`, `GetScryfallAvailableSetsQueryHandler`, `GetSyncProgressQueryHandler`, `GetSetSyncStatusQueryHandler`, `GetSetSyncStatusByCodesQueryHandler`, `DownloadCardImagesCommandHandler`, `ResolveLegacyCardsQueryHandler`, `ValidateCardIdsQueryHandler`, `ImportResolvedCardsCommandHandler`, `RemoveCardsFromDeckCommandHandler`, `MoveCardsCommandHandler`, `UpdateCardCommandHandler`, `CreateNodeCommandHandler`, `DeleteNodeCommandHandler`, `RenameNodeCommandHandler`, `LockNodeCommandHandler`, `UnlockNodeCommandHandler`, `GetDeckAnalysisQueryHandler`, `GetNodesTreeQueryHandler`, `GetNodeByIdQueryHandler`, `GetNodesBranchQueryHandler`, `GetCardByIdQueryHandler`, `GetCardPrintingsQueryHandler`, `GetCardLanguagesQueryHandler`, `GetCardInstancesQueryHandler`, `GetKBAvailableSetsQueryHandler`, `GetCardSetQueryHandler`, `SyncCardSetsCommandHandler`, `SaveUserSettingCommandHandler`, `GetUserSettingQueryHandler`
 - Вертикальные сервисы: `IDeckManagementService`, `IDeckCardService`, `ICardResolveService`, `IKnowledgeBaseSyncService`, `IDeckImportExportService`, `ICardSearchService`, `IDeckAnalysisService`
 - `KbRefreshService` — подписка/уведомление UI о завершении синхронизации БЗ
 
@@ -503,6 +537,8 @@ UI не требует заранее скачанных картинок: ес�
 
 ### MainLayout.razor
 Трёхпанельная раскладка (левая — навигатор, центральная — контент с табами, правая — описание карты + печати + экземпляры).
+
+Layout-режим: `LayoutMode.Management` (трёхпанельная раскладка) / `LayoutMode.Showcase` (только CollectorView, без management UI); переключение — кнопки Showcase/Management в хедере, персистится в user settings (`MainLayout.Mode`).
 
 Вверху центральной панели — `ContextStrip` (`Shared/ContextStrip.razor`): полоса из трёх секций — слева selected, в центре золотая стрелка SVG 24×24 (указывает вправо), справа pinned. Selected всегда заполнен: selected-коллекция либо KB-вариант «KnowledgeBase Cards» без статистики. Pinned — только deck/collection/sideboard; пусто → «? (pin to set)» жирным серым 24px. Названия — жирные золотые 24px, прижаты к центру (у selected вправо, у pinned влево), так что в центре склеиваются «Selected Name → Pinned Name»; статистика «(x/y)» с тултипом «unique: x, total: y» разнесена по внешним краям (у selected влево, у pinned вправо). Статистика: `IDeckCardService.GetDeckCardsAsync(collectionId)` (unique = число уникальных карт, total = сумма копий); перечитывается при смене контекстов и по `_stripRefresh++` (`RecordLastActionAsync` — +/−, KB-добавление, Move; `OnEditCardSaved`; `OnSplitDone`; `OnImportCompleted`; `OnLegacyImportCompleted`). SearchControl вынесен из центральной панели в верх окна CardFilterDialog.
 
@@ -563,6 +599,7 @@ Content area (`@key="_currentCollectionId"`): deck-режим — TabBar (Cards 
 | `HasForTrade` | `bool` | Collection-фильтр: только карты с `Deck.ForTradeCount > 0`. Только deck-режим |
 | `HasComment` | `bool` | Collection-фильтр: только карты с непустым `Deck.Comment`. Только deck-режим |
 | `CurrentCollectionId` | `int?` | ID отображаемого узла навигации (колода/коллекция/sideboard). Навигационное состояние, не фильтр — исключён из `Clear()`. Устанавливается MainLayout при выборе в навигаторе / прыжке из InstancesView, сбрасывается при переходе в KB. Переключает CardsListControl между KB- и deck-режимами |
+| `CurrentCollectionNodeType` | `NodeType?` | Тип отображаемого узла; устанавливается/сбрасывается вместе с `CurrentCollectionId` — ведёт label «All sets of collection/deck/sideboard» и wording пустого состояния location-режима |
 | `SortField` | `string` | Поле сортировки: Name/CmcNumber/Type/SetCode/Rarity (совпадает с `CardListFilter.SortFields`) |
 | `SortAsc` | `bool` | Направление сортировки |
 | `ClearGeneration` | `int` | Инкрементируется при каждом `Clear()` — подписчики по нему детектят внешний сброс и синхронизируют локальные вводы (debounce-буфер имени, поиск по сетам) |
@@ -804,7 +841,7 @@ IAnalysisService
 - **Контракты** — иерархия ICardSimple → ICard → ICardModifiable → IMyCard, ICardStore<T>, IDbCardStore (HasCardsForSetAsync, GetCardsByIdsAsync, GetPagedAsync), ICollectionStore (CreateCollectionAsync, CreateFolderAsync, LockAsync, UnlockAsync, GetCardCountsAsync), IScrayfallClient
 - **Фильтры и выражения** — AST: Expr → BinaryExpr/NotExpr/CardFieldExpr/TextValue, MagicCardFilter с сортировкой/группировкой, SearchStringTokenizer, Abilities (regex), ISearchableProperty
 - **Агрегаторы** — `IAnalysisService` однопроходный анализ: mana curve, colors, types, creatures, abilities, basic stats. Analysis Blazor-компоненты.
-- **Коллекционер** — `GetCollectorProgressQuery`
+- **Коллекционер** — `IDeckAnalysisService.GetCollectorProgressAsync(setTypes)` (один SQL, фильтр типов сетов)
 - **Единая БД `cards.db`** — таблицы (Cards, CardsFts, CardSet, Collection, Deck, UserSettings, CardFaces, CardsImageUris, CardFacesImageUris) + CardAllParts, FTS5 триггеры, индексы, FK с ON DELETE CASCADE
 - **SqliteCardStore** — CRUD, транзакции, FTS5-поиск, ConcurrentDictionary кэш, batch-запрос GetCardsByIdsAsync
 - **SqliteCollectionStore** — SQLite + Dapper, ON CONFLICT merge, JOIN-запросы к Cards
@@ -814,7 +851,7 @@ IAnalysisService
 - **SyncCardSetsCommand** — синхронизация списка сетов Scryfall в БД (флаг FullUpdate); вызывается из диалога SyncKnowledgeBase
 - **Импорт/экспорт** — нативный JSON (JsonImport/JsonExport из Data.IO); legacy XML-импорт — XmlImport (OldDeckImportWizard)
 - **Все Commands**: CreateNode, CreateDeck, CreateCollection, CreateFolder, DeleteNode, RenameNode, LockNode, UnlockNode, AddCards, RemoveCards, MoveCards, UpdateCard, SyncKB, SyncCardSets, ImportResolvedCards, SaveUserSetting
-- **Все Queries**: SearchCards, GetDeckCards, GetScryfallAvailableSets, GetKBAvailableSets, HasCards, GetSyncProgress, GetNodesTree, GetNodeById, GetNodesBranch, GetCardById, GetCardPrintings, GetCardLanguages, GetCardInstances, GetCardSet, GetDeckAnalysis, GetCollectorProgress, GetUserSetting, GetSetSyncStatus, ResolveLegacyCards, ValidateCardIds
+- **Все Queries**: SearchCards, GetDeckCards, GetScryfallAvailableSets, GetKBAvailableSets, HasCards, GetSyncProgress, GetNodesTree, GetNodeById, GetNodesBranch, GetCardById, GetCardPrintings, GetCardLanguages, GetCardInstances, GetCardSet, GetDeckAnalysis, GetUserSetting, GetSetSyncStatus, GetSetSyncStatusByCodes, ResolveLegacyCards, ValidateCardIds
 - **Инвариант импорта**: новый узел (колода/коллекция) никогда не создаётся до полного резолва всех карт. Коммит — только после 100% резолва (+ ручного сопоставления нераспознанных); new-режим атомарен (`CreateDeckWithCardsAsync`, одна транзакция). Оркестрация интерактива — в `DeckImportExportService` (доменный модуль всех действий с импортом), бизнес-логика — в атомарных командах/запросах
 - **MainLayout** — 3 панели, header-действия, TabBar, рендер диалогов (закрытие — только ✕/Cancel + Escape, клик по оверлею не закрывает), status bar; CardsListControl — единый браузер карт для KB- и deck-режимов
 - **SyncKnowledgeBase.razor** — рабочий компонент синхронизации
