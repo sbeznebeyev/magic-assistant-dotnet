@@ -69,24 +69,29 @@
                 <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-deck-ico")"></span>
 
                 <span class="tree-label">@Node.Name</span>
-                @if (Node.CardCount > 0)
+                @* Combined count: deck copies, with /sideboard appended when the SB is not empty. *@
+                @{
+                    var sbCount = deck.Sideboard?.CardCount ?? 0;
+                }
+                @if (Node.CardCount > 0 || sbCount > 0)
                 {
-                    <span class="tree-count">@(Node.CardCount)</span>
+                    <span class="tree-count">@(sbCount > 0 ? $"{Node.CardCount}/{sbCount}" : $"{Node.CardCount}")</span>
                 }
 
                 <span class="tree-actions">
                     @if (deck.Sideboard != null)
                     {
                         var sideboard = deck.Sideboard;
-                        <button class="tree-sb-btn @(SelectedId == sideboard.Id ? "selected" : "") @(SbShowMarker(sideboard) ? "has-marker" : "")" @onclick:stopPropagation="true"
+                        @* pin/lock dot stands outside the capsule, to its left — same click as the button itself *@
+                        @if (SbShowMarker(sideboard))
+                        {
+                            <span class="tree-sb-marker @SbMarkerClass(sideboard)" @onclick:stopPropagation="true"
+                                  @onclick="() => OnSideboardClick(sideboard)"
+                                  title="Sideboard @(sideboard.CardCount) cards"></span>
+                        }
+                        <button class="tree-sb-btn @(SelectedId == sideboard.Id ? "selected" : "")" @onclick:stopPropagation="true"
                                 @onclick="() => OnSideboardClick(sideboard)"
-                                title="Sideboard @(sideboard.CardCount) cards">
-                            @if (SbShowMarker(sideboard))
-                            {
-                                <span class="node-marker @SbMarkerClass(sideboard)"></span>
-                            }
-                            SB@(sideboard.CardCount > 0 ? " " + sideboard.CardCount : "")
-                        </button>
+                                title="Sideboard @(sideboard.CardCount) cards">SB</button>
                     }
                     <button class="tree-more-btn" @onclick:stopPropagation="true"
                             @onclick="OnMoreClick" title="Options">⋯</button>
@@ -143,7 +148,7 @@
 
     // ── State marker: 10px dot with black rim — red = locked, green = pinned (locked wins).
     // Deck/collection rows: the dot replaces the type icon in the 24px slot; folder rows: it stands alone;
-    // SB button: it sits in an 8px left gutter (.node-marker). ──
+    // SB button: the dot stands outside the capsule, to its left (.tree-sb-marker). ──
     private bool ShowMarker => Node.Locked || PinnedId == Node.Id;
     private string NodeMarkerClass => Node.Locked ? "marker-locked" : "marker-pinned";
 

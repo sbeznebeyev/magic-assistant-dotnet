@@ -44,7 +44,7 @@
 
 /* ── State marker — 10px dot with black rim. On node rows the picture class is
    swapped for .node-dot: no image at all, the dot centers in the 24px slot.
-   On the SB button an inner .node-marker keeps the left gutter.
+   For the SB button the dot stands outside the capsule, to its left (.tree-sb-marker).
    Rendered only when locked or pinned; sizes adjustable after visual tuning. */
 .deck-nav-ico.node-dot {
     position: relative;
@@ -71,32 +71,22 @@
     background: #4caf50;
 }
 
-.node-marker {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 8px;
-}
-
-.node-marker::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
+/* SB state dot — a flex sibling standing just left of the capsule; same click as the button. */
+.tree-sb-marker {
+    flex-shrink: 0;
     width: 10px;
     height: 10px;
     border-radius: 50%;
     border: 1px solid #000;
     box-sizing: border-box;
+    cursor: pointer;
 }
 
-.node-marker.marker-locked::after {
+.tree-sb-marker.marker-locked {
     background: #ff4d4d;
 }
 
-.node-marker.marker-pinned::after {
+.tree-sb-marker.marker-pinned {
     background: #4caf50;
 }
 
@@ -156,19 +146,14 @@
 .tree-sb-btn {
     flex-shrink: 0;
     background: transparent;
-    border: 2px solid #666;
+    border: 1px solid #666;
     color: #888;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    /* permanent 10px left inset — same text gutter as tree labels, room for the marker dot */
-    padding: 2px 6px 2px 10px;
-    border-radius: 10px;
+    padding: 1px 5px;
+    border-radius: 8px; /* capsule at the reduced height */
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.tree-sb-btn.has-marker {
-    position: relative;
 }
 
 .tree-sb-btn:hover {
