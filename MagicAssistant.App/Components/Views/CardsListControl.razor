@@ -12,6 +12,7 @@
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
 @inject HasCardsQueryHandler? HasCardsHandler
+@inject GetSideboardPresenceQueryHandler? SideboardPresenceHandler
 @inject IJSRuntime JS
 
 <div class="kb-browser">
@@ -186,6 +187,7 @@
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
                                   PinnedCounts="_pinnedCountByCardId"
+                                  SbPresence="_sbPresenceByCardId"
                                   OnKbAddRequested="AddCardToPinned"
                                   OnKbRemoveRequested="RemoveCardFromPinned"
                                   SelectedCardId="@_selectedCardId"
@@ -256,6 +258,9 @@
     /// <summary>Total copies of each displayed card in the pinned collection (KB mode with a pinned target only —
     /// deck mode shows the current deck's count in the Total column instead). Null otherwise.</summary>
     private Dictionary<Guid, int>? _pinnedCountByCardId;
+
+    /// <summary>Deck view only: CardId → the deck's sideboard holds ≥1 copy. Null = SB badges hidden.</summary>
+    private Dictionary<Guid, bool>? _sbPresenceByCardId;
     private int? _previousPinnedCollectionId;
     private int _totalCount;
     private int _currentPage = 1;
@@ -891,12 +896,20 @@
             _pinnedCountByCardId = FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue
                 ? await LoadPinnedCountsAsync(_displayCards)
                 : null;
+
+            // Deck view: read-only SB badges — one bulk query for the whole page answers which
+            // displayed cards also sit in the sideboard. Sideboard/collection/KB views: no badges.
+            _sbPresenceByCardId = FilterViewModel.CurrentCollectionId is { } deckId
+                                  && FilterViewModel.CurrentCollectionNodeType == NodeType.Deck
+                ? await LoadSideboardPresenceAsync(deckId)
+                : null;
         }
         catch
         {
             _displayCards = new List<Card>();
             _totalCount = 0;
             _totalPages = 0;
+            _sbPresenceByCardId = null;
         }
         finally
         {
@@ -983,6 +996,17 @@
     }
 
     /// <summary>One grouped query over Deck: total copies of each displayed card in the pinned collection.</summary>
+    /// <summary>Deck view: which of the displayed cards have ≥1 copy in the deck's sideboard.
+    /// One GetSideboardPresenceQuery per page — no per-row round-trips.</summary>
+    private async Task<Dictionary<Guid, bool>?> LoadSideboardPresenceAsync(int deckId)
+    {
+        if (SideboardPresenceHandler is null || _displayCards.Count == 0)
+            return null;
+
+        return await SideboardPresenceHandler.Handle(
+            new GetSideboardPresenceQuery(deckId, _displayCards.Select(c => c.Id).ToList()));
+    }
+
     private async Task<Dictionary<Guid, int>> LoadPinnedCountsAsync(List<Card> cards)
     {
         if (cards.Count == 0 || PinnedCollectionId is null)

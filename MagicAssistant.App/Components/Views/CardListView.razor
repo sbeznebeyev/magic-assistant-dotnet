@@ -94,13 +94,20 @@
                         }
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
+                            @* Read-only sideboard-presence capsule (deck view only): rendered only
+                               on rows whose card has ≥1 copy in the sideboard — off badges are not
+                               placed at all, so their space collapses. *@
+                            @if (SbPresence?.GetValueOrDefault(card.Id) == true)
+                            {
+                                <span class="sb-badge" title="Copies in the sideboard">SB</span>
+                            }
                             @if (physical != null && !Locked)
                             {
                                 <button class="edit-btn" @onclick:stopPropagation="true"
                                         @onclick="() => EditCard(physical)" title="Edit card">✎</button>
                                 @* Always available — even a single copy can move deck↔sideboard as a whole. *@
                                 <button class="split-btn" @onclick:stopPropagation="true"
-                                        @onclick="() => SplitCard(physical)" title="Split pile">✂</button>
+                                        @onclick="() => SplitCard(physical)" title="Split pile">⇄</button>
                             }
                         </td>
                         <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
@@ -169,6 +176,10 @@
     /// pinned target only — in deck mode the Total column shows the current deck's count instead).
     /// Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
     [Parameter] public Dictionary<Guid, int>? PinnedCounts { get; set; }
+
+    /// <summary>Deck view only: CardId → the deck's sideboard holds ≥1 copy of the card (one bulk
+    /// query per page). Null = the read-only SB capsule is hidden (KB/sideboard/collection view).</summary>
+    [Parameter] public Dictionary<Guid, bool>? SbPresence { get; set; }
 
     /// <summary>The displayed collection is locked — −/+ and ✎/✂ are hidden, count shown read-only.</summary>
     [Parameter] public bool Locked { get; set; }
