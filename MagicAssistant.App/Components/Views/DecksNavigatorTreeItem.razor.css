@@ -120,15 +120,17 @@
 
 .tree-more-btn {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    /* slimmed to match the reduced SB capsule — same 1px rim, 18px circle;
+       bottom padding lifts the ⋯ dots to the circle's visual center */
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    border: 2px solid #666;
+    border: 1px solid #666;
     background: transparent;
     color: #888;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1;
-    padding: 0;
+    padding: 0 0 2px 0;
     cursor: pointer;
     display: flex;
     align-items: center;
