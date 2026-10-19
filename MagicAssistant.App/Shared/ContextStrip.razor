@@ -6,10 +6,16 @@
                right toward the arrow.
       middle — gold arrow pointing right (inline SVG, 24×24).
       right  — pinned collection (deck/collection/sideboard only); name pushed left toward the
-               arrow, stats "(x/y)" pushed to the outer right edge. Nothing pinned →
-               "? (pin to set)" in bold gray.
-    Names are large gold bold; stats show "(x/y)" with a "unique: x, total: y" tooltip.
+               arrow, stats "(x/y)" pushed to the outer right edge. Nothing pinned → an
+               italic hint framed by gold dashes: "pin collection/deck/sideboard to set
+               destination".
+    Velvet base (demo variant 3): burgundy velvet panel, cream names, dusty-rose stats.
+    Names are 14px — 2px over the pill's 12px to even out the all-caps size illusion —
+    and start with a capital letter; stats show "(x/y)" with a "unique: x, total: y" tooltip.
+    A sideboard on either side shows its deck's name plus a gold "Sideboard" pill (the
+    CreaturePage badge design) in place of the " (sb)" name suffix.
 *@
+@using MagicAssistant.Data.Model.NavigatorNodes
 @inject IDeckCardService DeckCardService
 
 <div class="context-strip">
@@ -18,7 +24,12 @@
         @if (SelectedCollection.CollectionId.HasValue)
         {
             <span class="context-stats" title="unique: @_selectedUnique, total: @_selectedTotal">(@_selectedUnique/@_selectedTotal)</span>
-            <span class="context-name" title="@SelectedCollection.Name">@SelectedCollection.Name</span>
+            <span class="context-name" title="@SelectedCollection.Name">@DisplayNameOf(SelectedCollection)</span>
+            @* Sideboard view: deck name + pill badge instead of the " (sb)" name suffix. *@
+            @if (IsSideboard(SelectedCollection))
+            {
+                <span class="sideboard-badge">Sideboard</span>
+            }
         }
         else
         {
@@ -39,12 +50,16 @@
     <div class="context-half context-pinned">
         @if (PinnedCollection.CollectionId.HasValue)
         {
-            <span class="context-name" title="@PinnedCollection.Name">@PinnedCollection.Name</span>
+            <span class="context-name" title="@PinnedCollection.Name">@DisplayNameOf(PinnedCollection)</span>
+            @if (IsSideboard(PinnedCollection))
+            {
+                <span class="sideboard-badge">Sideboard</span>
+            }
             <span class="context-stats" title="unique: @_pinnedUnique, total: @_pinnedTotal">(@_pinnedUnique/@_pinnedTotal)</span>
         }
         else
         {
-            <span class="context-name context-placeholder">? (pin to set)</span>
+            <span class="context-hint">pin collection/deck/sideboard to set destination</span>
         }
     </div>
 </div>
@@ -58,6 +73,21 @@
 
     /// <summary>Bumped by MainLayout whenever card counts in either context may have changed.</summary>
     [Parameter] public int RefreshTrigger { get; set; }
+
+    /// <summary>Sideboard nodes carry "deckName (sb)" — the store keeps this suffix through
+    /// create, rename and import (SqliteCollectionStore). The strip shows the deck name plus
+    /// a badge instead; a directly renamed sideboard keeps its custom name and just gains the badge.</summary>
+    private static bool IsSideboard(LockableCollection c) => c.NodeType == NodeType.Sideboard;
+
+    /// <summary>Deck/collection/sideboard display name: the " (sb)" suffix is replaced by the
+    /// pill, and the first letter is capitalized for display (the stored name is untouched).</summary>
+    private static string DisplayNameOf(LockableCollection c)
+    {
+        var name = c.Name ?? string.Empty;
+        if (IsSideboard(c) && name.EndsWith(" (sb)", StringComparison.Ordinal))
+            name = name[..^" (sb)".Length];
+        return name.Length > 0 ? char.ToUpper(name[0]) + name[1..] : name;
+    }
 
     private int _pinnedUnique;
     private int _pinnedTotal;
