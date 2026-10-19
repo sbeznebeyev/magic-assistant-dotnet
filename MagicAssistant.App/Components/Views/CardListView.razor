@@ -4,6 +4,7 @@
    loading, filtering, pagination state and selection. *@
 @using System.Text
 @using MagicAssistant.App.Components.Shared
+@using MagicAssistant.Data.Model.NavigatorNodes
 
 <div class="card-list-view">
     <div class="table-wrapper">
@@ -105,9 +106,14 @@
                             {
                                 <button class="edit-btn" @onclick:stopPropagation="true"
                                         @onclick="() => EditCard(physical)" title="Edit card">✎</button>
-                                @* Always available — even a single copy can move deck↔sideboard as a whole. *@
-                                <button class="split-btn" @onclick:stopPropagation="true"
-                                        @onclick="() => SplitCard(physical)" title="Split pile">⇄</button>
+                                @* ⇄ Move — visibility and tooltip follow the Move rules table (MoveButtonVisible);
+                                   valid pinned target → MoveDialog, otherwise deck↔sideboard pile move (SplitDialog). *@
+                                @if (MoveButtonVisible)
+                                {
+                                    <button class="move-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => MoveCard(physical)"
+                                            title="@MoveTooltip">⇄</button>
+                                }
                             }
                         </td>
                         <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
@@ -181,6 +187,22 @@
     /// query per page). Null = the read-only SB capsule is hidden (KB/sideboard/collection view).</summary>
     [Parameter] public Dictionary<Guid, bool>? SbPresence { get; set; }
 
+    /// <summary>Node type of the viewed location — drives ⇄ per the Move rules table: a Collection needs a
+    /// pinned target to show the button at all; Deck/Sideboard without one fall back to the pile move
+    /// (SplitDialog). Null (KB/unknown) — button hidden.</summary>
+    [Parameter] public NodeType? ViewNodeKind { get; set; }
+
+    /// <summary>The viewed node IS the pinned node — rule 0: the ⇄ button is hidden entirely.</summary>
+    [Parameter] public bool SelectedIsPinned { get; set; }
+
+    /// <summary>Display label of the pinned move target — "Name", or "&lt;deck&gt; (sideboard)" for a pinned
+    /// sideboard. Null = no valid target (nothing pinned / pinned is the viewed node) — button hidden.</summary>
+    [Parameter] public string? PinnedMoveLabel { get; set; }
+
+    /// <summary>Move requested with a valid pinned target (any location mode) — move part of a card
+    /// pile to the pinned node (MoveDialog).</summary>
+    [Parameter] public EventCallback<MyCard> OnMoveToPinnedRequested { get; set; }
+
     /// <summary>The displayed collection is locked — −/+ and ✎/✂ are hidden, count shown read-only.</summary>
     [Parameter] public bool Locked { get; set; }
 
@@ -240,6 +262,39 @@
     private async Task EditCard(MyCard card) => await OnEditRequested.InvokeAsync(card);
 
     private async Task SplitCard(MyCard card) => await OnSplitRequested.InvokeAsync(card);
+
+    // ── ⇄ Move rules (the table) ────────────────────────────────────────────
+    // 0) selected == pinned     → hidden
+    // 1) collection, no pinned  → hidden
+    // 2) collection + pinned    → MoveDialog,  "Move to <pinned>"
+    // 3) deck,       no pinned  → SplitDialog, "Move to sideboard"
+    // 4) deck + pinned          → MoveDialog,  "Move to <pinned>"
+    // 5) sideboard,  no pinned  → SplitDialog, "Move to deck" (slider: deck left, sideboard right)
+    // 6) sideboard + pinned     → MoveDialog,  "Move to <pinned>"
+    // A locked pin is not a target — and by strict reading: a pinned-but-locked destination hides
+    // the ⇄ button everywhere (no pile-move fallback in deck/sideboard views).
+    private bool HasPinnedTarget => PinnedMoveLabel is not null && !PinnedLocked;
+
+    private bool MoveButtonVisible => !SelectedIsPinned && !PinnedLocked && ViewNodeKind switch
+    {
+        NodeType.Collection => HasPinnedTarget,
+        NodeType.Deck or NodeType.Sideboard => true,
+        _ => false,
+    };
+
+    private string MoveTooltip => HasPinnedTarget
+        ? $"Move to {PinnedMoveLabel}"
+        : ViewNodeKind == NodeType.Sideboard ? "Move to deck" : "Move to sideboard";
+
+    /// <summary>⇄ handler — one dedicated async method (guide rule 9: no raw InvokeAsync in lambdas);
+    /// routes by the rules table: valid pinned target → MoveDialog, otherwise deck↔sideboard split.</summary>
+    private async Task MoveCard(MyCard card)
+    {
+        if (HasPinnedTarget)
+            await OnMoveToPinnedRequested.InvokeAsync(card);
+        else
+            await OnSplitRequested.InvokeAsync(card);
+    }
 
     private async Task AddToFixed(Card card) => await OnKbAddRequested.InvokeAsync(card);
 

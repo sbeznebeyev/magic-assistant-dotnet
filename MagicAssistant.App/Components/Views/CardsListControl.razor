@@ -126,15 +126,6 @@
                     </select>
                     <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
                     <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" disabled="@(!HasActiveFilters)" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
-                    @if (FilterViewModel.CurrentCollectionId.HasValue
-                        && PinnedCollectionId.HasValue
-                        && FilterViewModel.CurrentCollectionId != PinnedCollectionId
-                        && !CurrentCollectionLocked
-                        && !PinnedCollectionLocked)
-                    {
-                        <button class="move-btn" @onclick="OnMoveClick" disabled="@(_selectedCardId == null)"
-                                title="@(_selectedCardId == null ? "Select a card to move" : "Move selected card to the fixed collection")">📦 Move</button>
-                    }
                 </div>
             </div>
 
@@ -186,8 +177,12 @@
                                   OnCountChanged="ChangeCardCount"
                                   OnEditRequested="EditLocationCard"
                                   OnSplitRequested="SplitLocationCard"
+                                  OnMoveToPinnedRequested="MoveLocationCardToPinned"
                                   PinnedCounts="_pinnedCountByCardId"
                                   SbPresence="_sbPresenceByCardId"
+                                  ViewNodeKind="@FilterViewModel.CurrentCollectionNodeType"
+                                  SelectedIsPinned="@(PinnedCollectionId.HasValue && PinnedCollectionId == FilterViewModel.CurrentCollectionId)"
+                                  PinnedMoveLabel="@PinnedMoveLabel"
                                   OnKbAddRequested="AddCardToPinned"
                                   OnKbRemoveRequested="RemoveCardFromPinned"
                                   SelectedCardId="@_selectedCardId"
@@ -341,8 +336,15 @@
     /// <summary>Edit requested for a location card (deck mode only).</summary>
     [Parameter] public EventCallback<MyCard> OnEditCard { get; set; }
 
-    /// <summary>Split requested for a location card (deck mode only, Count &gt; 1).</summary>
+    /// <summary>Split requested for a location card (deck/sideboard views — any count, the whole row can move).</summary>
     [Parameter] public EventCallback<MyCard> OnSplitCard { get; set; }
+
+    /// <summary>Move-to-pinned requested from a row (collection view — MainLayout opens MoveDialog).</summary>
+    [Parameter] public EventCallback<MyCard> OnMoveCardToPinned { get; set; }
+
+    /// <summary>Display label of the pinned move target (MainLayout.PinnedMoveLabel);
+    /// null = no valid target — the row's ⇄ stays hidden in collection view.</summary>
+    [Parameter] public string? PinnedMoveLabel { get; set; }
 
     /// <summary>Pinned operation target (MainLayout._pinnedCollection.CollectionId).
     /// KB-mode (+) and quick Move work against it.</summary>
@@ -351,12 +353,9 @@
     /// <summary>The displayed collection is locked — its card-mutation controls (−/+, ✎, ✂) are hidden.</summary>
     [Parameter] public bool CurrentCollectionLocked { get; set; }
 
-    /// <summary>The pinned collection is locked — KB (+) and quick Move are hidden.</summary>
+    /// <summary>The pinned collection is locked — KB (+) is hidden and the row ⇄ Move button
+    /// disappears everywhere (strict reading: a locked pin is no destination).</summary>
     [Parameter] public bool PinnedCollectionLocked { get; set; }
-
-    /// <summary>Quick move: send the selected card (with all copies) to the pinned collection.
-    /// Available only when a different collection is viewed (current != pinned, both set).</summary>
-    [Parameter] public EventCallback<MyCard> OnMoveToPinned { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -987,13 +986,7 @@
     /// <summary>Any count, including a single copy — the whole row moves deck↔sideboard.</summary>
     private async Task SplitLocationCard(MyCard card) => await OnSplitCard.InvokeAsync(card);
 
-    /// <summary>Look up the selected physical instance and hand it to MainLayout for the quick move.</summary>
-    private async Task OnMoveClick()
-    {
-        if (_selectedCardId is null) return;
-        if (_physicalByCardId?.TryGetValue(_selectedCardId.Value, out var physical) != true) return;
-        await OnMoveToPinned.InvokeAsync(physical);
-    }
+    private async Task MoveLocationCardToPinned(MyCard card) => await OnMoveCardToPinned.InvokeAsync(card);
 
     /// <summary>One grouped query over Deck: total copies of each displayed card in the pinned collection.</summary>
     /// <summary>Deck view: which of the displayed cards have ≥1 copy in the deck's sideboard.

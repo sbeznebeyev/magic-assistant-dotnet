@@ -273,6 +273,40 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
+    public async Task<MyCard?> TransferCardsAsync(int sourceCollectionId, Guid cardId, int count, int targetCollectionId, CancellationToken ct = default)
+    {
+        if (count <= 0)
+            return null;
+        if (sourceCollectionId == targetCollectionId)
+            throw new ArgumentException("Source and target must differ.", nameof(targetCollectionId));
+
+        var existing = await _collectionStore.GetCardsAsync(cardId, ct);
+        var matching = existing.FirstOrDefault(e => e.Collection?.Id == sourceCollectionId && e.Card.Id == cardId);
+        if (matching == null)
+            return null;
+
+        var total = matching.Count;
+        if (count >= total)
+            return null; // whole-row move — use MoveCardsAsync
+
+        // Create the target part FIRST (before modifying the source count) — same order as SplitCardAsync.
+        var part = new MyCard(matching.Card, new Collection(targetCollectionId, string.Empty, null, NodeType.Deck, 0), matching.IsOwn)
+        {
+            Count = count,
+            MyPrice = matching.MyPrice,
+            Comment = matching.Comment,
+        };
+
+        matching.Count = total - count;
+        await _cardStore.UpdateAsync(matching, new[] { MagicCardField.Count }, ct);
+
+        // Add the target part (upsert merges into an existing row; throws when the target is locked)
+        await _cardStore.AddAsync(part, ct);
+
+        return part;
+    }
+
+    /// <inheritdoc />
     public async Task<ICollection<MyCard>> SplitCardsAsync(
         ICollection<ICard> cards, int rightCount, CancellationToken ct = default)
     {

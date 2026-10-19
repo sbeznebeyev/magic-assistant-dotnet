@@ -70,6 +70,14 @@ public interface IDeckCardService
     Task<MyCard?> SplitCardBackAsync(int deckId, Guid cardId, int count, CancellationToken ct = default);
 
     /// <summary>
+    /// Move part of a card pile between any two collection nodes (deck/collection/sideboard).
+    /// The target row merges counts when the card is already there. Returns the target part, or
+    /// null when there is nothing to move (count ≤ 0, source row missing, or count ≥ source —
+    /// a whole-row move belongs to MoveCardsAsync).
+    /// </summary>
+    Task<MyCard?> TransferCardsAsync(int sourceCollectionId, Guid cardId, int count, int targetCollectionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Split cards from a collection into two parts.
     /// </summary>
     Task<ICollection<MyCard>> SplitCardsAsync(ICollection<ICard> cards, int rightCount, CancellationToken ct = default);

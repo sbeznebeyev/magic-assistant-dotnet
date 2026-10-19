@@ -32,6 +32,7 @@
 
     @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
     @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
+    @if (_showMoveDialog) { <MoveDialog IsOpen="@_showMoveDialog" Card="@_moveCardTarget" SourceCollectionId="@_currentCollection.CollectionId" SourceLabel="@_currentCollection.Name" TargetCollectionId="@_pinnedCollection.CollectionId" TargetLabel="@PinnedMoveLabel" TargetIsSideboard="@(_pinnedCollection.NodeType == NodeType.Sideboard)" OnMoveDone="OnMoveDone" IsOpenChanged="@(v => _showMoveDialog = v)" /> }
     
 
     @* ── Management mode: everything below the header is management UI ── *@
@@ -192,11 +193,14 @@
 
     private bool _showFilterDialog;
     private bool _showSplitDialog;
+    private bool _showMoveDialog;
 
     // ── Dialog Data ──
     private MyCard? _editCardTarget;
 
     private MyCard? _splitCardTarget;
+
+    private MyCard? _moveCardTarget;
 
     /// <summary>Central filter/sort state shared between CardsListControl and CardFilterDialog.</summary>
     private readonly FilterViewModel _filterViewModel = new();
@@ -227,11 +231,15 @@
     }
 
     /// <summary>Pin toggle from the navigator — the ONLY writer of _pinnedCollection.
-    /// Clicking an already-pinned node unpins it (silently). Pinning reports to the status bar.</summary>
+    /// Clicking an already-pinned node unpins it (silently). Pinning reports to the status bar.
+    /// Handler-level guard: a locked payload is never pinned even if the menu's disabled state
+    /// went stale (lock persisted elsewhere) — unpinning stays allowed for locked nodes.</summary>
     private void OnPinToggled(LockableCollection c)
     {
         if (_pinnedCollection.CollectionId == c.CollectionId)
             _pinnedCollection = new();  // unpin — no status message
+        else if (c.IsLocked)
+            _statusText = $"Cannot pin {c.Name} — the collection is locked";
         else
         {
             _pinnedCollection = c;
@@ -358,6 +366,26 @@
     private void OpenEditCard(MyCard card) { _editCardTarget = card; _showEditCardDialog = true; }
 
     private void OpenSplit(MyCard card) { _splitCardTarget = card; _showSplitDialog = true; }
+
+    private void OpenMoveDialog(MyCard card) { _moveCardTarget = card; _showMoveDialog = true; }
+
+    /// <summary>Move tooltip/dialog label for the pinned target: a pinned sideboard reads
+    /// "&lt;deck&gt; (sideboard)" (the store's " (sb)" suffix is replaced); null = nothing pinned,
+    /// or the pinned node is the viewed collection itself (nowhere to move).</summary>
+    private string? PinnedMoveLabel
+    {
+        get
+        {
+            if (_pinnedCollection.CollectionId is null || _pinnedCollection.Name is not { Length: > 0 } name) return null;
+            if (_pinnedCollection.CollectionId == _currentCollection.CollectionId) return null;
+            if (_pinnedCollection.NodeType == NodeType.Sideboard)
+            {
+                var deckName = name.EndsWith(" (sb)", StringComparison.Ordinal) ? name[..^" (sb)".Length] : name;
+                return $"{deckName} (sideboard)";
+            }
+            return name;
+        }
+    }
 
     // ── Lifecycle (Microsoft Learn: subscribe in OnInitialized, unsubscribe in Dispose) ──
     protected override async Task OnInitializedAsync()
@@ -504,33 +532,15 @@
         StateHasChanged();
         if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // cards moved between main deck and sideboard
     }
-    /// <summary>Quick move: the selected card (with all its copies) moves from the viewed collection to the pinned one.</summary>
-    private async Task OnMoveToPinned(MyCard card)
+
+    /// <summary>MoveDialog finished — same refresh fan-out as a split: list, strip stats, navigator n/m.</summary>
+    private async Task OnMoveDone()
     {
-        if (_currentCollection.CollectionId == null || _pinnedCollection.CollectionId == null) return;
-        if (_currentCollection.CollectionId == _pinnedCollection.CollectionId) return;
-
-        try
-        {
-            var moved = await DeckCardService.MoveCardsAsync(_currentCollection.CollectionId.Value, new[] { card.Id }, _pinnedCollection.CollectionId.Value);
-            if (moved > 0)
-            {
-                // Addition to the working collection — record it in LastActions.
-                await RecordLastActionAsync(new CardOperationRecord(_pinnedCollection.CollectionId.Value, card.Card, moved, LastActionOperationEnum.Add));
-                _statusText = $"Moved card to location {_pinnedCollection.CollectionId.Value}";
-                _kbRefreshTrigger++;  // reload the viewed list
-            }
-            else
-            {
-                _statusText = "Nothing to move — card not found in this collection";
-            }
-        }
-        catch (Exception ex)
-        {
-            _statusText = $"Move failed: {ex.Message}";
-        }
+        _statusText = "Card moved";
+        _kbRefreshTrigger++;  // reload the viewed list — source/target row counts changed
+        _stripRefresh++;      // copies changed nodes — refresh ContextStrip stats
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // navigator counts follow the move
     }
-
     /// <summary>Records an Add/Sub card operation in the rolling LastActions history.
     /// The entry is labeled with the target collection's display name (Location).
     /// The queue is never reset — entries from different collections coexist, each carrying its own location.</summary>
@@ -607,7 +617,8 @@
                                   PinnedCollectionLocked="@_pinnedCollection.IsLocked"
                                   OnEditCard="OpenEditCard"
                                   OnSplitCard="OpenSplit"
-                                  OnMoveToPinned="OnMoveToPinned" />
+                                  OnMoveCardToPinned="OpenMoveDialog"
+                                  PinnedMoveLabel="@PinnedMoveLabel" />
                 break;
         }
     </div>;
