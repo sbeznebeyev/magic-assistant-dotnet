@@ -5,6 +5,7 @@
 @inject IDeckManagementService DeckManagement
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
+@inject HasAnySetQueryHandler? HasAnySet
 @using MagicAssistant.App.Services
 @using MagicAssistant.Core.Commands
 @using MagicAssistant.Core.Queries
@@ -18,12 +19,14 @@
             <span class="header-action @(_mode == LayoutMode.Showcase ? "active" : "")" @onclick="() => SetMode(LayoutMode.Showcase)" title="Show collector progress">Showcase</span>
             <span class="header-action @(_mode == LayoutMode.Management ? "active" : "")" @onclick="() => SetMode(LayoutMode.Management)" title="Deck & collection management">Management</span>
             <span class="header-action" @onclick="OpenLegacyImportDialog" title="Import legacy deck (Gatherer ID + full set names)">Legacy Import</span>
-            <span class="header-action" @onclick="OpenUpdateDbDialog" title="Update DataBase from Scryfall">Update DB</span>
+            <span class="header-action" @onclick="OpenSyncSetsDialog" title="Sync the set list from Scryfall">Sync Sets</span>
+            <span class="header-action" @onclick="OpenSyncCardsDialog" title="Sync cards of one set from Scryfall">Sync Cards</span>
         </span>
     </div>
 
     @* ── Dialogs (render only when visible) *@
-    @if (_showSyncDialog) { <SyncKnowledgeBase IsOpen="@_showSyncDialog" IsOpenChanged="@(v => _showSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
+    @if (_showSyncSetsDialog) { <SyncSets IsOpen="@_showSyncSetsDialog" IsOpenChanged="@(v => _showSyncSetsDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
+    @if (_showSyncCardsDialog) { <SyncCards IsOpen="@_showSyncCardsDialog" IsOpenChanged="@(v => _showSyncCardsDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" ParentNodeId="@_importParentId" TargetNodeId="@_importTargetId" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
     @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
@@ -172,7 +175,11 @@
     private string _statusText = "Ready";
 
     // ── Dialog Visibility (state-based pattern) ──
-    private bool _showSyncDialog;
+    private bool _showSyncSetsDialog;
+    private bool _showSyncCardsDialog;
+
+    // First-run bootstrap: one probe per circuit — an empty CardSet table opens Sync Sets at once.
+    private bool _startupSetsChecked;
     private bool _showSelectedSetSyncDialog;
     private string _selectedSetForSync = string.Empty;
     private int _kbRefreshTrigger;
@@ -309,7 +316,8 @@
     }
 
     private void OpenLegacyImportDialog() => _showLegacyImportDialog = true;
-    private void OpenUpdateDbDialog() => _showSyncDialog = true;
+    private void OpenSyncSetsDialog() => _showSyncSetsDialog = true;
+    private void OpenSyncCardsDialog() => _showSyncCardsDialog = true;
 
     /// <summary>Import from the navigator's add-node menu — parentId null = root level (old header behavior).</summary>
     private void OpenImportDialog(int? parentId) { _importParentId = parentId; _importTargetId = null; _showImportDialog = true; }
@@ -392,6 +400,31 @@
     {
         KbRefresh.Subscribe(OnKbRefresh);
         await LoadPanelStatesAsync();
+    }
+
+    /// <summary>On a knowledge base with zero sets there is nothing to render — open Sync Sets
+    /// immediately so a fresh install starts with a set sync. Runs after the first render because
+    /// the DB probe is genuinely async: in OnInitializedAsync the flag could flip after the frame
+    /// was already painted, and nothing would re-render. StateHasChanged here is the documented
+    /// continuation nudge after an awaited OnAfterRenderAsync.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _startupSetsChecked) return;
+        _startupSetsChecked = true;
+
+        try
+        {
+            if (HasAnySet is not null && !await HasAnySet.Handle(new HasAnySetQuery()))
+            {
+                _showSyncSetsDialog = true;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // A failed probe must not block the layout — Sync Sets stays one click in the header,
+            // and the error surfaces normally on the next real data load.
+        }
     }
 
     /// <summary>Collapse/expand the left panel and persist the choice. Render is automatic after

@@ -435,6 +435,13 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             new { SetCode = setCode });
     }
 
+    public async Task<bool> HasAnySetAsync(CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+        return await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM CardSet)");
+    }
+
     public async Task<ICollection<Card>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));

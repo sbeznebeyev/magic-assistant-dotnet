@@ -12,6 +12,13 @@ public interface IDbCardStore : ICardStore<Card>
     /// Direct DB check — no filter inference. Drives the KB empty-state sync button visibility.
     /// </summary>
     Task<bool> HasCardsForSetAsync(string setCode, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if the CardSet table holds at least one set. Direct DB check — cache bypassed
+    /// on purpose: this is the first-run bootstrap probe, it must see committed rows, not a warm
+    /// empty cache. Drives the auto-open of the Sync Sets dialog on an empty knowledge base.
+    /// </summary>
+    Task<bool> HasAnySetAsync(CancellationToken ct = default);
     Task<ICollection<Card>> GetPrintingsAsync(string name, CancellationToken ct = default);
 
     // Edition methods

@@ -1,0 +1,142 @@
+@* SyncSets — Scryfall set-list sync: the upper half of the former SyncKnowledgeBase dialog
+   (everything above the old sync-divider). Pure presentation — SyncCardSetsCommand owns the
+   download, the DB writes and the icon/stylesheet refresh. The dialog stays open after a run
+   so the counts can be read; closing is the user's call. *@
+@using MagicAssistant.Core.Commands
+
+@if (IsOpen)
+{
+    <div class="sync-dialog-overlay">
+    <div class="sync-dialog" @onclick:stopPropagation="true">
+        @* ── Header ── *@
+        <div class="sync-header">
+            <span class="sync-title">Sync Sets from Scryfall</span>
+            <button class="close-btn" @onclick="Close">✕</button>
+        </div>
+
+        <div class="sync-form">
+            <p class="sync-hint"></p>
+            @* Full-update checkbox removed from the UI by design — the flag stays in code,
+               pinned to true: rewriting existing sets is the normal behavior now. *@
+            <div class="scryfall-row">
+                <button class="sync-scryfall-btn" @onclick="SyncSetsFromScryfall"
+                        disabled="@_isSyncingSets">
+                    @if (_isSyncingSets)
+                    {
+                        <span>Syncing…</span>
+                    }
+                    else
+                    {
+                        <span>Sync Sets</span>
+                    }
+                </button>
+                @* Throbber sits right of the button — spins for the whole run (the handler's
+                   StateHasChanged before the await is what paints it), gone when the result appears. *@
+                @if (_isSyncingSets)
+                {
+                    <span class="sync-spinner" role="status" aria-label="Syncing sets…"></span>
+                }
+            </div>
+        </div>
+
+        @* ── Sets Sync Result ── *@
+        @if (_setsSyncResult != null)
+        {
+            <div class="sync-result @(_setsSyncResult.Success ? "success" : "error")">
+                <div class="result-header">
+                    @(_setsSyncResult.Success ? "✓ Sets Synced" : "✗ Sets Sync Failed")
+                </div>
+                <div class="result-details">
+                    <span class="detail">Total from Scryfall: @_setsSyncResult.TotalScryfallSets</span>
+                    <span class="detail">New added: @_setsSyncResult.NewSetsAdded</span>
+                    @if (_fullUpdateCardSets)
+                    {
+                        <span class="detail">Updated: @_setsSyncResult.ExistingSetsUpdated</span>
+                    }
+                    else
+                    {
+                        <span class="detail">Skipped (existing): @_setsSyncResult.ExistingSetsSkipped</span>
+                    }
+                    @if (_setsSyncResult.IconsDownloaded > 0)
+                    {
+                        <span class="detail">Icons: @_setsSyncResult.IconsDownloaded</span>
+                    }
+                    @* Icons reach the UI only as .set-symbol classes in sets.css — the generator
+                       appends the missing ones right after the icon cache is filled. *@
+                    @if (_setsSyncResult.CssRulesAdded > 0)
+                    {
+                        <span class="detail">CSS rules: @_setsSyncResult.CssRulesAdded</span>
+                    }
+                </div>
+                @if (!string.IsNullOrEmpty(_setsSyncResult.CssError))
+                {
+                    <div class="result-errors">
+                        <div>⚠ Icons cached, but sets.css was not updated: @_setsSyncResult.CssError</div>
+                    </div>
+                }
+                @if (!_setsSyncResult.Success && !string.IsNullOrEmpty(_setsSyncResult.ErrorMessage))
+                {
+                    <div class="result-errors">
+                        <div>⚠ @_setsSyncResult.ErrorMessage</div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    </div>
+}
+
+@code {
+    /// <summary>Always true — the UI toggle was removed deliberately, so every run refreshes
+    /// existing sets too. Kept as a field (not a constant) so the result block and the command
+    /// wiring stay untouched if the toggle ever returns.</summary>
+    private bool _fullUpdateCardSets = true;
+    private bool _isSyncingSets;
+    private SyncCardSetsResult? _setsSyncResult;
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Notifies MainLayout after a successful run (RefreshTrigger++ → the sets lists reload).</summary>
+    [Parameter] public EventCallback OnCompleted { get; set; }
+
+    [Inject] private SyncCardSetsCommandHandler? SyncCardSetsHandler { get; set; }
+
+    private async Task SyncSetsFromScryfall()
+    {
+        _isSyncingSets = true;
+        _setsSyncResult = null;
+
+        // This handler awaits the whole sync, and Blazor renders only when the handler returns —
+        // an explicit render is what puts "Syncing..." on screen before the download starts.
+        StateHasChanged();
+
+        try
+        {
+            var result = await SyncCardSetsHandler!.Handle(new SyncCardSetsCommand(FullUpdate: _fullUpdateCardSets));
+            _setsSyncResult = result;
+
+            // Keep the dialog open: the counts are the point of this window.
+            if (result.Success)
+                await OnCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _setsSyncResult = new SyncCardSetsResult
+            {
+                Success = false,
+                ErrorMessage = ex.Message
+            };
+        }
+        finally
+        {
+            _isSyncingSets = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

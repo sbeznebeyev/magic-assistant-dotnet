@@ -1,0 +1,173 @@
+/* SyncSets — deliberately mirrors the shared dialog shell from SyncCards.razor.css (scoped CSS
+   cannot cross components); keep the shell in sync when either file changes. */
+
+/* ── Overlay ─────────────────────────────────────────── */
+.sync-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Dialog Box ──────────────────────────────────────── */
+.sync-dialog {
+    background: #1e1e1e;
+    border: 1px solid #555;
+    border-radius: 10px;
+    /* Compact on purpose: this window is one action + its result, 480px of empty shell
+       around a single button reads as a bug, not as room. */
+    width: 420px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Header ──────────────────────────────────────────── */
+.sync-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #3c3c3c;
+}
+
+.sync-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #eee;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.close-btn:hover {
+    background: #3c3c3c;
+    color: #fff;
+}
+
+/* ── Form ────────────────────────────────────────────── */
+.sync-form {
+    padding: 16px;
+}
+
+/* One honest line about what the button does — fills the vertical space with meaning
+   instead of padding. */
+.sync-hint {
+    margin: 0 0 12px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #9a9a9a;
+}
+
+/* ── Action row (button stretches, throbber rides along) ── */
+.scryfall-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0; /* last block in the form — bottom space comes from .sync-form */
+}
+
+.sync-scryfall-btn {
+    flex: 1;
+    background: linear-gradient(180deg, #1a8ae8, #0078d4);
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter 0.15s ease, background 0.15s ease;
+}
+
+.sync-scryfall-btn span {
+    white-space: nowrap;
+}
+
+.sync-scryfall-btn:hover:not(:disabled) {
+    filter: brightness(1.12);
+}
+
+.sync-scryfall-btn:focus-visible {
+    outline: 2px solid #4fc3f7;
+    outline-offset: 2px;
+}
+
+.sync-scryfall-btn:disabled {
+    background: #3c3c3c;
+    color: #888;
+    cursor: default;
+    filter: none;
+}
+
+/* ── Throbber (spins while the sets sync runs) ── */
+.sync-spinner {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border: 3px solid #3c3c3c;
+    border-top-color: #4fc3f7;
+    border-radius: 50%;
+    animation: sync-spin 0.8s linear infinite;
+}
+
+/* Scoped CSS rewrites the keyframes name with the component's scope id — both ends stay paired. */
+@keyframes sync-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Result ──────────────────────────────────────────── */
+.sync-result {
+    margin: 0 16px 16px;
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.sync-result.success {
+    background: rgba(46, 204, 113, 0.1);
+    border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+.sync-result.error {
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.result-header {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.sync-result.success .result-header { color: #2ecc71; }
+.sync-result.error .result-header { color: #e74c3c; }
+
+.result-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: #aaa;
+}
+
+.result-details .detail.error {
+    color: #e74c3c;
+}
+
+.result-errors {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #e74c3c;
+}

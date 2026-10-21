@@ -159,6 +159,7 @@ builder.Services.AddScoped<GetCardInstancesQueryHandler>();
 builder.Services.AddScoped<GetKBAvailableSetsQueryHandler>();
 builder.Services.AddScoped<GetCardSetQueryHandler>();
 builder.Services.AddScoped<HasCardsQueryHandler>();
+builder.Services.AddScoped<HasAnySetQueryHandler>();
 builder.Services.AddScoped<GetSideboardPresenceQueryHandler>();
 builder.Services.AddScoped<SyncCardSetsCommandHandler>();
 // On-demand per-card image download (lazy loading) — reuses the set-sync image pipeline
