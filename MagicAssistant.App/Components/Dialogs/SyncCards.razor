@@ -112,15 +112,23 @@
         {
             @* ── Sync In Progress ── *@
             <div class="sync-progress-section">
-                <div class="progress-set-name">@(_currentSet?.Name ?? _selectedSetCode)</div>
+                <div class="progress-set-line">
+                    @* Global .set-symbol sprite classes (sets.css): gold gradient painted through
+                       the per-set mask — same binding pattern as CollectorView's set rows. *@
+                    <span class="progress-set-icon set-symbol set-symbol-@(_selectedSetCode)"></span>
+                    <span class="progress-set-name">@(_currentSet?.Name ?? _selectedSetCode)</span>
+                </div>
 
+                @* One status line: the message already names the phase; PhaseName rendered
+                   beside it was a duplicate of the same thought. *@
                 <div class="phase-indicator">
-                    <span class="phase-label">@_currentState?.PhaseName</span>
                     <span class="phase-message">@_currentState?.Message</span>
                 </div>
 
                 <div class="progress-bar-wrap">
-                    <div class="progress-bar" style="width: @(_currentState?.ProgressPercent ?? 0)%"></div>
+                    @* ProgressWidthPct, not ProgressPercent: raw double under a comma culture
+                       produces "width: 70,5%" — invalid, dropped, bar renders full. *@
+                    <div class="progress-bar" style="width: @(_currentState?.ProgressWidthPct ?? 0)%"></div>
                 </div>
 
                 <div class="progress-stats">

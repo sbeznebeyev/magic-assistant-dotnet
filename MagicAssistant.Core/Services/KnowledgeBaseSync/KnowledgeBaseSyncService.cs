@@ -117,12 +117,16 @@ public class KnowledgeBaseSyncService : IKnowledgeBaseSyncService
             if (downloadImages)
             {
                 state.Phase = 3;
-                state.PhaseName = "Images";
+                state.PhaseName = "Downloading images";
                 state.Message = "Checking existing...";
 
                 _imageCacheService.CreateSetLanguageDirs(setCode, languages);
                 var existing = _imageCacheService.GetExistingCardUidsForSet(setCode);
                 imgSkip = existing.Count;
+                state.Message = "Downloading images";
+                // Static label for the whole loop: the live counters live in the stats row, and a
+                // second copy of them here only updated on a different (25-item) cadence — the
+                // old duplicated lagging line.
 
                 for (var i = 0; i < dtoCards.Count; i++)
                 {
@@ -150,8 +154,6 @@ public class KnowledgeBaseSyncService : IKnowledgeBaseSyncService
 
                     state.ImagesDownloaded = imgOk;
                     state.ImagesFailed = imgFail;
-                    if (i % 25 == 0)
-                        state.Message = $"Images: {imgOk}/{dtoCards.Count} ({imgFail} failed)";
                 }
             }
 
