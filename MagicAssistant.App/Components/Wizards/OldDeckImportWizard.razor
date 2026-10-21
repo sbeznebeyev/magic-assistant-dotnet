@@ -1,8 +1,6 @@
 @using MagicAssistant.Core.Commands
 @using MagicAssistant.Core.Queries
 @using MagicAssistant.Data.Model
-@using MagicAssistant.Data.Model.NavigatorNodes
-@inject IDeckManagementService DeckManagement
 @inject IDeckImportExportService ImportExport
 @inject ICardImageLoader ImageLoader
 @inject GetSyncProgressQueryHandler SyncProgressQuery
@@ -11,14 +9,16 @@
 
 <div class="dialog-overlay">
     <div class="dialog-box" @onclick:stopPropagation="true">
-        <div class="dialog-title">📜 Import Legacy Deck</div>
+        @* The import always merges into the selected navigator node — its name lives in the
+           title, gold, same technology as DeckImportWizard's fixed-target mode. *@
+        <div class="dialog-title"><span>📜 Import to </span><span class="target-name">@(TargetName ?? "?")</span></div>
 
         @switch (_state)
         {
             case WizardState.FileSelection:
                 <div class="dialog-subtitle">
                     For old Magic Assistant XML files with Gatherer IDs and full set names (e.g. "Core Set 2019").<br />
-                    Cards are resolved against the knowledge base; the deck is created only after every card is resolved.
+                    Cards are resolved against the knowledge base.
                 </div>
 
                 @* ── Step 1: Select File ── *@
@@ -29,19 +29,6 @@
                     {
                         <div class="file-info">✓ @_fileName</div>
                     }
-                </div>
-
-                @* ── Step 2: Target Deck ── *@
-                <div class="form-group">
-                    <label>Import to</label>
-                    <select @bind="_importMode" class="dialog-select">
-                        <option value="new">New deck (creates from file name)</option>
-                        @foreach (var (target, depth, isSideboard) in _importTargets)
-                        {
-                            var indent = new string('\u00A0', depth * 2);
-                            <option value="@target.Id">@indent@(isSideboard ? "↳ " : "")@target.Name</option>
-                        }
-                    </select>
                 </div>
 
                 @if (!string.IsNullOrEmpty(_error))
@@ -280,8 +267,6 @@
     private string? _fileName;
     private byte[]? _fileContent;
     private string _xmlContent = "";
-    private string _importMode = "new";
-    private string _deckName = "";
     private string? _error;
 
     private LegacyImportCheckResult? _check;
@@ -305,15 +290,15 @@
     private Card? _hoverCard;
     private readonly Dictionary<string, CancellationTokenSource> _searchCts = new();
 
-    /// <summary>
-    /// Valid import targets: Collection, Deck and Sideboard nodes only (folders cannot hold cards).
-    /// Depth — nesting level for display; IsSideboard marks a deck's sideboard child.
-    /// </summary>
-    private List<(NavigatorNodeBase Node, int Depth, bool IsSideboard)> _importTargets = new();
-
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnImported { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>The selected navigator node the import merges into — id and display name.
+    /// The legacy wizard has no target picker and no create-from-file mode; the header
+    /// action is guarded so the dialog only opens with a selection.</summary>
+    [Parameter] public int? TargetNodeId { get; set; }
+    [Parameter] public string? TargetName { get; set; }
 
     private bool AllMapped => _rows.Count > 0 && _rows.All(r => r.SelectedId.HasValue);
 
@@ -322,44 +307,7 @@
         if (IsOpen)
         {
             ResetState();
-            try
-            {
-                var tree = await DeckManagement!.GetAllNodesAsync();
-                var targets = new List<(NavigatorNodeBase, int, bool)>();
-                foreach (var root in tree.Values)
-                    CollectImportTargets(root, 0, targets);
-                _importTargets = targets;
-            }
-            catch { }
-
             await LoadLanguagesAsync();
-        }
-    }
-
-    /// <summary>
-    /// Walks the navigation tree collecting import targets.
-    /// Folders are transparent containers — skipped as targets, but their children are walked;
-    /// a deck contributes itself plus its sideboard; collections contribute themselves.
-    /// </summary>
-    private static void CollectImportTargets(NavigatorNodeBase node, int depth, List<(NavigatorNodeBase Node, int Depth, bool IsSideboard)> result)
-    {
-        switch (node)
-        {
-            case NavigatorNodeFolder folder:
-                if (folder.Children is not null)
-                    foreach (var child in folder.Children)
-                        CollectImportTargets(child, depth + 1, result);
-                break;
-
-            case NavigatorNodeDeck deck:
-                result.Add((deck, depth, false));
-                if (deck.Sideboard is { } sb)
-                    result.Add((sb, depth + 1, true));
-                break;
-
-            default: // NavigatorNodeCollection — can hold cards
-                result.Add((node, depth, false));
-                break;
         }
     }
 
@@ -369,8 +317,6 @@
         _fileName = null;
         _fileContent = null;
         _xmlContent = "";
-        _importMode = "new";
-        _deckName = "";
         _error = null;
         _check = null;
         _cts?.Dispose();
@@ -421,14 +367,34 @@
 
     // ── File selection ───────────────────────────────────
 
+    /// <summary>Upload ceiling for deck files. Blazor's default is 512 KB — anything larger
+    /// used to fail silently here, and the wizard then parsed the zero-filled buffer
+    /// ("0x00, line 1, position 1").</summary>
+    private const long MaxImportFileBytes = 25 * 1024 * 1024;
+
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         var file = e.File;
         if (file == null) return;
 
-        _fileName = file.Name;
-        _fileContent = new byte[file.Size];
-        await file.OpenReadStream().ReadExactlyAsync(_fileContent);
+        // Read into a local buffer under the explicit ceiling; _fileContent/_fileName are
+        // published only on success, so a failed read can never leave a zero-filled buffer
+        // wearing a selected-file name.
+        try
+        {
+            var content = new byte[file.Size];
+            await file.OpenReadStream(MaxImportFileBytes).ReadExactlyAsync(content);
+
+            _fileContent = content;
+            _fileName = file.Name;
+            _error = null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            _fileContent = null;
+            _fileName = null;
+            _error = $"Could not read \"{file.Name}\": {ex.Message}";
+        }
     }
 
     // ── Flow: check → (sync) → resolve → (map) → commit ──
@@ -444,7 +410,6 @@
         {
             _xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
             _check = await ImportExport.CheckLegacyImportAsync(_xmlContent);
-            _deckName = string.IsNullOrWhiteSpace(_check.DeckName) ? _fileName.Replace(".xml", "") : _check.DeckName;
 
             if (_check.MissingSets.Count > 0)
             {
@@ -660,8 +625,11 @@
 
         try
         {
-            var targetId = _importMode == "new" ? (int?)null : int.Parse(_importMode);
-            await ImportExport.CommitImportAsync(_deckName, null, targetId, cards);
+            // Fixed target only: the selected node is the single import destination.
+            // DeckName drives the command's create-new mode — not reachable from this wizard.
+            if (TargetNodeId is not { } targetId)
+                throw new InvalidOperationException("No location is selected.");
+            await ImportExport.CommitImportAsync(string.Empty, null, targetId, cards);
             await OnImported.InvokeAsync();
             // Commit succeeded — the state machine has no further step; close the dialog.
             // (Without this, _state stays Committing and the window hangs on "Importing...".)

@@ -20,6 +20,19 @@
 
 .dialog-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #eee; }
 
+/* Fixed import target: gold gradient name with a soft glow (same recipe as DeckImportWizard) */
+.target-name {
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    /* `to bottom`, not 135deg: on a wide-short inline box a diagonal gradient compresses into a
+       thin mid-palette band vertically — the glyphs read gray-beige instead of gold. */
+    background: linear-gradient(to bottom, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.35));
+}
+
 .form-group { margin-bottom: 12px; }
 .form-group label { display: block; font-size: 12px; color: #aaa; margin-bottom: 4px; }
 

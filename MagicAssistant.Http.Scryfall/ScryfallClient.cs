@@ -102,22 +102,4 @@ public class ScryfallClient : IScrayfallClient
         return allCards;
     }
 
-    public async Task<ScryfallCardDto?> GetCardByIdAsync(Guid id, CancellationToken ct = default)
-    {
-        var response = await _httpClient.GetAsync($"/cards/{id}", ct);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            return null;
-        response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync(ct);
-        return JsonSerializer.Deserialize<ScryfallCardDto>(json, _jsonOptions);
-    }
-
-    public async Task<ICollection<ScryfallCardDto>> SearchAsync(string query, int limit = 100, CancellationToken ct = default)
-    {
-        var url = $"/cards/search?q={Uri.EscapeDataString(query)}&per_page={Math.Min(limit, 250)}";
-        var response = await _httpClient.GetAsync(url, ct);
-        response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync(ct);
-        return JsonSerializer.Deserialize<ScryfallSearchResponse<ScryfallCardDto>>(json, _jsonOptions)?.Data ?? Array.Empty<ScryfallCardDto>();
-    }
 }

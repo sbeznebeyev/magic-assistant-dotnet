@@ -303,13 +303,31 @@
 
     // ── File selection ───────────────────────────────────
 
+    /// <summary>Upload ceiling for deck files. Blazor's default is 512 KB — anything larger
+    /// threw past this handler and left the wizard without content (see OldDeckImportWizard's
+    /// "0x00, line 1, position 1" incident for the silent-failure shape).</summary>
+    private const long MaxImportFileBytes = 25 * 1024 * 1024;
+
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         var file = e.File;
         if (file == null) return;
 
-        var content = new byte[file.Size];
-        await file.OpenReadStream().ReadExactlyAsync(content);
+        // Read first, parse second: the size-limit exception is a read failure, not an
+        // "invalid file", and gets its own message.
+        byte[] content;
+        try
+        {
+            content = new byte[file.Size];
+            await file.OpenReadStream(MaxImportFileBytes).ReadExactlyAsync(content);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            _fileName = null;
+            _fileContent = null;
+            _error = $"Could not read \"{file.Name}\": {ex.Message}";
+            return;
+        }
 
         // Parse early: reject invalid files up front and take the default deck name from the file.
         try

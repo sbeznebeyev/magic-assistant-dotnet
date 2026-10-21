@@ -26,7 +26,12 @@ public class KnowledgeBaseSyncService : IKnowledgeBaseSyncService
     private readonly IImageCacheService _imageCacheService;
     private readonly SyncSetStateRegistry _syncSetStateRegistry;
     private readonly ILogger _logger;
-    
+
+    /// <summary>Concurrent card-image downloads in phase 3. Scryfall's file origins
+    /// (*.scryfall.io) carry no rate limits (docs checked 2026-10-21); 10 is a polite
+    /// ceiling, not a maximum.</summary>
+    private const int MaxImageDownloads = 10;
+
     public KnowledgeBaseSyncService(
         IScrayfallClient scrayflClient,
         IDbCardStore dbCardStore,
@@ -128,33 +133,44 @@ public class KnowledgeBaseSyncService : IKnowledgeBaseSyncService
                 // second copy of them here only updated on a different (25-item) cadence — the
                 // old duplicated lagging line.
 
-                for (var i = 0; i < dtoCards.Count; i++)
+                // Concurrent slots: each card downloads into its own unique file
+                // (<set>/<lang>/front|back/<uid>.png), so the workers never touch the same
+                // path; `existing` is read-only here. Counters cross threads → Interlocked.
+                var localErrors = 0;
+                var opts = new ParallelOptions { MaxDegreeOfParallelism = MaxImageDownloads, CancellationToken = ct };
+                await Parallel.ForEachAsync(magicCards, opts, async (card, token) =>
                 {
-                    ct.ThrowIfCancellationRequested();
-
-                    if (existing.Contains(magicCards[i].Id))
+                    if (existing.Contains(card.Id))
                     {
-                        imgOk++;
-                        state.ImagesDownloaded = imgOk;
-                        continue;
+                        Interlocked.Increment(ref imgOk);
+                        return;
                     }
 
+                    var cardErrors = 0;
                     try
                     {
-                        if (await _imageCacheService.DownloadAsync(magicCards[i], ct))
-                            imgOk++;
+                        if (await _imageCacheService.DownloadAsync(card, token))
+                            Interlocked.Increment(ref imgOk);
                         else
-                            imgFail++;
+                            Interlocked.Increment(ref imgFail);
                     }
                     catch
                     {
-                        imgFail++;
-                        result.Errors++;
+                        Interlocked.Increment(ref imgFail);
+                        cardErrors = 1;
                     }
 
-                    state.ImagesDownloaded = imgOk;
-                    state.ImagesFailed = imgFail;
-                }
+                    if (cardErrors > 0)
+                        Interlocked.Add(ref localErrors, cardErrors);
+
+                    // Last-writer-wins snapshots: the UI polls at 500ms, exactness per frame
+                    // is irrelevant; the authoritative values are published after the loop.
+                    state.ImagesDownloaded = Volatile.Read(ref imgOk);
+                    state.ImagesFailed = Volatile.Read(ref imgFail);
+                });
+                state.ImagesDownloaded = imgOk;
+                state.ImagesFailed = imgFail;
+                result.Errors += localErrors;
             }
 
             result.ImagesDownloaded = imgOk;

@@ -116,118 +116,6 @@ public class ScryfallClientTests
     }
 
     /* ═══════════════════════════════════════════════════════
-     * GetCardByIdAsync — одиночная карта
-     * ═══════════════════════════════════════════════════════ */
-
-    [Test]
-    public async Task GetCardByIdAsync_ExistingCard_ReturnsCard()
-    {
-        var cardId = Guid.NewGuid();
-        var card = CreateCardDto(cardId, "Black Lotus");
-        _handler.Responses.Enqueue(CreateCardResponse(card));
-
-        var result = await _client.GetCardByIdAsync(cardId);
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Name, Is.EqualTo("Black Lotus"));
-    }
-
-    [Test]
-    public async Task GetCardByIdAsync_NotFound_ReturnsNull()
-    {
-        _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.NotFound));
-
-        var result = await _client.GetCardByIdAsync(Guid.NewGuid());
-
-        Assert.That(result, Is.Null);
-    }
-
-    [Test]
-    public async Task GetCardByIdAsync_ServerError_ThrowsException()
-    {
-        _handler.Responses.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
-
-        await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetCardByIdAsync(Guid.NewGuid()));
-    }
-
-    /* ═══════════════════════════════════════════════════════
-     * SearchAsync — поиск (без пагинации)
-     * ═══════════════════════════════════════════════════════ */
-
-    [Test]
-    public async Task SearchAsync_ReturnsResults()
-    {
-        var cards = new[] { CreateCardDto(Guid.NewGuid(), "Lightning Bolt"), CreateCardDto(Guid.NewGuid(), "Lightning Helix") };
-        _handler.Responses.Enqueue(CreateSearchResponse(cards, hasMore: false, nextPage: null));
-
-        var result = await _client.SearchAsync("lightning");
-
-        Assert.That(result, Has.Count.EqualTo(2));
-    }
-
-    [Test]
-    public async Task SearchAsync_EmptyResults_ReturnsEmptyArray()
-    {
-        _handler.Responses.Enqueue(CreateSearchResponse(Array.Empty<ScryfallCardDto>(), hasMore: false, nextPage: null));
-
-        var result = await _client.SearchAsync("nonexistent");
-
-        Assert.That(result, Is.Empty);
-    }
-
-    [Test]
-    public async Task SearchAsync_Limit_CappedAt250()
-    {
-        _handler.Responses.Enqueue(CreateSearchResponse(Array.Empty<ScryfallCardDto>(), hasMore: false, nextPage: null));
-
-        await _client.SearchAsync("test", limit: 500);
-
-        var request = _handler.Requests.First();
-        var query = request.RequestUri!.Query;
-
-        // Verify exact capping: per_page must be exactly 250, not 500
-        Assert.That(query, Does.Contain("per_page=250"),
-            $"BUG in ScryfallClient.SearchAsync: per_page should be capped at 250 " +
-            $"(Scryfall API maximum) when limit exceeds it. Actual query: '{query}'. " +
-            $"The capping logic (Math.Min(limit, 250)) may be missing or incorrect.");
-        // Also verify the original limit (500) does NOT appear
-        Assert.That(query, Does.Not.Contain("per_page=500"),
-            $"BUG in ScryfallClient.SearchAsync: Original limit value 500 appears in query " +
-            $"instead of capped value 250. Actual query: '{query}'. Math.Min(limit, 250) is not applied correctly.");
-    }
-
-    [Test]
-    public async Task SearchAsync_DefaultLimit_Uses100()
-    {
-        _handler.Responses.Enqueue(CreateSearchResponse(Array.Empty<ScryfallCardDto>(), hasMore: false, nextPage: null));
-
-        await _client.SearchAsync("test");
-
-        var request = _handler.Requests.First();
-        var query = request.RequestUri!.Query;
-
-        Assert.That(query, Does.Contain("per_page=100"),
-            $"BUG in ScryfallClient.SearchAsync: Default per_page should be 100 when no limit is specified. " +
-            $"Actual query: '{query}'. The method signature default or the URL construction may be wrong.");
-        // Verify it's exactly 100, not a partial match like "per_page=1000"
-        Assert.That(query.Split('&').Any(p => p == "per_page=100"),
-            $"BUG in ScryfallClient.SearchAsync: per_page parameter value is not exactly 100. " +
-            $"The query contains 'per_page=100' as a substring but the actual parameter may differ " +
-            $"(e.g., per_page=1000). Actual query: '{query}'. Check the default parameter and URL construction.");
-    }
-
-    [Test]
-    public async Task SearchAsync_DoesNotPaginate()
-    {
-        _handler.Responses.Enqueue(CreateSearchResponse(new[] { CreateCardDto(Guid.NewGuid(), "Card 1") }, hasMore: true, nextPage: "/cards/search?page=2"));
-
-        var result = await _client.SearchAsync("test");
-
-        Assert.That(result, Has.Count.EqualTo(1));
-        Assert.That(_handler.Requests, Has.Count.EqualTo(1));
-    }
-
-    /* ═══════════════════════════════════════════════════════
      * HTTP ошибки
      * ═══════════════════════════════════════════════════════ */
 
@@ -256,16 +144,6 @@ public class ScryfallClientTests
             "search", hasMore, nextPage, cards.Length, cards, null);
         return CreateJsonResponse(response);
     }
-
-    private static HttpResponseMessage CreateSearchResponse(ScryfallCardDto[] cards, bool hasMore, string? nextPage)
-    {
-        var response = new ScryfallSearchResponse<ScryfallCardDto>(
-            "search", hasMore, nextPage, cards.Length, cards, null);
-        return CreateJsonResponse(response);
-    }
-
-    private static HttpResponseMessage CreateCardResponse(ScryfallCardDto card) =>
-        CreateJsonResponse(card);
 
     private static HttpResponseMessage CreateJsonResponse(object data)
     {

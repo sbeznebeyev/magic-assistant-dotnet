@@ -29,7 +29,7 @@
     @if (_showSyncCardsDialog) { <SyncCards IsOpen="@_showSyncCardsDialog" IsOpenChanged="@(v => _showSyncCardsDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" ParentNodeId="@_importParentId" TargetNodeId="@_importTargetId" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
-    @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
+    @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" TargetNodeId="@_currentCollection.CollectionId" TargetName="@_currentCollection.Name" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
     @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_exportTargetId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
     @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
@@ -315,7 +315,17 @@
         }
     }
 
-    private void OpenLegacyImportDialog() => _showLegacyImportDialog = true;
+    private void OpenLegacyImportDialog()
+    {
+        // The legacy wizard has no target picker — it merges into the selected node, so
+        // a selection is a precondition; the header action stays silent without one.
+        if (_currentCollection.CollectionId is null)
+        {
+            _statusText = "Select a collection or deck first";
+            return;
+        }
+        _showLegacyImportDialog = true;
+    }
     private void OpenSyncSetsDialog() => _showSyncSetsDialog = true;
     private void OpenSyncCardsDialog() => _showSyncCardsDialog = true;
 

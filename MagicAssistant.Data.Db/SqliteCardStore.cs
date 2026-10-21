@@ -1884,6 +1884,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>Max items per UNION ALL chunk. SQLite caps a compound SELECT at
+    /// SQLITE_MAX_COMPOUND_SELECT = 500 terms; 100 leaves generous headroom and keeps
+    /// the parameter count low (≤200 per query).</summary>
+    private const int UnionQueryChunkSize = 100;
+
     public async Task<Dictionary<string, Card>> ResolveCardsByNameAndSetAsync(
         ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default)
     {
@@ -1897,42 +1902,52 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         // the same chain the UI uses for display (ActiveName in CardDescriptionView).
         // Localized KB rows keep English in Name and the localized name in PrintedName,
         // so legacy files with non-English names resolve too.
+        // Chunked: one UNION ALL branch per pair, and SQLite caps a compound SELECT at
+        // SQLITE_MAX_COMPOUND_SELECT (500) terms — a 10k-card legacy deck died there with
+        // "too many terms in compound SELECT". Batches run in pair order, so "first match
+        // wins per pair" keeps exactly the old single-query semantics.
         var pairsList = pairs.ToList();
-        var conditions = new List<string>();
-        var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
-
-        for (int i = 0; i < pairsList.Count; i++)
-        {
-            var (name, set) = pairsList[i];
-            var nKey = $"N{i}";
-            var sKey = $"S{i}";
-            paramObj[nKey] = name;
-            paramObj[sKey] = (object?)set ?? DBNull.Value;
-
-            var nameMatch = "(Name = @" + nKey + " OR PrintedName = @" + nKey +
-                            " OR Id IN (SELECT CardId FROM CardFaces WHERE Name = @" + nKey +
-                            " OR PrintedName = @" + nKey + "))";
-            if (set == null)
-                // Match cards where Set is NULL
-                conditions.Add(nameMatch + " AND SetCode IS NULL");
-            else
-                conditions.Add(nameMatch + " AND SetCode = @" + sKey);
-        }
-
-        // One UNION ALL branch per pair with a discriminator column, so results can be
-        // keyed by the REQUESTED (name, set) — the stored Name may differ from the input.
-        var sql = string.Join(" UNION ALL ",
-            conditions.Select((c, i) => $"SELECT *, {i} AS __m FROM Cards WHERE {c}"));
-        var rows = await conn.QueryAsync<ResolveMatchRow>(sql, paramObj);
-
-        // Build requested-pair key → card mapping (first match wins per pair)
         var result = new Dictionary<string, Card>();
-        foreach (var row in rows)
+
+        for (var offset = 0; offset < pairsList.Count; offset += UnionQueryChunkSize)
         {
-            var pair = pairsList[row.__m];
-            var key = $"{pair.Name}|{pair.Set ?? ""}";
-            if (!result.ContainsKey(key))
-                result[key] = MapToMagicCard(row);
+            var count = Math.Min(UnionQueryChunkSize, pairsList.Count - offset);
+            var conditions = new List<string>(count);
+            var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+
+            for (int i = 0; i < count; i++)
+            {
+                var (name, set) = pairsList[offset + i];
+                var nKey = $"N{i}";
+                var sKey = $"S{i}";
+                paramObj[nKey] = name;
+                paramObj[sKey] = (object?)set ?? DBNull.Value;
+
+                var nameMatch = "(Name = @" + nKey + " OR PrintedName = @" + nKey +
+                                " OR Id IN (SELECT CardId FROM CardFaces WHERE Name = @" + nKey +
+                                " OR PrintedName = @" + nKey + "))";
+                if (set == null)
+                    // Match cards where Set is NULL
+                    conditions.Add(nameMatch + " AND SetCode IS NULL");
+                else
+                    conditions.Add(nameMatch + " AND SetCode = @" + sKey);
+            }
+
+            // Discriminator = GLOBAL pair index (literal int), so rows from any batch key
+            // back into pairsList — the stored Name may differ from the input.
+            var sql = string.Join(" UNION ALL ",
+                conditions.Select((c, i) => $"SELECT *, {offset + i} AS __m FROM Cards WHERE {c}"));
+            var rows = await conn.QueryAsync<ResolveMatchRow>(sql, paramObj);
+
+            foreach (var row in rows)
+            {
+                var pair = pairsList[row.__m];
+                var key = $"{pair.Name}|{pair.Set ?? ""}";
+                if (!result.ContainsKey(key))
+                    result[key] = MapToMagicCard(row);
+            }
+
+            ct.ThrowIfCancellationRequested();
         }
 
         return result;
@@ -1956,22 +1971,29 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
         // Derived table of requested names (UNION ALL — the VALUES table constructor
         // with a column alias is not supported by the bundled SQLite) LEFT JOINed to
-        // CardSet (case-insensitive) + card count per set — one query, no N+1.
-        var selects = names.Select((_, i) => $"SELECT @N{i} AS Name");
-        var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
-        for (int i = 0; i < names.Count; i++)
-            paramObj[$"N{i}"] = names[i];
+        // CardSet (case-insensitive) + card count per set — one query per chunk, no N+1.
+        // Chunked: SQLite caps a compound SELECT at SQLITE_MAX_COMPOUND_SELECT (500) terms.
+        var rows = new List<SetSyncStatusRow>();
+        for (var offset = 0; offset < names.Count; offset += UnionQueryChunkSize)
+        {
+            var count = Math.Min(UnionQueryChunkSize, names.Count - offset);
+            var selects = Enumerable.Range(0, count).Select(i => $"SELECT @N{i} AS Name");
+            var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+            for (int i = 0; i < count; i++)
+                paramObj[$"N{i}"] = names[offset + i];
 
-        var sql = $@"
-            SELECT n.Name AS Name,
-                   cs.SetCode AS SetCode,
-                   cs.Name AS SetName,
-                   (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
-            FROM ({string.Join(" UNION ALL ", selects)}) AS n
-            LEFT JOIN CardSet cs ON cs.Name COLLATE NOCASE = n.Name
-            GROUP BY n.Name, cs.SetCode, cs.Name";
+            var sql = $@"
+                SELECT n.Name AS Name,
+                       cs.SetCode AS SetCode,
+                       cs.Name AS SetName,
+                       (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
+                FROM ({string.Join(" UNION ALL ", selects)}) AS n
+                LEFT JOIN CardSet cs ON cs.Name COLLATE NOCASE = n.Name
+                GROUP BY n.Name, cs.SetCode, cs.Name";
 
-        var rows = await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj);
+            rows.AddRange(await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj));
+            ct.ThrowIfCancellationRequested();
+        }
 
         return rows
             .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
@@ -2008,21 +2030,28 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         // The requested code is echoed back in the Name column so the result keeps the
         // one-row-per-requested-entry contract; SetName stays null for codes absent
         // from CardSet (the sync resolves the name from Scryfall itself).
-        var selects = codes.Select((_, i) => $"SELECT @N{i} AS Name");
-        var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
-        for (int i = 0; i < codes.Count; i++)
-            paramObj[$"N{i}"] = codes[i];
+        // Chunked for the same SQLITE_MAX_COMPOUND_SELECT (500) reason.
+        var rows = new List<SetSyncStatusRow>();
+        for (var offset = 0; offset < codes.Count; offset += UnionQueryChunkSize)
+        {
+            var count = Math.Min(UnionQueryChunkSize, codes.Count - offset);
+            var selects = Enumerable.Range(0, count).Select(i => $"SELECT @N{i} AS Name");
+            var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+            for (int i = 0; i < count; i++)
+                paramObj[$"N{i}"] = codes[offset + i];
 
-        var sql = $@"
-            SELECT n.Name AS Name,
-                   cs.SetCode AS SetCode,
-                   cs.Name AS SetName,
-                   (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
-            FROM ({string.Join(" UNION ALL ", selects)}) AS n
-            LEFT JOIN CardSet cs ON cs.SetCode COLLATE NOCASE = n.Name
-            GROUP BY n.Name, cs.SetCode, cs.Name";
+            var sql = $@"
+                SELECT n.Name AS Name,
+                       cs.SetCode AS SetCode,
+                       cs.Name AS SetName,
+                       (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
+                FROM ({string.Join(" UNION ALL ", selects)}) AS n
+                LEFT JOIN CardSet cs ON cs.SetCode COLLATE NOCASE = n.Name
+                GROUP BY n.Name, cs.SetCode, cs.Name";
 
-        var rows = await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj);
+            rows.AddRange(await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj));
+            ct.ThrowIfCancellationRequested();
+        }
 
         return rows
             .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)

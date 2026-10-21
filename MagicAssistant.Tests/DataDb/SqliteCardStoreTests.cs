@@ -519,6 +519,35 @@ public class SqliteCardStoreTests
     }
 
     [Test]
+    public async Task ResolveCardsByNameAndSetAsync_BeyondCompoundSelectLimit_ResolvesAllAcrossChunks()
+    {
+        // Regression: the query used to build ONE UNION ALL branch per pair and died on
+        // large legacy decks (10k+ cards) with "too many terms in compound SELECT" —
+        // SQLite caps a compound SELECT at SQLITE_MAX_COMPOUND_SELECT = 500 terms.
+        // 550 pairs span 6 chunks of the chunked builder and also verify the global
+        // discriminator keeps every pair keyed to its own card across chunk boundaries.
+        const int n = 550;
+        var ids = Enumerable.Range(0, n).Select(_ => Guid.NewGuid()).ToList();
+        await _store.AddAllAsync(ids.Select((id, i) => new Card
+        {
+            Id = id,
+            Name = $"Chunked Card {i}",
+            SetCode = "chg",
+        }).ToList());
+
+        var pairs = Enumerable.Range(0, n)
+            .Select(i => ($"Chunked Card {i}", (string?)"chg"))
+            .ToList();
+
+        var result = await _store.ResolveCardsByNameAndSetAsync(pairs);
+
+        Assert.That(result, Has.Count.EqualTo(n));
+        for (int i = 0; i < n; i++)
+            Assert.That(result[$"Chunked Card {i}|chg"].Id, Is.EqualTo(ids[i]),
+                $"Pair {i} mapped to the wrong card — global discriminator mapping across chunks is broken.");
+    }
+
+    [Test]
     public async Task ResolveCardsByNameAndSetAsync_DistinguishesSameNameDifferentSets()
     {
         var cardId1 = Guid.NewGuid();
