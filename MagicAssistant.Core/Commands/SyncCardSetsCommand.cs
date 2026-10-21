@@ -20,6 +20,15 @@ public class SyncCardSetsResult
     public int ExistingSetsUpdated { get; set; }
     public int ExistingSetsSkipped { get; set; }
     public int IconsDownloaded { get; set; }
+
+    /// <summary>.set-symbol rules appended to sets.css by this run — icons that had no class yet.
+    /// 0 when every cached icon was already represented.</summary>
+    public int CssRulesAdded { get; set; }
+
+    /// <summary>Set when the stylesheet could not be refreshed. Downloads already succeeded, so the
+    /// sync still reports Success — the UI shows this as a warning next to the icon count.</summary>
+    public string? CssError { get; set; }
+
     public string? ErrorMessage { get; set; }
 }
 
@@ -32,12 +41,18 @@ public class SyncCardSetsCommandHandler
     private readonly IDbCardStore _dbCardStore;
     private readonly IScrayfallClient _scryfallClient;
     private readonly ISetIconsCacheService _setIconsCache;
+    private readonly SetIconsCssGenerator? _setIconsCss;
 
-    public SyncCardSetsCommandHandler(IDbCardStore dbCardStore, IScrayfallClient scryfallClient, ISetIconsCacheService setIconsCache)
+    public SyncCardSetsCommandHandler(
+        IDbCardStore dbCardStore,
+        IScrayfallClient scryfallClient,
+        ISetIconsCacheService setIconsCache,
+        SetIconsCssGenerator? setIconsCss = null)
     {
         _dbCardStore = dbCardStore;
         _scryfallClient = scryfallClient;
         _setIconsCache = setIconsCache;
+        _setIconsCss = setIconsCss;
     }
 
     public async Task<SyncCardSetsResult> Handle(
@@ -109,6 +124,15 @@ public class SyncCardSetsCommandHandler
                 .ToArray();
 
             result.IconsDownloaded = await _setIconsCache.DownloadAsync(iconPairs, ct);
+
+            // 6. Keep the stylesheet in step with the cache: every cached icon without a
+            //    .set-symbol class gets one appended. Optional — a missing generator (tests) skips it.
+            if (_setIconsCss is not null)
+            {
+                var css = _setIconsCss.SyncMissing();
+                result.CssRulesAdded = css.RulesAdded;
+                result.CssError = css.Error;
+            }
 
             result.Success = true;
         }

@@ -98,6 +98,15 @@ builder.Services.AddSingleton<ISetIconsCacheService>(sp =>
     return new SetIconsCacheService(setIconsDir, httpClient);
 });
 
+// Set-icon stylesheet generator — keeps wwwroot/css/sets.css in step with the icon cache.
+// In dev (dotnet run) WebRootPath is the project's wwwroot, so a sets sync writes the new rules
+// into the repo; in a published app it writes the deployment copy and rebuilds any missing rule
+// from data/set_icons on the next sync — no re-download.
+var setsCssPath = Path.Combine(
+    builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
+    "css", "sets.css");
+builder.Services.AddSingleton(new SetIconsCssGenerator(setsCssPath, setIconsDir));
+
 // Sync state registry (singleton — tracks all active syncs)
 builder.Services.AddSingleton<SyncSetStateRegistry>();
 

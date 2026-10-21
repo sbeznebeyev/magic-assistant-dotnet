@@ -116,7 +116,19 @@
                         {
                             <span class="detail">Icons: @_setsSyncResult.IconsDownloaded</span>
                         }
+                        @* Icons reach the UI only as .set-symbol classes in sets.css — the generator
+                           appends the missing ones right after the icon cache is filled. *@
+                        @if (_setsSyncResult.CssRulesAdded > 0)
+                        {
+                            <span class="detail">CSS rules: @_setsSyncResult.CssRulesAdded</span>
+                        }
                     </div>
+                    @if (!string.IsNullOrEmpty(_setsSyncResult.CssError))
+                    {
+                        <div class="result-errors">
+                            <div>⚠ Icons cached, but sets.css was not updated: @_setsSyncResult.CssError</div>
+                        </div>
+                    }
                     @if (!_setsSyncResult.Success && !string.IsNullOrEmpty(_setsSyncResult.ErrorMessage))
                     {
                         <div class="result-errors">
