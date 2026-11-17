@@ -16,6 +16,8 @@ MagicAssistant is a full-featured desktop-class application for managing MTG car
 
 It is a **single-user** application: there are no user accounts or profiles, and no way to keep separate collections and decks for different people. One installation, one knowledge base, one collection — the way a personal organizer should be.
 
+![MagicAssistant in action](/docs/demo1.png)
+
 ---
 
 ## Architecture at a Glance
