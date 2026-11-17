@@ -3,13 +3,6 @@
 @inject IDeckManagementService DeckManagement
 
 <div class="navigator" @onkeydown="OnKeyDown">
-    <div class="navigator-kb-header">
-        <span>Knowledge Base Cards</span>
-    </div>
-
-    <div class="navigator-show-all">
-        <button class="btn-show-all" @onclick="HandleShowAllCards">Show All Cards</button>
-    </div>
 
     @* ── Add Menu Overlay (click-outside to close, like context menu) ── *@
     @if (_activeAddMenuNodeId != null || _showRootAddMenu)
@@ -21,6 +14,14 @@
     <div class="navigator-header">
         <span>Collections &amp; Decks</span>
     </div>
+
+    @* ── KnowledgeBase pseudo-node: sits above the tree, looks like a node but is not part of it ── *@
+    <button class="btn-kb-node @(SelectedNodeId == null ? "active" : "")"
+            @onclick="HandleShowAllCards"
+            title="Browse all knowledge base cards">
+        <span class="kb-icon"></span>
+        <span class="kb-label">KnowledgeBase Cards</span>
+    </button>
 
     @if (_loading)
     {
@@ -40,32 +41,22 @@
             {
                 <DecksNavigatorTreeItem @key="node.Id + node.Name" Node="@node"
                           Depth="0"
-                          SelectedId="@SelectedNode?.Id"
+                          SelectedId="@SelectedNodeId"
+                          PinnedId="@PinnedNodeId"
                           ActiveAddMenuNodeId="@_activeAddMenuNodeId"
                           ExpandedSet="@_expandedNodes"
                           OnToggleExpand="ToggleNodeExpanded"
                           OnSelectDeck="OnSelectDeck"
                           OnContextMenuToggle="OnContextMenuToggle"
                           OnAskCreateNode="OnAskCreateNode"
-                          OnAddMenuToggle="OnAddMenuToggle" />
+                          OnAddMenuToggle="OnAddMenuToggle"
+                          OnImportRequest="OnImportFromMenu" />
             }
 
-            @* ── Add Node Button (root level) ── *@
-            <div class="add-menu-wrapper">
-                <div class="tree-node tree-add-node" style="--depth: 0;" @onclick="ToggleRootAddMenu">
-                    <span></span>
-                    <button class="tree-add-btn" @onclick:stopPropagation="true" title="Add node">+</button>
-                    <span class="tree-label tree-add-label" style="margin-left: 6px;">add node</span>
-                </div>
-                @if (_showRootAddMenu)
-                {
-                    <div class="add-menu">
-                        <button @onclick="() => SelectAndShow(null, NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
-                        <button @onclick="() => SelectAndShow(null, NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
-                        <button @onclick="() => SelectAndShow(null, NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
-                    </div>
-                }
-            </div>
+            @* ── Add Node Button (root level) — unified AddNodeRow; ShowSpacer=false keeps the current depth-0 offset *@
+            <AddNodeRow Depth="0" ShowSpacer="false" IsMenuOpen="_showRootAddMenu"
+                        OnToggle="ToggleRootAddMenu" OnCreateNode="(t) => SelectAndShow(null, t)"
+                        OnImportRequest="OnImportFromMenu" />
         </div>
     }
 
@@ -76,17 +67,63 @@
         </div>
         @if (_contextTarget != null)
         {
-            <div class="context-menu-fixed" style="top: @(_contextMenuTop.ToString("F0") + "px"); left: @(_contextMenuLeft.ToString("F0") + "px");">
+            <div class="context-menu-fixed" style="--ctx-x: @(_contextMenuLeft.ToString("F0"))px; --ctx-y: @(_contextMenuTop.ToString("F0"))px;">
                 <span class="context-label">@_contextTarget.Name</span>
-                <button @onclick="() => BeginRename(_contextTarget)">✏ Rename</button>
-                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Deck)">🃏 New Deck</button>
-                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Folder)">📁 New Folder</button>
-                <button @onclick="() => ShowCreateDialog(_contextTarget.Id, NodeType.Collection)">🗂 New Collection</button>
+                <button @onclick="() => BeginRename(_contextTarget)">
+                    <span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" aria-hidden="true"><text x="1" y="17" font-size="15" font-weight="bold" fill="currentColor">ab</text><rect x="19.5" y="3" width="2.5" height="18" fill="currentColor"/></svg></span>Rename
+                </button>
+                @if (_contextTarget.NodeType != NodeType.Folder)
+                {
+                    @* Pin/Unpin + Clear — state dot (green = pin, red = lock) / eraser SVG; locked nodes get gray read-only items; sideboard inherits the deck's lock.
+                       Deck with a sideboard: paired rows — deck action (1/3 width) | sideboard action (2/3 width). *@
+                    @if (_contextTarget is NavigatorNodeDeck menuDeck && menuDeck.Sideboard != null)
+                    {
+                        var menuSideboard = menuDeck.Sideboard;
+                        <div class="ctx-pair">
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                                    @onclick="() => TogglePinFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-pinned"></span></span>@(menuDeck.Id == PinnedNodeId ? "Unpin" : _contextTarget.Locked ? "Pin (unlock to pin)" : "Pin")
+                            </button>
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                                    @onclick="() => TogglePinFromMenu(menuSideboard)"><span class="ctx-cell"><span class="menu-dot dot-pinned"></span></span>@(menuSideboard.Id == PinnedNodeId ? "Unpin sideboard" : _contextTarget.Locked ? "Pin sideboard (unlock to pin)" : "Pin sideboard")
+                            </button>
+                        </div>
+                        <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-locked"></span></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
+                        </button>
+                        <div class="ctx-pair">
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                                    @onclick="() => AskClear(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear</button>
+                            <button disabled="@_contextTarget.Locked"
+                                    title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                                    @onclick="() => AskClearSideboard(menuDeck)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear sideboard</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button disabled="@_contextTarget.Locked"
+                                title="@(_contextTarget.Locked ? "Locked collections cannot be pinned" : null)"
+                                @onclick="() => TogglePinFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-pinned"></span></span>@(_contextTarget.Id == PinnedNodeId ? "Unpin" : _contextTarget.Locked ? "Pin (unlock to pin)" : "Pin")
+                        </button>
+                        <button @onclick="() => ToggleLockFromMenu(_contextTarget)"><span class="ctx-cell"><span class="menu-dot dot-locked"></span></span>@(_contextTarget.Locked ? "Unlock" : "Lock")
+                        </button>
+                        <button disabled="@_contextTarget.Locked"
+                                title="@(_contextTarget.Locked ? "Locked collections cannot be cleared" : null)"
+                                @onclick="() => AskClear(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></span>Clear</button>
+                    }
+                    @* Import — cards merge into the clicked node's CollectionId (a deck import also merges the
+                       file's sideboard into the deck's sideboard child); gray read-only while locked, same as Clear.
+                       Export — read-only, never disabled; a deck export includes its sideboard in the JSON. *@
+                    <button disabled="@_contextTarget.Locked"
+                            title="@(_contextTarget.Locked ? "Locked collections cannot be imported into" : null)"
+                            @onclick="() => ImportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Import</button>
+                    <button @onclick="() => ExportFromMenu(_contextTarget)"><span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>Export</button>
+                }
                 <hr class="context-sep" />
-                <button @onclick="() => OpenDeckProperties(_contextTarget)">⚙ Properties</button>
-                <button @onclick="() => ToggleLock(_contextTarget)">@GetLockText(_contextTarget)</button>
-                <hr class="context-sep" />
-                <button class="danger" @onclick="() => AskDelete(_contextTarget)">🗑 Delete</button>
+                <button class="danger" @onclick="() => AskDelete(_contextTarget)">
+                    <span class="ctx-cell"><svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>Delete
+                </button>
             </div>
         }
     }
@@ -139,6 +176,36 @@
             </div>
         </div>
     }
+
+    @* ── Clear Sideboard Confirmation (deck nodes only; the SB node itself is kept) ── *@
+    @if (_showClearSbConfirm)
+    {
+        <div class="dialog-overlay" @onclick="CloseClearSbConfirm">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">Clear sideboard</div>
+                <p>Delete all @_clearSbTargetSideboardCardCount cards from the sideboard of "<strong>@_clearSbTarget?.Name</strong>"? The sideboard itself is kept.</p>
+                <div class="dialog-actions">
+                    <button class="btn-danger" @onclick="ConfirmClearSideboard">Clear</button>
+                    <button class="btn-secondary" @onclick="CloseClearSbConfirm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Clear Confirmation (deck/collection nodes; the node itself is kept) ── *@
+    @if (_showClearConfirm)
+    {
+        <div class="dialog-overlay" @onclick="CloseClearConfirm">
+            <div class="dialog-box" @onclick:stopPropagation="true">
+                <div class="dialog-title">Clear</div>
+                <p>Delete all @_clearTargetCardCount cards from the @GetClearNodeKind() "<strong>@_clearTarget?.Name</strong>"? The @GetClearNodeKind() itself is kept.</p>
+                <div class="dialog-actions">
+                    <button class="btn-danger" @onclick="ConfirmClear">Clear</button>
+                    <button class="btn-secondary" @onclick="CloseClearConfirm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -147,16 +214,6 @@
     private List<NavigatorNodeBase>? _rootNodes;
     /// <summary>Folder IDs that are visually expanded. Decoupled from data — collapse only hides.</summary>
     private HashSet<int> _expandedNodes = new();
-
-    /// <summary>
-    /// Единый узел выбора: Deck, Collection или Sideboard (NavigatorNodeDeck.Sideboard).
-    /// </summary>
-    private NavigatorNodeBase? SelectedNode
-    {
-        get => _selectedNode;
-        set => _selectedNode = value;
-    }
-    private NavigatorNodeBase? _selectedNode;
 
     private bool _loading;
     private string? _error;
@@ -185,6 +242,20 @@
     private bool _showDeleteConfirm;
     private NavigatorNodeBase? _deleteTarget;
 
+    // ── Clear Sideboard Confirmation ─────────────────────
+    private bool _showClearSbConfirm;
+    private NavigatorNodeDeck? _clearSbTarget;
+
+    /// <summary>Sideboard card count for the confirmation text (captured when the dialog opens).</summary>
+    private int _clearSbTargetSideboardCardCount;
+
+    // ── Clear Confirmation (deck/collection nodes) ───────
+    private bool _showClearConfirm;
+    private NavigatorNodeBase? _clearTarget;
+
+    /// <summary>Node card count for the confirmation text (captured when the dialog opens).</summary>
+    private int _clearTargetCardCount;
+
     // ── Root add menu ──────────────────────────────────────
     private bool _showRootAddMenu;
 
@@ -198,9 +269,52 @@
     private ElementReference _renameInput = default!;
 
     // ── Events to parent (MainLayout) ──────────────────────
-    [Parameter] public EventCallback<int> OnDeckSelected { get; set; }
-    [Parameter] public EventCallback<NavigatorNodeBase> OnOpenProperties { get; set; }
+    /// <summary>Selected node as a LockableCollection (Id, Locked, Name) built from the node's state.</summary>
+    [Parameter] public EventCallback<LockableCollection> OnDeckSelected { get; set; }
+
+    /// <summary>Pin button click — the clicked node as a LockableCollection.
+    /// These buttons are the only source that changes MainLayout._pinnedCollection.</summary>
+    [Parameter] public EventCallback<LockableCollection> OnPinToggled { get; set; }
+
+    /// <summary>Lock state changed on a node (and, for decks, its sideboard) — MainLayout keeps the
+    /// _currentCollection/_pinnedCollection IsLocked snapshots fresh and unpins locked nodes.</summary>
+    [Parameter] public EventCallback<(int Id, bool Locked)> OnNodeLockToggled { get; set; }
     [Parameter] public EventCallback OnShowAllCards { get; set; }
+
+    /// <summary>A node (and its subtree) was deleted — MainLayout drops any context referencing it.</summary>
+    [Parameter] public EventCallback<int> OnNodeDeleted { get; set; }
+
+    /// <summary>Import requested from the add-node menu — parentId null = root level.
+    /// MainLayout opens DeckImportWizard with that parent context (new decks are created inside it).</summary>
+    [Parameter] public EventCallback<int?> OnImportRequested { get; set; }
+
+    /// <summary>Import requested from the ⋯ context menu — the CollectionId cards are merged INTO (the clicked
+    /// deck/collection node; a deck import also merges the file's sideboard into its sideboard child).
+    /// MainLayout opens DeckImportWizard pre-targeted at that existing node.</summary>
+    [Parameter] public EventCallback<int> OnImportIntoRequested { get; set; }
+
+    /// <summary>Export requested from the ⋯ context menu — the clicked node (deck/collection).
+    /// MainLayout opens DeckExportWizard for that node, not for the displayed one.</summary>
+    [Parameter] public EventCallback<int> OnExportRequested { get; set; }
+
+    /// <summary>Clear sideboard requested from the ⋯ context menu (deck nodes only) — the SIDEBOARD node's
+    /// own ID (NavigatorNodeDeck.Sideboard.Id), not the parent deck's. MainLayout wipes all cards out of
+    /// that sideboard via IDeckCardService (the SB node is kept) and refreshes navigator counts / strip stats.</summary>
+    [Parameter] public EventCallback<int> OnClearSideboardRequested { get; set; }
+
+    /// <summary>Clear requested from the ⋯ context menu (deck/collection nodes only, folders ignored) —
+    /// the clicked node's own ID. MainLayout wipes all cards out of that node via IDeckCardService
+    /// (the node is kept) and refreshes navigator counts / strip stats.</summary>
+    [Parameter] public EventCallback<int> OnClearRequested { get; set; }
+
+    /// <summary>Currently displayed collection node (MainLayout._currentCollection.CollectionId).
+    /// Pure projection: non-null highlights that node, null (KB mode) highlights nothing —
+    /// clicking the KnowledgeBase button clears the tree selection.</summary>
+    [Parameter] public int? SelectedNodeId { get; set; }
+
+    /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId)
+    /// — drives the Pin/Unpin labels in the ⋯ context menu and the green marker dot on node rows.</summary>
+    [Parameter] public int? PinnedNodeId { get; set; }
 
     // ── Lifecycle ──────────────────────────────────────────
     protected override async Task OnInitializedAsync()
@@ -253,6 +367,27 @@
         }
     }
 
+    /// <summary>
+    /// Re-fetches the tree (single query) and swaps in fresh node objects so card counts
+    /// reflect the latest Deck-table state. Called by MainLayout after any card-mutating operation
+    /// (+/−, KB add, Move, Split, Edit, Import). Expansion and selection survive — they are keyed
+    /// by id, not by node references.
+    /// </summary>
+    public async Task RefreshCardCountsAsync()
+    {
+        if (_rootNodes == null) return;  // initial load failed — nothing to refresh
+        try
+        {
+            var tree = await DeckManagement.GetAllNodesAsync();
+            _rootNodes = new List<NavigatorNodeBase>(tree.Values);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Keep the current tree — a failed refresh must not blank out the navigator.
+        }
+    }
+
     private static void CollectAllFolders(IEnumerable<NavigatorNodeBase> nodes, HashSet<int> expandedSet)
     {
         foreach (var node in nodes)
@@ -270,18 +405,61 @@
     private void ToggleNodeExpanded(int folderId)
     {
         if (_expandedNodes.Contains(folderId))
+        {
             _expandedNodes.Remove(folderId);
+            // The add-node row is a child of the folder — collapsing removes it,
+            // so drop the open add-menu state to avoid a dangling overlay.
+            if (_activeAddMenuNodeId == folderId)
+                _activeAddMenuNodeId = null;
+        }
         else
             _expandedNodes.Add(folderId);
     }
 
-    /// <summary>Выбор узла — присваиваем SelectedNode и уведомляем MainLayout.</summary>
-    private void OnSelectDeck(NavigatorNodeBase node)
+    /// <summary>Selection request from the tree (deck/collection/SB). The highlight is a pure
+    /// projection of SelectedNodeId — KB mode (null) leaves nothing highlighted.
+    /// Folders are not locations and never select; re-clicking the displayed node is a no-op.</summary>
+    private async Task OnSelectDeck(NavigatorNodeBase node)
     {
-        if (SelectedNode == node) return;
-        SelectedNode = node;
-        if (node != null)
-            _ = OnDeckSelected.InvokeAsync(node.Id);
+        if (node.NodeType == NodeType.Folder) return;
+        if (node.Id == SelectedNodeId) return;
+        await OnDeckSelected.InvokeAsync(ToLockable(node));
+    }
+
+    /// <summary>Builds the navigation payload (Id, Locked, Name) from a tree node.</summary>
+    private static LockableCollection ToLockable(NavigatorNodeBase node) => new()
+    {
+        CollectionId = node.Id,
+        IsLocked = node.Locked,
+        Name = node.Name,
+        NodeType = node.NodeType
+    };
+
+    /// <summary>
+    /// Selects a node by id through the same path as a click in the tree
+    /// (external sources, e.g. the InstancesView jump). The node's own (Id, Locked)
+    /// pair is reported to MainLayout via OnDeckSelected. No-op if the node is not in the tree.
+    /// </summary>
+    public async Task SelectNodeAsync(int nodeId)
+    {
+        var node = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), nodeId);
+        if (node == null) return;
+        await OnSelectDeck(node);
+    }
+
+    /// <summary>Pin/Unpin from the ⋯ context menu — closes the menu, then reuses the shared toggle.
+    /// The menu renders this item disabled for locked nodes, so it never fires there.</summary>
+    private async Task TogglePinFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnPinToggle(node);
+    }
+
+    /// <summary>Pin request — passes the clicked node up as a LockableCollection; MainLayout toggles the pin.
+    /// Only deck/collection/sideboard nodes arrive here (folders have no pin).</summary>
+    private async Task OnPinToggle(NavigatorNodeBase node)
+    {
+        await OnPinToggled.InvokeAsync(ToLockable(node));
     }
 
     private async Task HandleShowAllCards()
@@ -290,25 +468,10 @@
     }
 
     // ── Context menu ───────────────────────────────────────
-    private void OpenContextMenu(NavigatorNodeBase node)
-    {
-        _contextTarget = node;
-        _activeContextMenuNodeId = node.Id;
-        // Close any other open menus
-        _activeAddMenuNodeId = null;
-        _showRootAddMenu = false;
-    }
-
     private void CloseContextMenu()
     {
         _contextTarget = null;
         _activeContextMenuNodeId = null;
-    }
-
-    private async Task OpenDeckProperties(NavigatorNodeBase node)
-    {
-        CloseContextMenu();
-        await OnOpenProperties.InvokeAsync(node);
     }
 
     // ── Create Node (unified dialog → CreateNodeAsync → GetNodesBranchAsync) ──
@@ -367,7 +530,7 @@
             CloseCreateDialog();
 
             if (created.NodeType == NodeType.Deck || created.NodeType == NodeType.Collection)
-                OnSelectDeck(created);
+                await OnSelectDeck(created);
         }
         catch (Exception ex)
         {
@@ -416,26 +579,69 @@
         }
     }
 
-    // ── Lock/Unlock ────────────────────────────────────────
-    private async Task ToggleLock(NavigatorNodeBase node)
+    // ── Delete ─────────────────────────────────────────────
+    // ── Clear Sideboard (⋯ context menu — deck nodes only) ──
+
+    /// <summary>Open the clear-sideboard confirmation. Locked decks never fire here —
+    /// the menu renders the item disabled, mirroring the pin items.</summary>
+    private ValueTask AskClearSideboard(NavigatorNodeDeck deck)
     {
+        if (deck.Locked || deck.Sideboard == null) return default;
         CloseContextMenu();
-        try
-        {
-            if (node.Locked)
-                await DeckManagement.UnlockAsync(node.Id);
-            else
-                await DeckManagement.LockAsync(node.Id);
-            // In-place mutation — shared reference in the tree
-            node.Locked = !node.Locked;
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
+        _clearSbTarget = deck;
+        _clearSbTargetSideboardCardCount = deck.Sideboard.CardCount;
+        _showClearSbConfirm = true;
+        return default;
     }
 
-    // ── Delete ─────────────────────────────────────────────
+    private async Task ConfirmClearSideboard()
+    {
+        if (_clearSbTarget?.Sideboard == null) return;
+        // The sideboard node's own ID — the SB rows in Deck are keyed by it, not by the parent deck's ID.
+        var sideboardId = _clearSbTarget.Sideboard.Id;
+        CloseClearSbConfirm();
+        await OnClearSideboardRequested.InvokeAsync(sideboardId);
+    }
+
+    private void CloseClearSbConfirm()
+    {
+        _showClearSbConfirm = false;
+        _clearSbTarget = null;
+        _clearSbTargetSideboardCardCount = 0;
+    }
+
+    // ── Clear (⋯ context menu — deck/collection nodes, folders ignored) ──
+
+    /// <summary>Open the clear confirmation. Locked nodes never fire here —
+    /// the menu renders the item disabled, mirroring the pin items.</summary>
+    private ValueTask AskClear(NavigatorNodeBase node)
+    {
+        if (node.Locked || node.NodeType == NodeType.Folder) return default;
+        CloseContextMenu();
+        _clearTarget = node;
+        _clearTargetCardCount = node.CardCount;
+        _showClearConfirm = true;
+        return default;
+    }
+
+    private async Task ConfirmClear()
+    {
+        if (_clearTarget == null) return;
+        var nodeId = _clearTarget.Id;
+        CloseClearConfirm();
+        await OnClearRequested.InvokeAsync(nodeId);
+    }
+
+    private void CloseClearConfirm()
+    {
+        _showClearConfirm = false;
+        _clearTarget = null;
+        _clearTargetCardCount = 0;
+    }
+
+    /// <summary>"deck" or "collection" for the confirmation text (folders never open this dialog).</summary>
+    private string GetClearNodeKind() => _clearTarget?.NodeType == NodeType.Deck ? "deck" : "collection";
+
     private ValueTask AskDelete(NavigatorNodeBase node)
     {
         if (node.Locked) return default;
@@ -450,9 +656,11 @@
         if (_deleteTarget == null) return;
         try
         {
-            await DeckManagement.DeleteDeckAsync(_deleteTarget.Id);
-            RemoveFromTree(_deleteTarget.Id);
+            var deletedId = _deleteTarget.Id;
+            await DeckManagement.DeleteDeckAsync(deletedId);
+            RemoveFromTree(deletedId);
             CloseDeleteConfirm();
+            await OnNodeDeleted.InvokeAsync(deletedId);
         }
         catch (Exception ex)
         {
@@ -574,6 +782,28 @@
         ShowCreateDialog(parentId, nodeType);
     }
 
+    /// <summary>Import from the add-node menu — closes any open add-menu, then reports the parent context up (null = root).</summary>
+    private async Task OnImportFromMenu(int? parentId)
+    {
+        CloseAddMenu();
+        await OnImportRequested.InvokeAsync(parentId);
+    }
+
+    /// <summary>Import from the ⋯ context menu — imports INTO the clicked node's own CollectionId (merge semantics);
+    /// folders are excluded by the menu itself. MainLayout opens DeckImportWizard pre-targeted at that node.</summary>
+    private async Task ImportFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnImportIntoRequested.InvokeAsync(node.Id);
+    }
+
+    /// <summary>Export from the ⋯ context menu — exports the clicked node; folders are excluded by the menu itself (they hold no cards).</summary>
+    private async Task ExportFromMenu(NavigatorNodeBase node)
+    {
+        CloseContextMenu();
+        await OnExportRequested.InvokeAsync(node.Id);
+    }
+
     // ── Add Menu Overlay (click-outside to close) ──────────
     private void OnAddMenuToggle(int nodeId)
     {
@@ -591,8 +821,6 @@
         _activeAddMenuNodeId = null;
         _showRootAddMenu = false;
     }
-
-    private string GetLockText(NavigatorNodeBase node) => node.Locked ? "🔓 Unlock" : "🔒 Lock";
 
     // ── Context Menu (click-outside to close) ──────────────
     private void OnContextMenuToggle((int nodeId, double clientX, double clientY) args)
@@ -612,34 +840,14 @@
         }
     }
 
-    // ── In-tree mutations (called from TreeItem callbacks) ──
-    private async Task OnRenameNode((int id, string newName) args)
+    /// <summary>Lock/Unlock from the ⋯ context menu — closes the menu, then reuses the shared toggle.</summary>
+    private async Task ToggleLockFromMenu(NavigatorNodeBase node)
     {
-        try
-        {
-            await DeckManagement.RenameAsync(args.id, args.newName);
-            var node = FindNodeInTree(_rootNodes ?? Enumerable.Empty<NavigatorNodeBase>(), args.id);
-            if (node != null) node.Name = args.newName;
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
+        CloseContextMenu();
+        await OnLockToggle(node.Id);
     }
 
-    private async Task OnDeleteNode(int id)
-    {
-        try
-        {
-            await DeckManagement.DeleteDeckAsync(id);
-            RemoveFromTree(id);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-    }
-
+    // ── Lock toggle (⋯ context menu — deck/collection nodes only) ──
     private async Task OnLockToggle(int id)
     {
         try
@@ -652,7 +860,16 @@
             else
                 await DeckManagement.LockAsync(id);
 
+            // In-place mutation — shared reference in the tree
             node.Locked = !node.Locked;
+
+            // A deck's lock propagates to its sideboard (Core persists it — sync the tree, notify MainLayout for both ids)
+            if (node is NavigatorNodeDeck { Sideboard: not null } deck)
+            {
+                deck.Sideboard.Locked = node.Locked;
+                await OnNodeLockToggled.InvokeAsync((deck.Sideboard.Id, node.Locked));
+            }
+            await OnNodeLockToggled.InvokeAsync((node.Id, node.Locked));
         }
         catch (Exception ex)
         {
@@ -699,6 +916,8 @@
             if (_contextTarget != null) CloseContextMenu();
             else if (_showCreateDialog) CloseCreateDialog();
             else if (_showRenameDialog) CloseRenameDialog();
+            else if (_showClearSbConfirm) CloseClearSbConfirm();
+            else if (_showClearConfirm) CloseClearConfirm();
             else if (_showDeleteConfirm) CloseDeleteConfirm();
         }
     }

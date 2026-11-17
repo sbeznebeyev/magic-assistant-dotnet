@@ -5,12 +5,12 @@
 
 @if (IsOpen)
 {
-    <div class="sync-dialog-overlay" @onclick="OnOverlayClick">
+    <div class="sync-dialog-overlay">
     <div class="sync-dialog" @onclick:stopPropagation="true">
         @* ── Header ── *@
         <div class="sync-header">
-            <span class="sync-title">🔄 Sync Set from Scryfall</span>
-            <button class="close-btn" @onclick="OnOverlayClick">✕</button>
+            <span class="sync-title">Sync cards from Scryfall</span>
+            <button class="close-btn" @onclick="Close">✕</button>
         </div>
 
         @if (_loadingSet)
@@ -119,15 +119,21 @@
         {
             @* ── Sync In Progress ── *@
             <div class="sync-progress-section">
-                <div class="progress-set-name">@(_currentSet?.Name ?? SetCode)</div>
+                <div class="progress-set-line">
+                    @* Same treatment as SyncCards: global .set-symbol sprite (gold gradient
+                       through the per-set mask) + gold gradient text for the name. *@
+                    <span class="progress-set-icon set-symbol set-symbol-@SetCode"></span>
+                    <span class="progress-set-name">@(_currentSet?.Name ?? SetCode)</span>
+                </div>
 
                 <div class="phase-indicator">
-                    <span class="phase-label">@_currentState?.PhaseName</span>
                     <span class="phase-message">@_currentState?.Message</span>
                 </div>
 
                 <div class="progress-bar-wrap">
-                    <div class="progress-bar" style="width: @(_currentState?.ProgressPercent ?? 0)%"></div>
+                    @* Culture-safe int width (CreaturePage pattern) — raw double breaks the style
+                       under comma cultures and the bar renders permanently full. *@
+                    <div class="progress-bar" style="width: @(_currentState?.ProgressWidthPct ?? 0)%"></div>
                 </div>
 
                 <div class="progress-stats">
@@ -374,7 +380,7 @@
     }
 
     // ── Dialog ───────────────────────────────────────────
-    private async Task OnOverlayClick()
+    private async Task Close()
     {
         if (_isSyncing) return; // Don't close while syncing
         IsOpen = false;

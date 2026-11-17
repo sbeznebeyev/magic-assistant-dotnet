@@ -28,10 +28,10 @@ public class MagicCardFilterTests
         var filter = new MagicCardFilter();
         filter.SetFilter(BinaryExpr.FieldMatches(MagicCardField.Name, "lightning"));
 
-        var cards = new ICard[]
+        var cards = new ICardSimple[]
         {
-            new MagicCard { Name = "Lightning Bolt" },
-            new MagicCard { Name = "Fireball" },
+            new Card { Name = "Lightning Bolt" },
+            new Card { Name = "Fireball" },
         };
 
         Assert.That(filter.FilterCards(cards), Has.Length.EqualTo(1));
@@ -43,10 +43,10 @@ public class MagicCardFilterTests
         var filter = new MagicCardFilter();
         filter.SetFilter(BinaryExpr.FieldEquals(MagicCardField.Set, "m19"));
 
-        var cards = new ICard[]
+        var cards = new ICardSimple[]
         {
-            new MagicCard { Name = "Card 1", SetCode = "m19" },
-            new MagicCard { Name = "Card 2", SetCode = "m20" },
+            new Card { Name = "Card 1", SetCode = "m19" },
+            new Card { Name = "Card 2", SetCode = "m20" },
         };
 
         Assert.That(filter.FilterCards(cards), Has.Length.EqualTo(1));

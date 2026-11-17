@@ -72,8 +72,12 @@ public sealed class ColorFilter : IEquatable<ColorFilter>
         var cardCondition = BuildCondition(col);
         var faceCondition = BuildCondition(faceCol);
 
-        // Cards where bits match directly, OR cards that have at least one matching face
-        return $"({cardCondition}) OR (Id IN (SELECT CardId FROM CardFaces WHERE {faceCondition}))";
+        // Cards where bits match directly, OR cards that have at least one matching face.
+        // Outer parentheses are MANDATORY: the fragment's top level is an OR, and GetPagedAsync
+        // joins whereParts with AND — without them SQL precedence re-groups the whole WHERE as
+        // "(otherFilters AND cardCondition) OR faceSubquery", leaking the face branch past every
+        // other filter (set, rarity, name, location...).
+        return $"(({cardCondition}) OR (Id IN (SELECT CardId FROM CardFaces WHERE {faceCondition})))";
     }
 
     private string BuildCondition(string col)

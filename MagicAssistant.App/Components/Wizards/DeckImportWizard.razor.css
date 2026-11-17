@@ -54,9 +54,55 @@
     border-color: #0078d4;
 }
 
-.file-input {
-    width: 100%;
-    padding: 6px;
+/* Native file input is visually hidden — the custom label button below triggers it.
+   This keeps the native filename readout out of the layout so the editable name
+   input on the next line doesn't collide with it. */
+::deep .file-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.file-btn {
+    display: inline-block;
+    background: #3c3c3c;
+    color: #ccc;
+    border: 1px solid #555;
+    padding: 6px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.file-btn:hover {
+    background: #4a4a4a;
+}
+
+/* Selected-file confirmation: green check + plain file name */
+.file-selected {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #4caf50;
+}
+
+/* Fixed import target (⋯ menu): gold gradient name with a soft glow */
+.target-name {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    /* `to bottom`, not 135deg: on a wide-short inline box a diagonal gradient compresses into a
+       thin mid-palette band vertically — the glyphs read gray-beige instead of gold. A vertical
+       gradient sweeps the full palette across the glyph height. */
+    background: linear-gradient(to bottom, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.35));
 }
 
 .file-info {
@@ -121,4 +167,129 @@
 
 .dialog-success {
     color: #4caf50;
+}
+
+.form-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6cb6ff;
+}
+
+/* ── Missing sets prompt (mirrors OldDeckImportWizard) ── */
+.missing-sets-header {
+    font-size: 13px;
+    color: #eee;
+    margin-bottom: 8px;
+}
+
+.missing-set-list {
+    margin: 0 0 12px;
+    padding-left: 18px;
+    font-size: 12px;
+    color: #ccc;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.missing-set-list li { margin-bottom: 4px; }
+.set-code { color: #888; }
+
+/* Cards that will be resolved by the sync — informational, not an error. */
+.unknown-cards-hint {
+    font-size: 12px;
+    color: #6cb6ff;
+    margin-bottom: 12px;
+}
+
+.language-group .language-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.lang-toggle {
+    background: #2d2d2d;
+    border: 1px solid #555;
+    color: #aaa;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.lang-toggle:hover { border-color: #0078d4; color: #ccc; }
+.lang-toggle.active { background: #0078d4; border-color: #0078d4; color: #fff; }
+
+.check-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #ccc;
+    cursor: pointer;
+}
+
+/* ── Sync progress (mirrors SyncKnowledgeBase) ───────── */
+.sync-progress-section { padding: 20px 16px; }
+
+.progress-set-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #eee;
+    margin-bottom: 12px;
+}
+
+.sync-count { font-size: 12px; color: #888; font-weight: 400; }
+
+.phase-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 10px;
+}
+
+.phase-message { font-size: 12px; color: #888; }
+
+.progress-bar-wrap {
+    background: #333;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #0078d4, #4fc3f7);
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 5px;
+}
+
+.progress-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 12px;
+}
+
+.progress-stats .fail { color: #e74c3c; }
+
+.cancel-btn {
+    width: 100%;
+    background: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.cancel-btn:hover { background: #4a4a4a; }
+
+/* Dialog scrolls when the missing-sets list grows */
+.dialog-box {
+    max-height: 85vh;
+    overflow-y: auto;
 }

@@ -10,7 +10,7 @@ public class AnalysisServiceTests
     [Test]
     public void Analyze_EmptyDeck_ReturnsZeroStats()
     {
-        var result = _service.Analyze(Array.Empty<MagicCardPhysical>());
+        var result = _service.Analyze(Array.Empty<MyCard>());
         
         Assert.That(result.TotalCards, Is.EqualTo(0));
         Assert.That(result.TotalManaCost, Is.EqualTo(0));
@@ -216,7 +216,7 @@ public class AnalysisServiceTests
     [Test]
     public void Analyze_MultiColorCard_CountsInBothColors()
     {
-        var card = new MagicCard
+        var card = new Card
         {
             Id = Guid.NewGuid(),
             Name = "Twincast",
@@ -224,7 +224,7 @@ public class AnalysisServiceTests
             Type = "Instant",
             CmcNumber = ColorTypes.GetConvertedManaCost("{W}{U}"),
         };
-        var physical = new MagicCardPhysical(card) { Count = 2 };
+        var physical = new MyCard(card) { Count = 2 };
         try
         {
             var result = _service.Analyze(new[] { physical });
@@ -348,6 +348,35 @@ public class AnalysisServiceTests
         {
             Assert.Fail($"BUG: Analyze() crashes with KeyNotFoundException in ColorDistribution. Got: {ex.Message}");
         }
+    }
+
+    [Test]
+    public void Analyze_DoubleFacedCreature_SubtypesFromCreatureFacesOnly()
+    {
+        // Regression: the parser split the joined type line without honoring the "//" face
+        // separator, so "Creature — Cat // Creature — Rat" polluted the chart with a
+        // literal "//" row, leaked "Creature" as a subtype, and leaked TWO bare-dash
+        // tokens per DFC (which the chart mined as its "all" total, inflating it).
+        // Each face must be parsed independently.
+        var dfc = CreatePhysicalCard("Daybound // Moonbound", "{1}{G}", "Creature — Cat // Creature — Rat", 2);
+        var modal = CreatePhysicalCard("Backface Brawler", "{R}", "Instant — Trap // Creature — Goblin", 1);
+
+        var result = _service.Analyze(new[] { dfc, modal });
+
+        Assert.That(result.CreatureSubtypes.ContainsKey("Cat"), Is.True);
+        Assert.That(result.CreatureSubtypes["Cat"], Is.EqualTo(2));
+        Assert.That(result.CreatureSubtypes["Rat"], Is.EqualTo(2));
+        Assert.That(result.CreatureSubtypes["Goblin"], Is.EqualTo(1),
+            "Only the creature face of a DFC contributes subtypes");
+        Assert.That(result.CreatureSubtypes.ContainsKey("Trap"), Is.False,
+            "The non-creature half of a DFC must not leak its subtype into the creature chart");
+        Assert.That(result.CreatureSubtypes.ContainsKey("//"), Is.False,
+            "The face separator is not a subtype name");
+        Assert.That(result.CreatureSubtypes.ContainsKey("Creature"), Is.False);
+        Assert.That(result.CreatureSubtypes.ContainsKey("\u2014"), Is.False,
+            "The supertype/subtype separator must not leak as a bare dash token");
+        Assert.That(result.CreatureCount, Is.EqualTo(3),
+            "Both DFC cards count once as creatures (card-level gate unchanged)");
     }
 
     // ─── Analyze — Ability Stats ───────────────────────────
@@ -489,7 +518,7 @@ public class AnalysisServiceTests
     [Test]
     public void ComputeManaCurve_EmptyDeck_ReturnsZeros()
     {
-        var curve = _service.ComputeManaCurve(Array.Empty<MagicCardPhysical>());
+        var curve = _service.ComputeManaCurve(Array.Empty<MyCard>());
         
         Assert.That(curve, Has.Length.EqualTo(8));
         Assert.That(curve[0], Is.EqualTo(0));
@@ -515,12 +544,23 @@ public class AnalysisServiceTests
         Assert.That(curve.Sum(), Is.EqualTo(0));
     }
 
+    // ─── IsLand ────────────────────────────────────────────
+
+    [Test]
+    public void IsLand_DetectsLandSupertypeTokens()
+    {
+        Assert.That(AnalysisService.IsLand(new Card { Type = "Basic Land — Forest" }), Is.True);
+        Assert.That(AnalysisService.IsLand(new Card { Type = "Land" }), Is.True);
+        Assert.That(AnalysisService.IsLand(new Card { Type = "Creature - Human Soldier" }), Is.False);
+        Assert.That(AnalysisService.IsLand(new Card { Type = null }), Is.False);
+    }
+
     // ─── Helper ────────────────────────────────────────────
 
-    private MagicCardPhysical CreatePhysicalCard(string name, string cost, string type, int count)
+    private MyCard CreatePhysicalCard(string name, string cost, string type, int count)
     {
         var cmc = ColorTypes.GetConvertedManaCost(cost);
-        var card = new MagicCard
+        var card = new Card
         {
             Id = Guid.NewGuid(),
             Name = name,
@@ -529,6 +569,6 @@ public class AnalysisServiceTests
             CmcNumber = cmc,
         };
 
-        return new MagicCardPhysical(card) { Count = count };
+        return new MyCard(card) { Count = count };
     }
 }

@@ -4,7 +4,7 @@ namespace MagicAssistant.Core.Commands;
 
 /// <summary>
 /// Rename a collection node (deck, folder, or collection) in the navigation tree.
-/// For decks: also renames the sideboard child to "{newName} (Sideboard)".
+/// For decks: also renames the sideboard child to "{newName} (sb)".
 /// </summary>
 public record RenameNodeCommand(int Id, string NewName);
 

@@ -19,7 +19,7 @@ public static class CardMatcher
     /// - TYPE field: uses CardTypes.HasType() for primary-type matching (non-regex mode)
     /// - Other fields: uses TextValue.GetPattern() regex with wordBoundary/caseSensitive/isRegex flags
     /// </summary>
-    public static bool Matches(IMagicCard card, MagicCardField field, TextValue textValue)
+    public static bool Matches(ICard card, MagicCardField field, TextValue textValue)
     {
         var value = GetFieldStringValue(card, field);
 
@@ -39,7 +39,7 @@ public static class CardMatcher
     /// Legacy overload for simple string matching (no flags).
     /// Used when TextValue is not available. Falls back to case-insensitive contains.
     /// </summary>
-    public static bool MatchesSimple(IMagicCard card, MagicCardField field, string pattern)
+    public static bool MatchesSimple(ICard card, MagicCardField field, string pattern)
     {
         if (string.IsNullOrEmpty(pattern)) return true;
 
@@ -57,7 +57,7 @@ public static class CardMatcher
     /// <summary>
     /// Gets the string representation of a card field value.
     /// </summary>
-    private static string GetFieldStringValue(IMagicCard card, MagicCardField field)
+    private static string GetFieldStringValue(ICard card, MagicCardField field)
     {
         var obj = field.Get(card);
         return obj?.ToString() ?? "";
@@ -68,7 +68,7 @@ public static class CardMatcher
     /// Mirrors Java CardTypes.hasType() — checks the primary type (word before " — ").
     /// For example: "Creature — Human Warrior" → primary type is "Creature".
     /// </summary>
-    private static bool TypeMatches(IMagicCard card, string pattern)
+    private static bool TypeMatches(ICard card, string pattern)
     {
         if (string.IsNullOrEmpty(pattern)) return true;
 

@@ -3,9 +3,9 @@
     Mirrors Java: ui.views.analyzers.DeckLegalityPage2
     
     Features:
-    - Visual format cards with legal/illegal status
-    - Color-coded badges (green=legal, red=illegal)
-    - Illegal cards list with expand/collapse
+    - Clickable format tiles with legal/illegal status (selection gets a gold glow)
+    - Descriptions panel below the grid: full problem details of the selected tile,
+      scrollable when long; card lists hard-capped at 10 with a truncation marker
     - Summary stats with progress bar
     - Error handling and loading states
 *@
@@ -50,42 +50,76 @@
             <div class="legality-progress">
                 <div class="progress-label">Deck Legality Rate</div>
                 <div class="progress-track">
-                    <div class="progress-fill" style="width: @_legalityRate%;"></div>
+                    @* Whole-percent width — culture-safe int for the inline style (ru-RU
+                       would render the double with a comma and break the CSS). *@
+                    <div class="progress-fill" style="width:@((int)Math.Round(_legalityRate))%;"></div>
                 </div>
                 <div class="progress-value">@_legalityRate.ToString("F0")%</div>
             </div>
 
-            @* ── Format Cards Grid ── *@
+            @* ── Format Tiles — clickable; the selection drives the Descriptions panel below ── *@
             <div class="format-grid">
                 @foreach (var format in _formats)
                 {
-                    <div class="format-card @(format.IsLegal ? "legal" : "illegal")">
+                    <div class="format-card @(format.IsLegal ? "legal" : "illegal") @(_selectedFormat == format.FormatName ? "selected" : "")"
+                         @onclick="() => SelectFormat(format.FormatName)">
                         <div class="format-header">
                             <span class="format-name">@format.FormatName</span>
                             <span class="legality-badge @(format.IsLegal ? "badge-legal" : "badge-illegal")">
                                 @(format.IsLegal ? "✓ Legal" : "✕ Illegal")
                             </span>
                         </div>
-
-                        @if (!format.IsLegal && format.IllegalCards.Any())
+                        @if (!format.IsLegal)
                         {
-                            <div class="illegal-section">
-                                <button class="toggle-btn" @onclick="() => ToggleFormat(format.FormatName)">
-                                    @_expandedFormats.Contains(format.FormatName) ? "▾" : "▸" @format.IllegalCards.Count illegal card@(format.IllegalCards.Count != 1 ? "s" : "")
-                                </button>
+                            <div class="tile-summary">@IssueSummary(format)</div>
+                        }
+                    </div>
+                }
+            </div>
 
-                                @if (_expandedFormats.Contains(format.FormatName))
-                                {
+            @* ── Descriptions Panel — full details of the selected tile; scrolls when long ── *@
+            <div class="description-panel">
+                @if (SelectedItem is { } sel)
+                {
+                    <div class="description-header">
+                        <span class="description-title">@sel.FormatName</span>
+                        <span class="legality-badge @(sel.IsLegal ? "badge-legal" : "badge-illegal")">
+                            @(sel.IsLegal ? "✓ Legal" : "✕ Illegal")
+                        </span>
+                    </div>
+
+                    @if (sel.IsLegal)
+                    {
+                        <div class="description-body legal-clear">
+                            <div class="clear-message">✓ This deck is fully legal in @sel.FormatName.</div>
+                            <div class="clear-sub">Every card in the deck is legal in this format.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="description-body">
+                            @if (sel.IllegalCards.Any())
+                            {
+                                <div class="desc-section">
+                                    <div class="desc-section-title">Illegal Cards <span class="desc-count desc-count-red">@sel.IllegalCards.Count</span></div>
                                     <div class="illegal-cards-list">
-                                        @foreach (var card in format.IllegalCards)
+                                        @foreach (var card in sel.IllegalCards.Take(10))
                                         {
                                             <span class="illegal-card-tag">@card</span>
                                         }
+                                        @if (sel.IllegalCards.Count > 10)
+                                        {
+                                            <span class="more-chip">+ @(sel.IllegalCards.Count - 10) more</span>
+                                        }
                                     </div>
-                                }
-                            </div>
-                        }
-                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="description-hint">Select a format tile above to see its details.</div>
                 }
             </div>
 
@@ -113,7 +147,7 @@
     private int _legalCount;
     private int _illegalCount;
     private double _legalityRate;
-    private HashSet<string> _expandedFormats = new();
+    private string? _selectedFormat;
     private bool _loading;
     private string? _error;
 
@@ -141,7 +175,7 @@
 
     private async Task Reload() => await LoadLegality();
 
-    private void BuildLegalityData(ICollection<MagicCardPhysical> cards)
+    private void BuildLegalityData(ICollection<MyCard> cards)
     {
         // Enum Format → display name mapping
         var formatMap = new Dictionary<Format, string>
@@ -156,6 +190,8 @@
             [Format.Historic] = "Historic",
             [Format.Pauper] = "Pauper",
             [Format.FutureStandard] = "Future Standard",
+            [Format.Timeless] = "Timeless",
+            [Format.Duelist] = "Duelist",
         };
 
         _formats = new List<FormatLegalityItem>();
@@ -163,6 +199,7 @@
 
         foreach (var (format, formatName) in formatMap)
         {
+            // Simple per-card legality: a format is legal when every card in the deck is.
             var illegalCards = cards
                 .Where(c => !c.Card.LegalityMap.IsLegal(format))
                 .Select(c => c.Card.Name)
@@ -185,18 +222,20 @@
         _legalityRate = _formats.Count > 0 ? (double)_legalCount / _formats.Count * 100 : 0;
     }
 
-    private void ToggleFormat(string formatName)
-    {
-        if (_expandedFormats.Contains(formatName))
-            _expandedFormats.Remove(formatName);
-        else
-            _expandedFormats.Add(formatName);
-        StateHasChanged();
-    }
+    private void SelectFormat(string formatName) => _selectedFormat = formatName;
+
+    /// <summary>The tile currently selected in the grid (null until the first click).</summary>
+    private FormatLegalityItem? SelectedItem =>
+        _selectedFormat is { } name ? _formats?.FirstOrDefault(f => f.FormatName == name) : null;
+
+    /// <summary>Tile summary line: "N illegal cards".</summary>
+    private static string IssueSummary(FormatLegalityItem f) =>
+        $"{f.IllegalCards.Count} illegal card{(f.IllegalCards.Count != 1 ? "s" : "")}";
 
     private class FormatLegalityItem
     {
         public string FormatName { get; set; } = "";
+        /// <summary>True when every card in the deck is legal in this format.</summary>
         public bool IsLegal { get; set; }
         public List<string> IllegalCards { get; set; } = new();
     }

@@ -11,9 +11,9 @@ public record GetCardInstancesQuery(Guid CardId);
 
 public class GetCardInstancesQueryHandler
 {
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
 
-    public GetCardInstancesQueryHandler(ICardStore<MagicCardPhysical> cardStore)
+    public GetCardInstancesQueryHandler(ICardStore<MyCard> cardStore)
     {
         _cardStore = cardStore;
     }
@@ -22,7 +22,7 @@ public class GetCardInstancesQueryHandler
     /// Returns all physical instances of a card across all decks and collections.
     /// Each instance includes the deck/collection location info.
     /// </summary>
-    public async Task<ICollection<MagicCardPhysical>> Handle(GetCardInstancesQuery query, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> Handle(GetCardInstancesQuery query, CancellationToken ct = default)
     {
         return await _cardStore.GetCardsAsync(query.CardId, ct);
     }

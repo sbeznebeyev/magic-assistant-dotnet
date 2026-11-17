@@ -1,0 +1,247 @@
+@* MoveDialog — move part of a card pile between the viewed collection and the pinned target.
+   Mirrors SplitDialog (the slider value = copies on the right side), but the right side is any
+   pinned node (collection/deck/sideboard) instead of the deck's own sideboard. Deck↔sideboard
+   pile moves keep using SplitDialog; this dialog opens only from the collection view. *@
+@using MagicAssistant.Core.Services.DeckCard
+@using MagicAssistant.Data.Model
+@inject IDeckCardService DeckCardService
+@inject ICollectionStore CollectionStore
+
+@if (!IsOpen) return;
+
+<div class="move-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+    <div class="move-dialog-box" @onclick:stopPropagation>
+        @* ── Header ── *@
+        <div class="move-dialog-header">
+            <span class="move-dialog-title">Move Card Pile</span>
+            <button class="move-dialog-close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
+        </div>
+
+        @if (_card == null)
+        {
+            <div class="move-dialog-empty">No card selected.</div>
+        }
+        else
+        {
+            @* ── Card preview ── *@
+            <div class="move-dialog-preview">
+                <span class="move-dialog-preview-name">@ActiveName</span>
+                <span class="move-dialog-preview-count">× @_totalCount</span>
+            </div>
+
+            @* ── Move slider: drag the handle to move cards one at a time into the pinned target ── *@
+            <div class="move-dialog-form">
+                <div class="move-dialog-slider-heads">
+                    <span class="move-dialog-label-src">@(SourceLabel ?? "here")</span>
+                    @* Only a sideboard target wears the gold capsule (SplitDialog's language);
+                       collection/deck targets read plain, exactly like the source label. *@
+                    @if (TargetIsSideboard)
+                    {
+                        <span class="move-dialog-badge-target">@(TargetLabel ?? "sideboard")</span>
+                    }
+                    else
+                    {
+                        <span class="move-dialog-label-target">@(TargetLabel ?? "pinned")</span>
+                    }
+                </div>
+
+                <div class="move-dialog-slider-row">
+                    <span class="move-dialog-count">@_mainCount</span>
+                    <div class="move-dialog-track-wrap">
+                        <div class="move-dialog-bar">
+                            <div class="move-dialog-bar-main" style="width:@LeftBarWidthPct%"></div>
+                            <div class="move-dialog-bar-side" style="width:@RightBarWidthPct%"></div>
+                        </div>
+                        <input type="range" min="0" max="@_totalCount" step="1"
+                               value="@_targetCount" @oninput="OnSliderInput"
+                               class="move-dialog-slider" aria-label="Split between here and the pinned target" />
+                    </div>
+                    <span class="move-dialog-count">@_targetCount</span>
+                </div>
+
+                @* Error ── *@
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="move-dialog-error">@_error</div>
+                }
+            </div>
+
+            @* ── Footer ── *@
+            <div class="move-dialog-footer">
+                <button class="move-dialog-btn-move" @onclick="OnMove" disabled="@(!_moved || _saving)">
+                    @(_saving ? "Moving..." : "Move")
+                </button>
+                <button class="move-dialog-btn-cancel" @onclick="Close" disabled="@_saving">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private MyCard? _card;
+    private int _sourceId;
+    private int _targetId;
+    private int _totalCount = 0;
+    private int _mainCount = 0;          // copies staying in the source collection
+    private int _initialMainCount;
+    private int _initialTargetCount;
+    private bool _isDoubleSided;
+    private bool _saving;
+    private string? _error;
+
+    /// <summary>True when the slider value differs from the distribution at open time.
+    /// The Move button is enabled only in that state.</summary>
+    private bool _moved => _mainCount != _initialMainCount;
+
+    // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter] public MyCard? Card { get; set; }
+
+    /// <summary>The viewed collection — copies move out of it.</summary>
+    [Parameter] public int? SourceCollectionId { get; set; }
+
+    /// <summary>The pinned target (collection/deck/sideboard) — copies move into it.</summary>
+    [Parameter] public int? TargetCollectionId { get; set; }
+
+    /// <summary>Slider head labels: source name (left) and the pinned target label (right).</summary>
+    [Parameter] public string? SourceLabel { get; set; }
+    [Parameter] public string? TargetLabel { get; set; }
+
+    /// <summary>True when the pinned target is a sideboard — the only case the right-hand label
+    /// wears the gold capsule; a collection/deck target stays plain, like the left-hand label.</summary>
+    [Parameter] public bool TargetIsSideboard { get; set; }
+
+    [Parameter] public EventCallback OnMoveDone { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && Card != _card)
+            await LoadCardAsync(Card);
+    }
+
+    private async Task LoadCardAsync(MyCard? card)
+    {
+        _card = card;
+        _error = null;
+        if (card == null) return;
+
+        _isDoubleSided = card.Card.Has2Faces;
+
+        if (SourceCollectionId is not int src || TargetCollectionId is not int tgt || src == tgt)
+        {
+            _error = "Move needs two different locations — pin a destination first.";
+            _totalCount = card.Count;
+            _mainCount = _initialMainCount = card.Count;
+            return;
+        }
+        _sourceId = src;
+        _targetId = tgt;
+
+        // Load both rows so the slider opens at the real distribution between source and target.
+        try
+        {
+            var rows = await CollectionStore.GetCardsAsync(card.Id);
+            var sourceRow = rows.FirstOrDefault(r => r.Collection?.Id == _sourceId);
+            var targetRow = rows.FirstOrDefault(r => r.Collection?.Id == _targetId);
+
+            _totalCount = (sourceRow?.Count ?? 0) + (targetRow?.Count ?? 0);
+            _mainCount = _initialMainCount = sourceRow?.Count ?? 0;
+            _initialTargetCount = targetRow?.Count ?? 0;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private CardFace? ActiveFace => _isDoubleSided && _card?.Card.CardFaces is { Length: >= 2 }
+        ? _card.Card.CardFaces[0] // the preview shows the front face
+        : null;
+
+    // Scryfall fills PrintedName for many double-sided cards.
+    // Fall back to base card values if face-specific fields are empty.
+    private string ActiveName => ActiveFace is { } f
+        ? (f.PrintedName ?? f.Name ?? _card?.Card.PrintedName ?? _card?.Name ?? string.Empty)
+        : (_card?.Card.PrintedName ?? _card?.Name ?? string.Empty);
+
+    private int _targetCount => _totalCount - _mainCount;
+
+    // Bar segments are positioned relative to the slider handle (slider value = target count):
+    // blue fills [0, handle], orange fills [handle, 1] — the handle sits exactly at the boundary.
+    // Whole percents via Math.Round, same as SplitDialog: an int renders identically in any culture.
+    private int LeftBarWidthPct => _totalCount > 0 ? (int)Math.Round(_targetCount / (double)_totalCount * 100) : 0;
+    private int RightBarWidthPct => _totalCount > 0 ? (int)Math.Round(_mainCount / (double)_totalCount * 100) : 0;
+
+    /// <summary>The slider value is the TARGET count: dragging right pushes cards into the pinned
+    /// target, dragging left pulls them back to the viewed collection — cards flow with the drag.</summary>
+    private void OnSliderInput(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var target))
+            _mainCount = _totalCount - Math.Clamp(target, 0, _totalCount);
+    }
+
+    private async Task OnMove()
+    {
+        if (_card == null) return;
+        if (!_moved || _saving) return;
+        if (!string.IsNullOrEmpty(_error)) return;
+
+        _saving = true;
+        _error = null;
+        var movedOk = false;
+
+        try
+        {
+            // Delta from the distribution at open time: positive pushes copies source→target,
+            // negative pulls them back. Full moves use MoveCardsAsync (whole-row move + merge);
+            // partial moves use TransferCardsAsync (decrement + merged add, any two nodes).
+            var delta = _targetCount - _initialTargetCount;
+
+            if (delta > 0)
+            {
+                if (delta == _initialMainCount)
+                    await DeckCardService.MoveCardsAsync(_sourceId, new[] { _card.Id }, _targetId);
+                else
+                    await DeckCardService.TransferCardsAsync(_sourceId, _card.Id, delta, _targetId);
+            }
+            else
+            {
+                var back = -delta;
+                if (back == _initialTargetCount)
+                    await DeckCardService.MoveCardsAsync(_targetId, new[] { _card.Id }, _sourceId);
+                else
+                    await DeckCardService.TransferCardsAsync(_targetId, _card.Id, back, _sourceId);
+            }
+
+            await OnMoveDone.InvokeAsync();
+            movedOk = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+
+        // Close after finally: Close() guards on _saving, which is still true inside the try block.
+        if (movedOk) await Close();
+    }
+
+    // ── Close helpers ──
+    private async Task Close()
+    {
+        if (_saving) return;
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await Close();
+    }
+}

@@ -158,9 +158,9 @@ public class MagicCardFilter : ICloneable
 
     public bool IsFiltered(object? o) => _root != Expr.True && !_root.Evaluate(o);
 
-    public ICard[] FilterCards(IEnumerable<ICard> cards)
+    public ICardSimple[] FilterCards(IEnumerable<ICardSimple> cards)
     {
-        var filtered = new List<ICard>();
+        var filtered = new List<ICardSimple>();
         foreach (var card in cards)
         {
             if (card is CardGroup group && group.Count > 0)
@@ -175,10 +175,10 @@ public class MagicCardFilter : ICloneable
         return filtered.ToArray();
     }
 
-    private IEnumerable<IMagicCard> RemoveSetDuplicates(IEnumerable<ICard> cards)
+    private IEnumerable<ICard> RemoveSetDuplicates(IEnumerable<ICardSimple> cards)
     {
-        var unique = new Dictionary<Guid, IMagicCard>();
-        foreach (var card in cards.OfType<IMagicCard>())
+        var unique = new Dictionary<Guid, ICard>();
+        foreach (var card in cards.OfType<ICard>())
         {
             if (card.Id != Guid.Empty && !unique.ContainsKey(card.Id))
                 unique[card.Id] = card;

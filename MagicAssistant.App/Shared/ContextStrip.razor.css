@@ -1,0 +1,97 @@
+/* Context strip — three sections: selected (left) | gold arrow (middle) | pinned (right).
+   Velvet base (demo variant 3): burgundy velvet panel with a dark-wine rim. */
+.context-strip {
+    display: flex;
+    height: 38px;
+    margin-bottom: 4px;
+    background: linear-gradient(180deg, #3a2230 0%, #241522 100%);
+    border: 1px solid #5c2a3a;
+    box-sizing: border-box;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.context-half {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Middle section — gold arrow pointing right */
+.context-arrow {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+}
+
+/* Collection name — velvet cream on the burgundy panel; 14px vs the pill's 12px on
+   purpose: the pill is ALL-CAPS, and capitals read noticeably larger than mixed-case
+   text at the same px. The 2px bump evens out the perceived size; both stay on one line. */
+.context-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #f0d9a0;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* "(x/y)" stats — dusty rose on velvet; tooltip carries "unique: x, total: y" */
+.context-stats {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #b09aa5;
+}
+
+/* Left half: name hugs the arrow (stats stay on the outer left edge) */
+.context-selected .context-name {
+    margin-left: auto;
+}
+
+/* Right half: stats pushed to the outer right edge (name stays by the arrow) */
+.context-pinned .context-stats {
+    margin-left: auto;
+}
+
+/* Empty-pinned hint (demo variant H10) — italic whisper in dusty rose, framed by two
+   faded gold dashes: reads as a note about the slot, not as its content. */
+.context-hint {
+    font-style: italic;
+    font-size: 12px;
+    color: #b09aa5;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.context-hint::before {
+    content: "\2014\00a0";
+    color: rgba(232, 199, 106, 0.4);
+}
+
+.context-hint::after {
+    content: "\00a0\2014";
+    color: rgba(232, 199, 106, 0.4);
+}
+
+/* Sideboard pill — deliberately duplicates the CreaturePage/Colors-tab badge: scoped CSS
+   can't cross components, and the design must stay identical. */
+.sideboard-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #e8c76a;
+    background: #1e1e2e;
+    border: 1px solid rgba(232, 199, 106, 0.5);
+}

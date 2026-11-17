@@ -5,22 +5,21 @@
     @if (Node.NodeType == NodeType.Folder)
     {
         var folder = (NavigatorNodeFolder)Node;
-        <div class="tree-node @(SelectedId == Node.Id ? "selected" : "")"
-                 style="--depth: @Depth;"
-                 @oncontextmenu:preventDefault="true">
+        <div class="tree-node"
+             style="--depth: @Depth;"
+             @oncontextmenu:preventDefault="true">
 
                 <span class="tree-toggle" @onclick:stopPropagation="true"
                       @onclick="OnToggleClick">
                     @(IsExpanded ? "▾" : "▸")
                 </span>
 
-                <span class="deck-nav-ico deck-nav-folder-ico"></span>
+                @if (ShowMarker)
+                {
+                    <span class="deck-nav-ico node-dot @NodeMarkerClass"></span>
+                }
 
                 <span class="tree-label">@Node.Name</span>
-                @if (Node.Locked)
-                {
-                    <span class="tree-locked">🔒</span>
-                }
                 @if (Node.CardCount > 0)
                 {
                     <span class="tree-count">@(Node.CardCount)</span>
@@ -39,32 +38,25 @@
                 <DecksNavigatorTreeItem @key="child.Id + child.Name" Node="@child"
                           Depth="@(Depth + 1)"
                           SelectedId="@SelectedId"
+                          PinnedId="@PinnedId"
                           ActiveAddMenuNodeId="@ActiveAddMenuNodeId"
                           ExpandedSet="@ExpandedSet"
                           OnToggleExpand="@OnToggleExpand"
                           OnSelectDeck="@OnSelectDeck"
                           OnContextMenuToggle="@OnContextMenuToggle"
                           OnAskCreateNode="@OnAskCreateNode"
-                          OnAddMenuToggle="@OnAddMenuToggle" />
+                          OnAddMenuToggle="@OnAddMenuToggle"
+                          OnImportRequest="@OnImportRequest" />
             }
         }
 
-        @* ── Add Node Button (only for folders) ── *@
-        <div class="add-menu-wrapper">
-            <div class="tree-node tree-add-node" style="--depth: @Depth;" @onclick="OnAddClick">
-                <span class="tree-spacer"></span>
-                <button class="tree-add-btn" @onclick:stopPropagation="true" title="Add node">+</button>
-                <span class="tree-label tree-add-label" style="margin-left: 6px;">add node</span>
-            </div>
-            @if (IsAddMenuOpen)
-            {
-                <div class="add-menu">
-                    <button @onclick="() => AskCreateNode(NodeType.Collection)"><span class="deck-nav-ico deck-nav-col-ico"></span> Collection</button>
-                    <button @onclick="() => AskCreateNode(NodeType.Deck)"><span class="deck-nav-ico deck-nav-deck-ico"></span> Deck</button>
-                    <button @onclick="() => AskCreateNode(NodeType.Folder)"><span class="deck-nav-ico deck-nav-folder-ico"></span> Folder</button>
-                </div>
-            }
-        </div>
+        @* ── Add Node Button (child of the folder — rendered only while expanded) — unified AddNodeRow *@
+        @if (IsExpanded)
+        {
+            <AddNodeRow Depth="@Depth" ShowSpacer="true" IsMenuOpen="IsAddMenuOpen"
+                        OnToggle="OnAddClick" OnCreateNode="AskCreateNode"
+                        ParentNodeId="@Node.Id" OnImportRequest="OnImportRequest" />
+        }
     }
     else if (Node.NodeType == NodeType.Deck)
     {
@@ -74,27 +66,32 @@
                  @onclick="OnSelectClick"
                  @oncontextmenu:preventDefault="true">
 
-                <span class="@(Depth > 0 ? "tree-spacer" : "")"></span>
-                <span class="deck-nav-ico deck-nav-deck-ico"></span>
+                <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-deck-ico")"></span>
 
                 <span class="tree-label">@Node.Name</span>
-                @if (Node.Locked)
-                {
-                    <span class="tree-locked">🔒</span>
+                @* Combined count: deck copies, with /sideboard appended when the SB is not empty. *@
+                @{
+                    var sbCount = deck.Sideboard?.CardCount ?? 0;
                 }
-                @if (Node.CardCount > 0)
+                @if (Node.CardCount > 0 || sbCount > 0)
                 {
-                    <span class="tree-count">@(Node.CardCount)</span>
+                    <span class="tree-count">@(sbCount > 0 ? $"{Node.CardCount}/{sbCount}" : $"{Node.CardCount}")</span>
                 }
 
                 <span class="tree-actions">
                     @if (deck.Sideboard != null)
                     {
-                        <button class="tree-sb-btn @(SelectedId == deck.Sideboard?.Id ? "selected" : "")" @onclick:stopPropagation="true"
-                                @onclick="() => OnSideboardClick(deck.Sideboard)"
-                                title="Sideboard @(deck.Sideboard.CardCount) cards">
-                            SB@(deck.Sideboard.CardCount > 0 ? " " + deck.Sideboard.CardCount : "")
-                        </button>
+                        var sideboard = deck.Sideboard;
+                        @* pin/lock dot stands outside the capsule, to its left — same click as the button itself *@
+                        @if (SbShowMarker(sideboard))
+                        {
+                            <span class="tree-sb-marker @SbMarkerClass(sideboard)" @onclick:stopPropagation="true"
+                                  @onclick="() => OnSideboardClick(sideboard)"
+                                  title="Sideboard @(sideboard.CardCount) cards"></span>
+                        }
+                        <button class="tree-sb-btn @(SelectedId == sideboard.Id ? "selected" : "")" @onclick:stopPropagation="true"
+                                @onclick="() => OnSideboardClick(sideboard)"
+                                title="Sideboard @(sideboard.CardCount) cards">SB</button>
                     }
                     <button class="tree-more-btn" @onclick:stopPropagation="true"
                             @onclick="OnMoreClick" title="Options">⋯</button>
@@ -108,14 +105,9 @@
              @onclick="OnSelectClick"
              @oncontextmenu:preventDefault="true">
 
-            <span class="@(Depth > 0 ? "tree-spacer" : "")"></span>
-            <span class="deck-nav-ico deck-nav-col-ico"></span>
+            <span class="deck-nav-ico @(ShowMarker ? "node-dot " + NodeMarkerClass : "deck-nav-col-ico")"></span>
 
             <span class="tree-label">@Node.Name</span>
-            @if (Node.Locked)
-            {
-                <span class="tree-locked">🔒</span>
-            }
             @if (Node.CardCount > 0)
             {
                 <span class="tree-count">@(Node.CardCount)</span>
@@ -133,6 +125,8 @@
     [Parameter] public required NavigatorNodeBase Node { get; set; }
     [Parameter] public int Depth { get; set; }
     [Parameter] public int? SelectedId { get; set; }
+    /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId) — drives the green marker dot.</summary>
+    [Parameter] public int? PinnedId { get; set; }
     /// <summary>ID of the folder whose add-menu is currently open. Each instance computes its own visibility.</summary>
     [Parameter] public int? ActiveAddMenuNodeId { get; set; }
 
@@ -147,8 +141,20 @@
     /// <summary>Requests parent to open the name-input dialog for creating a node.</summary>
     [Parameter] public EventCallback<(int? parentId, NodeType type)> OnAskCreateNode { get; set; } = default!;
     [Parameter] public EventCallback<int> OnAddMenuToggle { get; set; } = default!;
+    /// <summary>Import request from this folder's add-row — forwarded straight up; the row carries the parent id itself.</summary>
+    [Parameter] public EventCallback<int?> OnImportRequest { get; set; }
 
     private bool IsExpanded => ExpandedSet != null && ExpandedSet.Contains(Node.Id);
+
+    // ── State marker: 10px dot with black rim — red = locked, green = pinned (locked wins).
+    // Deck/collection rows: the dot replaces the type icon in the 24px slot; folder rows: it stands alone;
+    // SB button: the dot stands outside the capsule, to its left (.tree-sb-marker). ──
+    private bool ShowMarker => Node.Locked || PinnedId == Node.Id;
+    private string NodeMarkerClass => Node.Locked ? "marker-locked" : "marker-pinned";
+
+    // Same marker language on the deck row's SB button (sideboards have no row of their own)
+    private bool SbShowMarker(NavigatorNodeBase sb) => sb.Locked || PinnedId == sb.Id;
+    private string SbMarkerClass(NavigatorNodeBase sb) => sb.Locked ? "marker-locked" : "marker-pinned";
 
     private async Task OnSelectClick()
     {

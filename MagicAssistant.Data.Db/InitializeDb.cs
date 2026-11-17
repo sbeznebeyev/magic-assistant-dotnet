@@ -38,7 +38,6 @@ public static class InitializeDb
         await CreateSetTable(conn);
         await CreateCollectionTable(conn);
         await CreateDeckTable(conn);
-        await CreateOwnCountsTable(conn);
         await CreateCardFacesTable(conn);
         await CreateCardAllPartsTable(conn);
         await CreateCardsImageUrisTable(conn);
@@ -68,28 +67,17 @@ public static class InitializeDb
                 Artist          TEXT,
                 Language        TEXT,
                 CollectorNumber TEXT,
-                Text            TEXT,
                 PrintedName     TEXT,
                 PrintedText     TEXT,
                 PrintedTypeLine TEXT,
                 CmcNumber       INTEGER,
                 CmcText         TEXT,
                 ColorType       TEXT,
-                Side            INTEGER DEFAULT 0,
-                CollectorNumberId INTEGER DEFAULT 0,
-                DbPrice         REAL DEFAULT 0,
-                CommunityRating REAL DEFAULT 0,
                 LegalityFormats TEXT,
                 Colors          TEXT,
                 ColorIdentity   TEXT,
-                ColorIndicator  TEXT,
                 GameChanger     INTEGER,
-                Keywords        TEXT,
-                ProducedMana    TEXT,
                 Legal           TEXT,
-                NotLegal        TEXT,
-                Restricted      TEXT,
-                Banned          TEXT,
                 Usd             TEXT,
                 UsdFoil         TEXT,
                 ColorBits       INTEGER,
@@ -142,20 +130,10 @@ public static class InitializeDb
                 Comment      TEXT,
                 DateAdded    DateTime,
                 ForTradeCount INTEGER,
+                MyPrice       REAL DEFAULT 0,
+                Grade         INTEGER,
                 PRIMARY KEY (CollectionId, CardId),
                 FOREIGN KEY (CollectionId) REFERENCES Collection(Id) ON DELETE CASCADE,
-                FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE
-            )");
-    }
-
-    private static async Task CreateOwnCountsTable(SqliteConnection conn)
-    {
-        await conn.ExecuteAsync(@"
-            CREATE TABLE IF NOT EXISTS OwnCounts (
-                CardId     uniqueidentifier PRIMARY KEY,
-                OwnCount   INTEGER NOT NULL DEFAULT 0,
-                TotalCount INTEGER NOT NULL DEFAULT 0,
-                OwnUnique  INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (CardId) REFERENCES Cards(Id) ON DELETE CASCADE
             )");
     }

@@ -1,5 +1,5 @@
 @using MagicAssistant.Data.Contracts
-@inject ICardStore<MagicCardPhysical> CardStore
+@inject ICardStore<MyCard> CardStore
 
 <div class="instances-view">
     <div class="section-header">
@@ -40,7 +40,7 @@
                     @* Deck info *@
                     <div class="instance-deck">
                         <span class="deck-name">@GetDeckName(instance)</span>
-                        @if (instance.Location.IsSideboard)
+                        @if (instance.IsSideboard)
                         {
                             <span class="sideboard-tag">SB</span>
                         }
@@ -48,13 +48,9 @@
 
                     @* Properties *@
                     <div class="instance-right">
-                        @if (instance.Price.HasValue)
+                        @if (instance.MyPrice > 0)
                         {
-                            <span class="prop-price" title="Price">@instance.Price.Value.ToString("F2")</span>
-                        }
-                        @if (!string.IsNullOrEmpty(instance.SpecialTags))
-                        {
-                            <span class="prop-special" title="@instance.SpecialTags">★</span>
+                            <span class="prop-price" title="Price">@instance.MyPrice.ToString("F2")</span>
                         }
                         @if (!string.IsNullOrEmpty(instance.Comment))
                         {
@@ -88,7 +84,7 @@
 </div>
 
 @code {
-    private List<MagicCardPhysical> _instances = new();
+    private List<MyCard> _instances = new();
     private bool _loading;
 
     [Parameter] public Guid? CardId { get; set; }
@@ -98,7 +94,7 @@
     private int _totalCopies => _instances.Sum(i => i.Count);
     private int _ownedCount => _instances.Where(i => i.IsOwn).Sum(i => i.Count);
     private int _borrowedCount => _instances.Where(i => !i.IsOwn).Sum(i => i.Count);
-    private int _deckCount => _instances.Select(i => i.Location.Id).Distinct().Count();
+    private int _deckCount => _instances.Select(i => i.Collection?.Id ?? 0).Distinct().Count();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -114,7 +110,7 @@
             _instances = (await CardStore.GetCardsAsync(CardId.Value)).ToList();
             // Sort: owned first, then by deck
             _instances = _instances.OrderByDescending(i => i.IsOwn)
-                                   .ThenBy(i => i.Location.Id)
+                                   .ThenBy(i => i.Collection?.Id ?? 0)
                                    .ToList();
         }
         catch
@@ -127,18 +123,17 @@
         }
     }
 
-    private async Task SelectInstance(MagicCardPhysical instance)
+    private async Task SelectInstance(MyCard instance)
     {
-        if (int.TryParse(instance.Location.Id, out var locId))
+        var locId = instance.Collection?.Id ?? 0;
+        if (locId > 0)
             await OnDeckSelected.InvokeAsync(locId);
     }
 
-    private static string GetDeckName(MagicCardPhysical instance)
+    private static string GetDeckName(MyCard instance)
     {
-        var id = instance.Location.Id;
-        // Remove sideboard suffix for display
-        if (id.EndsWith("_sb"))
-            id = id[..^3];
-        return id.Length > 20 ? id[..17] + "…" : id;
+        // Collection Id is an int node ID; the sideboard marker comes from NodeType
+        // (rendered as the "SB" tag), so there's no suffix to strip or length to truncate.
+        return (instance.Collection?.Id ?? 0).ToString();
     }
 }

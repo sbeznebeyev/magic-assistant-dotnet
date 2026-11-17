@@ -59,6 +59,38 @@
     color: #0078d4;
 }
 
+/* Active layout mode (Showcase/Management) — highlighted, non-clickable feedback */
+.header-action.active {
+    color: #0078d4;
+    font-weight: bold;
+}
+
+/* Legacy Import affordance follows the selection: gold = unlocked coll/deck/sb is ready
+   to receive the import; gray = kb or a locked node (the click is refused, not silent-failed). */
+.header-action.gold {
+    color: #ffd700;
+}
+
+.header-action.gold:hover {
+    color: #ffe9a3;
+}
+
+.header-action.disabled {
+    color: #666;
+    cursor: default;
+}
+
+.header-action.disabled:hover {
+    color: #666;
+}
+
+/* === Showcase area — CollectorView only, no management UI === */
+.showcase-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+
 /* === Main grid - 3 columns === */
 .main-grid {
     display: flex;
@@ -67,15 +99,26 @@
     min-height: 0;
 }
 
-/* Left panel: Navigator tree */
+/* Left panel: Navigator tree (scrollable) + LastActions pinned at the bottom */
 .panel-left {
     width: 280px;
     min-width: 200px;
     max-width: 400px;
     border-right: 1px solid #444;
     background-color: #252526;
-    overflow-y: auto;
+    overflow: hidden;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: width 0.2s ease;
+}
+
+/* Scrollable area for the navigator — LastActions stays pinned below it */
+.navigator-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 /* Center panel: Main content */
@@ -97,7 +140,100 @@
     background-color: #252526;
     overflow-y: auto;
     flex-shrink: 0;
+    position: relative;
+    transition: width 0.2s ease;
 }
+
+/* === Collapsible side panels (toggle buttons in the top corners) === */
+.panel-left.collapsed { width: 20px; min-width: 20px; max-width: 20px; }
+.panel-right.collapsed { width: 20px; min-width: 20px; max-width: 20px; overflow: hidden; }
+
+/* Collapsed strips: hide the content entirely — fragments used to peek through the clip.
+   CSS-only hiding keeps the components mounted, so navigator/card state survives re-expansion. */
+.panel-left.collapsed .panel-content,
+.panel-right.collapsed .panel-content {
+    display: none;
+}
+
+/* Vertical badge labels in collapsed strips — same gold-technology as the sideboard tag:
+   gradient text via background-clip, soft glow, pill border, small caps with letter-spacing.
+   writing-mode (not transform: rotate) sizes the box to the text itself, so `top` pins the
+   label's visual top edge deterministically — a center-rotation would push long labels up
+   past the panel's top edge. Tight padding keeps the border close to the glyphs and the
+   pill inside the 20px strip. */
+.panel-label {
+    display: none;  /* shown only when the panel is collapsed */
+    position: absolute;
+    top: 12px;      /* the strip has no button anymore — the badge anchors near the top edge */
+    left: 50%;
+    white-space: nowrap;
+    padding: 6px 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1;
+    background: linear-gradient(135deg, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.35));
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    border-radius: 999px;
+    cursor: pointer;  /* clicking the badge expands the panel */
+}
+
+/* Left strip: 90° counterclockwise — reads bottom-to-top (vertical-rl + 180° flip) */
+.panel-left.collapsed .panel-label {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: translateX(-50%) rotate(180deg);
+}
+
+/* Right strip: 90° clockwise — reads top-to-bottom (plain vertical-rl) */
+.panel-right.collapsed .panel-label {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: translateX(-50%);
+}
+
+/* Content wrapper — keeps its natural width while the panel shrinks, so content
+   slides under the clip instead of reflowing */
+.panel-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.panel-left .panel-content { min-width: 280px; }
+.panel-right .panel-content { min-width: 360px; }
+
+/* Toggle buttons — stay visible in the collapsed 20px strip */
+.panel-toggle {
+    position: absolute;
+    top: 4px;
+    z-index: 20;
+    width: 16px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #3c3c3c;
+    border: 1px solid #555;
+    color: #ccc;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.panel-toggle:hover {
+    background-color: #0078d4;
+    border-color: #0078d4;
+    color: #fff;
+}
+.panel-toggle.left { right: 2px; border-radius: 3px 0 0 3px; }
+.panel-toggle.right { left: 2px; border-radius: 0 3px 3px 0; }
 
 /* === Tab bar (child component — use ::deep) === */
 ::deep .tab-bar {

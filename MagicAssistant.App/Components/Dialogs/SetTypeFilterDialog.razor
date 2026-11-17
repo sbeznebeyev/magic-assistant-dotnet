@@ -1,0 +1,95 @@
+@*
+    SetTypeFilterDialog — toggle picker for the CollectorView "Type Filter" button.
+
+    One toggle per CardSetType value; pressed toggles are staged locally and
+    committed only on Apply (Cancel / ✕ / overlay click close without committing).
+    Same visual principle as the color toggle grid in CardFilterDialog.
+*@
+
+@if (!IsOpen) return;
+
+<div class="set-type-dialog-overlay">
+    <div class="set-type-dialog-box" @onclick:stopPropagation>
+        @* ── Header ── *@
+        <div class="set-type-header">
+            <span class="set-type-title">Set Type Filter</span>
+            <button type="button" class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
+        </div>
+
+        @* ── Toggle grid: one button per CardSetType value ── *@
+        <div class="set-type-body">
+            <div class="type-toggle-grid">
+                @foreach (var type in _allTypes)
+                {
+                    <button type="button"
+                            class="type-toggle @(_staged.Contains(type) ? "active" : "")"
+                            title="@DisplayType(type)"
+                            @onclick="() => ToggleType(type)">
+                        <span>@DisplayType(type)</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* ── Footer: Apply commits the staged selection, Cancel discards it ── *@
+        <div class="set-type-footer">
+            <button type="button" class="btn-apply" @onclick="OnApply">Apply</button>
+            <button type="button" class="btn-cancel" @onclick="Close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Committed selection — seeds the staged set each time the dialog opens.</summary>
+    [Parameter] public IReadOnlyCollection<CardSetType>? SelectedTypes { get; set; }
+
+    /// <summary>Fired with the staged selection when Apply is pressed (empty = no filter).</summary>
+    [Parameter] public EventCallback<IReadOnlyCollection<CardSetType>> OnApplied { get; set; }
+
+    // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    // unknown is a fallback sentinel the Scryfall sync path never produces — filtering by it is pointless.
+    private static readonly CardSetType[] _allTypes
+        = Enum.GetValues<CardSetType>().Where(t => t != CardSetType.unknown).ToArray();
+
+    /// <summary>Staged selection while the dialog is open; committed only on Apply.</summary>
+    private readonly HashSet<CardSetType> _staged = new();
+
+    private bool _wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        // Re-seed staging whenever the dialog (re)opens so edits from a previous session don't leak in.
+        if (IsOpen && !_wasOpen)
+        {
+            _staged.Clear();
+            if (SelectedTypes is not null)
+                _staged.UnionWith(SelectedTypes);
+        }
+        _wasOpen = IsOpen;
+    }
+
+    private void ToggleType(CardSetType type)
+    {
+        if (_staged.Contains(type))
+            _staged.Remove(type);
+        else
+            _staged.Add(type);
+    }
+
+    private async Task OnApply()
+    {
+        await OnApplied.InvokeAsync(_staged.ToList());
+        await Close();
+    }
+
+    /// <summary>Cancel semantics: close without committing (used by ✕ and Cancel).</summary>
+    private async Task Close() => await IsOpenChanged.InvokeAsync(false);
+
+    /// <summary>Pretties a snake_case enum name for display: "from_the_vault" → "From the Vault".</summary>
+    private static string DisplayType(CardSetType type)
+        => string.Join(" ", type.ToString().Split('_')
+            .Select(w => w.Length == 0 ? "" : char.ToUpperInvariant(w[0]) + w[1..]));
+}

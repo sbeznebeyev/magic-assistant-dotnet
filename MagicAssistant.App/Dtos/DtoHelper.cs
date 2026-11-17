@@ -41,7 +41,7 @@ public static class DtoHelper
             cardSet.ScryfallUri,
             cardSet.SearchUri,
             cardSet.ReleaseDate ?? DateTime.MinValue,
-            cardSet.SetType,
+            cardSet.SetType.ToString(),
             cardSet.CardCount,
             cardSet.ParentSetCode,
             cardSet.Digital,

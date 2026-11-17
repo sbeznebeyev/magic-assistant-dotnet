@@ -12,7 +12,8 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #888;
-    padding: 8px 12px;
+    /* left inset clears the panel collapse button (left:2px + 16px wide) */
+    padding: 8px 12px 8px 26px;
     border-bottom: 1px solid #3c3c3c;
     display: flex;
     align-items: center;
@@ -108,6 +109,14 @@
     max-width: 100%;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Lazy-load placeholder shown while the image file is being downloaded (or when it cannot be). */
+.card-image-loading {
+    min-height: 220px;
+    align-items: center;
+    color: #888;
+    font-size: 13px;
 }
 
 /* ── Language Toggle Buttons ───────────────────────── */

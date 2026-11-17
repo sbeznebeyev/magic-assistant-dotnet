@@ -36,6 +36,28 @@
     user-select: none;
 }
 
+/* ── Sortable column headers (click = switch/toggle sort) ── */
+.card-table thead th.sortable {
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.card-table thead th.sortable:hover {
+    color: #ccc;
+}
+
+.card-table thead th.sorted {
+    color: #0078d4;
+}
+
+/* Fixed-width placeholder so the header text does not shift when the arrow appears */
+.sort-arrow {
+    display: inline-block;
+    min-width: 10px;
+    margin-left: 3px;
+    font-size: 10px;
+}
+
 .card-table tbody tr {
     cursor: pointer;
     border-bottom: 1px solid #2a2a2a;
@@ -55,6 +77,122 @@
     vertical-align: middle;
 }
 
+.count-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    /* Same baseline fix as the edit/split capsules: align the group by the line's
+       middle so the −/+ row sits level with the name and its buttons. */
+    vertical-align: middle;
+}
+
+.count-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 18px;
+    border-radius: 9px; /* capsule — same gold family as the edit/split badges */
+    background: linear-gradient(180deg, rgba(255, 215, 0, 0.12) 0%, rgba(255, 215, 0, 0.04) 100%);
+    border: 1px solid rgba(255, 215, 0, 0.35);
+    color: var(--gold-mid);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    /* bottom padding nudges the glyph up ~1px — −/+ sit low in this font at 12px */
+    padding: 0 0 2px 0;
+    opacity: 0;
+    transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+                background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.count-value {
+    min-width: 20px;
+    text-align: center;
+    font-weight: 600;
+    color: #eee;
+}
+
+/* Row action badges — gold capsules (pill border, dark gold-tinted ground, glowing on hover).
+   Revealed on row hover / selection, as before. */
+.edit-btn,
+.move-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 18px;
+    border-radius: 9px; /* capsule */
+    background: linear-gradient(180deg, rgba(255, 215, 0, 0.12) 0%, rgba(255, 215, 0, 0.04) 100%);
+    border: 1px solid rgba(255, 215, 0, 0.35);
+    color: var(--gold-mid);
+    font-size: 11px;
+    line-height: 1;
+    /* Inline-flex baseline differs between the text glyph (✎) and the SVG icon —
+       align both capsules by the line's middle so they sit on one row. */
+    vertical-align: middle;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+                background 0.15s ease, box-shadow 0.15s ease;
+}
+
+tr:hover .edit-btn,
+.selected .edit-btn,
+tr:hover .move-btn,
+.selected .move-btn,
+tr:hover .count-btn,
+.selected .count-btn {
+    opacity: 1;
+}
+
+.edit-btn:hover,
+.move-btn:hover,
+.count-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold-light);
+    background: linear-gradient(180deg, rgba(255, 215, 0, 0.24) 0%, rgba(255, 215, 0, 0.08) 100%);
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.25), inset 0 1px 0 rgba(255, 246, 200, 0.18);
+}
+
+.move-btn {
+    margin-left: 2px;
+    /* ⇄ reads small at the shared 11px; the larger size also lifts it off the capsule floor. */
+    font-size: 13px;
+    /* bottom padding nudges the glyph up ~1px — same trick as −/+ at 12px */
+    padding: 0 0 2px 0;
+}
+
+/* Read-only sideboard-presence badge (deck view): ruby in a gold setting — variant 8 of the
+   royal demo. Cream-gold letters on dark stone; gold frame with a dark inner line. Shape is a
+   rounded square, distinct from the capsule −/+/✎/⇄ buttons. Only rendered when lit —
+   no ghost state, no glow, no hover. */
+.sb-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 18px;
+    border-radius: 6px; /* rounded square, not a capsule */
+    background: linear-gradient(160deg, #c3122f 0%, #6e0a1c 100%);
+    border: 2px solid #e6b422;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+    color: #ffe9a3;
+    /* 8px keeps the demo's letter-to-ruby ratio inside the border-box inner area,
+       bottom padding lifts the caps toward the stone's visual center. */
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1;
+    padding-bottom: 1px;
+    vertical-align: middle;
+    margin-left: 6px;
+    user-select: none;
+}
+
+.col-total  { width: 1%; min-width: 44px; white-space: nowrap; text-align: center; color: #666; }
 .col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
 .col-name   { width: 50%; }
 .col-cost   { width: 1%; white-space: nowrap; }

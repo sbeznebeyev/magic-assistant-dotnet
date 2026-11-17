@@ -2,15 +2,34 @@
 
 namespace MagicAssistant.Data.Contracts;
 
-public interface IDbCardStore : ICardStore<MagicCard>
+public interface IDbCardStore : ICardStore<Card>
 {
-    Task<ICollection<MagicCard>> SearchAsync(string query, int limit = 100, CancellationToken ct = default);
-    Task<ICollection<MagicCard>> GetBySetAsync(string setCode, CancellationToken ct = default);
-    Task<ICollection<MagicCard>> GetPrintingsAsync(string name, CancellationToken ct = default);
+    Task<ICollection<Card>> SearchAsync(string query, int limit = 100, CancellationToken ct = default);
+    Task<ICollection<Card>> GetBySetAsync(string setCode, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if the knowledge base contains at least one card for the given set code.
+    /// Direct DB check — no filter inference. Drives the KB empty-state sync button visibility.
+    /// </summary>
+    Task<bool> HasCardsForSetAsync(string setCode, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if the CardSet table holds at least one set. Direct DB check — cache bypassed
+    /// on purpose: this is the first-run bootstrap probe, it must see committed rows, not a warm
+    /// empty cache. Drives the auto-open of the Sync Sets dialog on an empty knowledge base.
+    /// </summary>
+    Task<bool> HasAnySetAsync(CancellationToken ct = default);
+    Task<ICollection<Card>> GetPrintingsAsync(string name, CancellationToken ct = default);
 
     // Edition methods
     Task AddSetAsync(CardSet cardSet, CancellationToken ct = default);
     Task<ICollection<CardSet>> GetCardSetsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Get only the sets whose codes are in <paramref name="setCodes"/> (case-insensitive).
+    /// Empty input returns an empty collection. Scope for FilteredCardSetsCollection.
+    /// </summary>
+    Task<ICollection<CardSet>> GetCardSetsByCodesAsync(ICollection<string> setCodes, CancellationToken ct = default);
 
     /// <summary>
     /// Get a single set by its abbreviation code (e.g. "M19", "mh2").
@@ -53,29 +72,52 @@ public interface IDbCardStore : ICardStore<MagicCard>
     /// Returns a dictionary keyed by CardId for O(1) lookup.
     /// Used by CardResolveService for efficient batch resolution.
     /// </summary>
-    Task<Dictionary<Guid, MagicCard>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default);
+    Task<Dictionary<Guid, Card>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default);
 
     /// <summary>
     /// Collector progress for all sets — single SQL query.
     /// Returns per-set: total unique cards in KB vs unique cards the user owns in any deck.
     /// Replaces N+1 queries (GetEditions + GetBySet per edition + recursive tree walk).
+    /// When <paramref name="setTypes"/> is non-empty, only sets of those types are returned
+    /// (SQL: WHERE s.SetType IN (...)).
     /// </summary>
-    Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(CancellationToken ct = default);
+    Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(IReadOnlyCollection<CardSetType>? setTypes = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Progress details for a single set: identity plus owned/total per rarity and per mana color.
+    /// Null when the set is unknown.
+    /// </summary>
+    Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default);
 
     /// <summary>
     /// Batch-resolve full set names to set codes in a single SQL query.
-    /// Used by OldImportDeckCommandHandler to convert legacy set names ("Core Set 2019")
-    /// to KB abbreviations ("M19").
+    /// Used by ResolveLegacyCardsQuery to convert legacy set names ("Core Set 2019")
+    /// to KB abbreviations ("m19").
     /// Returns a dictionary: FullName → SetCode. Only matched names are included.
     /// </summary>
     Task<Dictionary<string, string>> ResolveSetNamesAsync(ICollection<string> fullNames, CancellationToken ct = default);
 
     /// <summary>
     /// Batch-resolve cards by (Name, SetCode) pairs in a single SQL query.
-    /// Used by OldImportDeckCommandHandler to replace Gatherer IDs with Scryfall UUIDs.
+    /// Used by ResolveLegacyCardsQuery to replace Gatherer IDs with Scryfall UUIDs.
     /// Returns a dictionary: "{Name}|{Set}" → MagicCard. Only matched pairs are included.
     /// </summary>
-    Task<Dictionary<string, MagicCard>> ResolveCardsByNameAndSetAsync(ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default);
+    Task<Dictionary<string, Card>> ResolveCardsByNameAndSetAsync(ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sync status of the given full set names in a single SQL query (CardSet + Cards counts).
+    /// Used by legacy import pre-check to detect "sets without cards" that need syncing from Scryfall.
+    /// Returns one row per requested name: resolved code (null when absent from CardSet) and card count.
+    /// </summary>
+    Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusAsync(ICollection<string> setNames, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sync status of the given set codes in a single SQL query (CardSet + Cards counts).
+    /// Used by the native JSON import pre-check: files carry set codes, not full names.
+    /// Returns one row per requested code; SetName is null when the code is absent from CardSet
+    /// (the sync itself resolves the name from Scryfall, so such sets remain syncable).
+    /// </summary>
+    Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusByCodeAsync(ICollection<string> setCodes, CancellationToken ct = default);
 
     /// <summary>
     /// Get distinct (Language, Id) pairs for all cards sharing the same OracleId.

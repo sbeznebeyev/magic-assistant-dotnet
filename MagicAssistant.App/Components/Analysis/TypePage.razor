@@ -1,10 +1,13 @@
+@using System.Globalization
 @*
-    TypePage — Card type distribution (pure CSS cards + progress bars)
-    Mirrors Java: ui.views.analyzers.TypePage + CardStoreUtils.buildTypeStats
-    
+    TypePage — Card type distribution as pie charts (pure SVG, no Chart.js).
+    Top = main deck only; bottom = sideboard only (hidden for nodes without a sideboard).
+
     Features:
-    - Visual type cards with color-coded badges
-    - Progress bars showing distribution percentages
+    - Pie chart per section split into sectors by base supertype (Artifact, Creature,
+      Enchantment, Instant, Land, Planeswalker, Sorcery); cards with multiple supertypes
+      ("Artifact Creature — X") appear in every sector they belong to
+    - Legend with swatch, count and percentage per supertype
     - Summary stats
 *@
 
@@ -19,33 +22,136 @@
         {
             <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
         }
-        else if (_loading && _typeItems.Count == 0)
+        else if (_loading || _main == null)
         {
             <div class="loading-state">Loading type data...</div>
         }
-        else if (_typeItems.Count > 0)
+        else if (_main!.TotalCards > 0 || (_hasSideboard && _side!.TotalCards > 0))
         {
-            @* ── Type Cards Grid ── *@
-            <div class="type-cards-grid">
-                @foreach (var type in _typeItems)
-                {
-                    <div class="type-card" style="--card-accent: @type.Hex;">
-                        <div class="type-icon">@GetIcon(type.TypeName)</div>
-                        <div class="type-name">@type.TypeName</div>
-                        <div class="type-count">@type.Count card@(type.Count != 1 ? "s" : "")</div>
-                        <div class="type-bar-track">
-                            <div class="type-bar-fill" style="width: @type.Percentage%; background: @type.Hex;"></div>
+            <div class="type-sections @(!_hasSideboard ? "single" : "")">
+                @* ── Top: main deck only ── *@
+                <div class="type-section">
+                    <div class="section-title-row">
+                        <span class="deck-name-title">@(DeckName ?? "Deck")</span>
+                    </div>
+                    <div class="pie-layout">
+                        <div class="pie-container">
+                            <div class="pie-title">@MainPieTitle</div>
+                            <div class="pie-chart">
+                                <svg viewBox="0 0 180 180" role="img" aria-label="Type distribution">
+                                @foreach (var sector in _main.Sectors)
+                                {
+                                    @if (sector.IsFull)
+                                    {
+                                        <circle cx="90" cy="90" r="80" fill="@sector.Hex"></circle>
+                                    }
+                                    else
+                                    {
+                                        <path d="@sector.PathData" fill="@sector.Hex"></path>
+                                    }
+                                }
+                                </svg>
+                            </div>
                         </div>
-                        <div class="type-percent">@type.Percentage.ToString("F1")%</div>
+
+                        @* "no lands" pie — only when lands are present; same legend/colors,
+                           land sector removed and the rest rescaled to fill the circle. *@
+                        @if (_main.NoLandSectors.Count > 0)
+                        {
+                            <div class="pie-container pie-nolands">
+                                <div class="pie-title">no lands</div>
+                                <div class="pie-chart">
+                                    <svg viewBox="0 0 180 180" role="img" aria-label="Type distribution without lands">
+                                        @foreach (var sector in _main.NoLandSectors)
+                                        {
+                                            @if (sector.IsFull)
+                                            {
+                                                <circle cx="90" cy="90" r="80" fill="@sector.Hex"></circle>
+                                            }
+                                            else
+                                            {
+                                                <path d="@sector.PathData" fill="@sector.Hex"></path>
+                                            }
+                                        }
+                                    </svg>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="pie-legend">
+                            @foreach (var sector in _main.Sectors)
+                            {
+                                <div class="legend-row">
+                                    <div class="legend-item">
+                                        <span class="legend-swatch" style="background:@sector.Hex;"></span>
+                                        <span class="legend-name">@sector.DisplayName</span>
+                                    </div>
+                                    <div class="legend-values">
+                                        <span class="legend-count">@sector.Count card@(sector.Count != 1 ? "s" : "")</span>
+                                        <span class="legend-pct">@sector.Percentage.ToString("F1")%</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="summary-stats">
+                            <div class="stat-card"><div class="stat-value">@_main.TotalCards</div><div class="stat-label">Total Cards</div></div>
+                            <div class="stat-card"><div class="stat-value">@_main.Sectors.Count</div><div class="stat-label">Types Used</div></div>
+                            <div class="stat-card"><div class="stat-value">@_main.DominantType</div><div class="stat-label">Dominant Type</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Bottom: sideboard only — hidden for nodes without a sideboard (Collection) ── *@
+                @if (_hasSideboard)
+                {
+                    <div class="type-section">
+                        <div class="section-title-row">
+                            <span class="sideboard-badge">Sideboard</span>
+                        </div>
+                        <div class="pie-layout">
+                            <div class="pie-container">
+                                @* Sideboard chart title is intentionally empty; the element keeps
+                                   both charts vertically aligned. *@
+                                <div class="pie-title"></div>
+                                <div class="pie-chart">
+                                    <svg viewBox="0 0 180 180" role="img" aria-label="Sideboard type distribution">
+                                    @foreach (var sector in _side!.Sectors)
+                                    {
+                                        @if (sector.IsFull)
+                                        {
+                                            <circle cx="90" cy="90" r="80" fill="@sector.Hex"></circle>
+                                        }
+                                        else
+                                        {
+                                            <path d="@sector.PathData" fill="@sector.Hex"></path>
+                                        }
+                                    }
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="pie-legend">
+                                @foreach (var sector in _side.Sectors)
+                                {
+                                    <div class="legend-row">
+                                        <div class="legend-item">
+                                            <span class="legend-swatch" style="background:@sector.Hex;"></span>
+                                            <span class="legend-name">@sector.DisplayName</span>
+                                        </div>
+                                        <div class="legend-values">
+                                            <span class="legend-count">@sector.Count card@(sector.Count != 1 ? "s" : "")</span>
+                                            <span class="legend-pct">@sector.Percentage.ToString("F1")%</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="summary-stats">
+                            <div class="stat-card"><div class="stat-value">@_side.TotalCards</div><div class="stat-label">Total Cards</div></div>
+                            <div class="stat-card"><div class="stat-value">@_side.Sectors.Count</div><div class="stat-label">Types Used</div></div>
+                            <div class="stat-card"><div class="stat-value">@_side.DominantType</div><div class="stat-label">Dominant Type</div></div>
+                        </div>
                     </div>
                 }
-            </div>
-
-            @* ── Summary Stats ── *@
-            <div class="summary-stats">
-                <div class="stat-card"><div class="stat-value">@_totalCards</div><div class="stat-label">Total Cards</div></div>
-                <div class="stat-card"><div class="stat-value">@_typeItems.Count</div><div class="stat-label">Types Used</div></div>
-                <div class="stat-card"><div class="stat-value">@_dominantType</div><div class="stat-label">Dominant Type</div></div>
             </div>
         }
         else
@@ -59,15 +165,29 @@
 </div>
 
 @code {
-    private List<TypeItem> _typeItems = new();
-    private int _totalCards;
-    private string _dominantType = "—";
+    private TypeChartData? _main;
+    private TypeChartData? _side;
+    /// <summary>True when the node has sideboard cards (Deck nodes only — Collection nodes
+    /// have no sideboard child). False → bottom section hidden.</summary>
+    private bool _hasSideboard;
     private bool _loading;
     private string? _error;
 
     [Parameter] public int DeckId { get; set; }
+    [Parameter] public string? DeckName { get; set; }
+    // Named NodeKind (not NodeType) so the property doesn't shadow the enum type in
+    // the switch below — C# would resolve `NodeType.Deck` as member access on the instance.
+    [Parameter] public NodeType? NodeKind { get; set; }
     [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
-    [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+
+    /// <summary>Main chart title by node type: "deck" for Deck nodes, "collection" for
+    /// Collection nodes. The sideboard chart's title stays empty.</summary>
+    private string MainPieTitle => NodeKind switch
+    {
+        NodeType.Deck => "deck",
+        NodeType.Collection => "collection",
+        _ => ""
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -77,19 +197,24 @@
 
     private async Task LoadAnalysis()
     {
-        _loading = true; _error = null; StateHasChanged();
+        _loading = true; _error = null; _main = null; _side = null; StateHasChanged();
         try
         {
             var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
             if (cards.Count == 0)
             {
-                _typeItems = new List<TypeItem>();
-                _totalCards = 0;
+                _main = new TypeChartData();
+                _side = new TypeChartData();
             }
             else
             {
-                var result = AnalysisService.Analyze(cards);
-                BuildTypeData(result);
+                // Each physical card carries its owning collection in Collection: the deck's own
+                // cards (Id == DeckId) vs. the sideboard child's (everything else).
+                var mainCards = cards.Where(c => c.Collection?.Id == DeckId).ToList();
+                var sideCards = cards.Where(c => c.Collection?.Id != DeckId).ToList();
+                _hasSideboard = sideCards.Count > 0;
+                _main = BuildSection(mainCards);
+                _side = BuildSection(sideCards);
             }
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -98,49 +223,154 @@
 
     private async Task Reload() => await LoadAnalysis();
 
-    private void BuildTypeData(DeckAnalysisResult result)
+    // ── Supertype reference data ──
+
+    private static readonly string[] _typeSeparators = { " - ", " :", " —", "—" };
+
+    private static readonly HashSet<string> _knownSupertypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        // DeckAnalysisResult stores types as LandCount/CreatureCount/NonCreatureCount.
-        // Build a dictionary for rendering.
-        var typeDistribution = new Dictionary<string, int>
-        {
-            ["Land"] = result.LandCount,
-            ["Creature"] = result.CreatureCount,
-            ["NonCreature"] = result.NonCreatureCount,
-        };
-
-        _totalCards = typeDistribution.Values.Sum();
-        if (_totalCards == 0) return;
-
-        var typeColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Land"] = "#4a9c2f", ["Creature"] = "#c0392b", ["NonCreature"] = "#8e44ad",
-        };
-
-        _typeItems = typeDistribution
-            .Select(kv => new TypeItem
-            {
-                TypeName = kv.Key,
-                Hex = typeColors.TryGetValue(kv.Key, out var hex) ? hex : "#95a5a6",
-                Count = kv.Value,
-                Percentage = (double)kv.Value / _totalCards * 100
-            })
-            .OrderByDescending(t => t.Count).ToList();
-
-        _dominantType = _typeItems.FirstOrDefault()?.TypeName ?? "—";
-    }
-
-    private static string GetIcon(string type) => type.ToLowerInvariant() switch
-    {
-        "land" => "🏔️", "creature" => "🐉", "instant" => "⚡", "sorcery" => "✨",
-        "enchantment" => "🔮", "artifact" => "⚙️", "planeswalker" => "🌟", _ => "🃏"
+        "artifact", "creature", "enchantment", "instant", "land", "planeswalker", "sorcery"
     };
 
-    private class TypeItem
+    private static readonly Dictionary<string, string> _displayNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        public string TypeName { get; set; } = "";
+        ["artifact"] = "Artifact", ["creature"] = "Creature", ["enchantment"] = "Enchantment",
+        ["instant"] = "Instant", ["land"] = "Land", ["planeswalker"] = "Planeswalker",
+        ["sorcery"] = "Sorcery", ["other"] = "Other"
+    };
+
+    private static readonly Dictionary<string, string> _supertypeColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["artifact"] = "#95a5a6",   // silver gray
+        ["creature"] = "#b57474",   // warm matte red (matches the Creatures tab)
+        ["enchantment"] = "#8e44ad",// purple
+        ["instant"] = "#6f8fb3",    // blue
+        ["land"] = "#4a9c2f",       // green
+        ["planeswalker"] = "#e8c76a",// gold (theme accent)
+        ["sorcery"] = "#d08c4a",    // warm orange
+        ["other"] = "#909099"
+    };
+
+    private TypeChartData BuildSection(List<MyCard> cards)
+    {
+        var data = new TypeChartData { TotalCards = cards.Sum(c => c.Count) };
+        if (data.TotalCards == 0) return data;
+
+        // Count every base supertype found in each type line. A card with multiple
+        // supertypes ("Artifact Creature — X") is counted in every sector it belongs to,
+        // so sectors hold occurrences, not unique cards.
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var card in cards)
+        {
+            var found = ExtractSupertypes(card.Card.Type ?? "");
+            foreach (var st in found)
+                counts[st] = counts.TryGetValue(st, out var v) ? v + card.Count : card.Count;
+
+            if (!found.Any())
+                counts["other"] = counts.TryGetValue("other", out var v2) ? v2 + card.Count : card.Count;
+        }
+
+        var totalOccurrences = counts.Values.Sum();
+        data.Sectors = BuildSectors(counts, totalOccurrences);
+
+        // "no lands" pie — same legend/colors, land sector removed and the rest rescaled to
+        // fill the circle. Only meaningful when lands are actually present.
+        if (counts.TryGetValue("land", out var landCount) && landCount > 0)
+        {
+            var nonLand = counts.Where(kv => kv.Key != "land").ToDictionary(kv => kv.Key, kv => kv.Value);
+            data.NoLandSectors = BuildSectors(nonLand, nonLand.Values.Sum());
+        }
+
+        // Dominant type ignores lands — they dominate by volume, not by deck choice.
+        data.DominantType = data.Sectors.Where(s => s.Key != "land").FirstOrDefault()?.DisplayName ?? "—";
+        return data;
+    }
+
+    /// <summary>Slice sectors for the given counts: sorted by count desc, angles from 12 o'clock
+    /// clockwise. Path coordinates are formatted with invariant culture — the OS locale (ru-RU)
+    /// would emit commas and corrupt the SVG path.</summary>
+    private static List<PieSector> BuildSectors(Dictionary<string, int> counts, int totalOccurrences)
+    {
+        var ordered = counts.OrderByDescending(kv => kv.Value).Select(kv => kv.Key).ToList();
+        double angle = 0;
+        return ordered.Select(key =>
+        {
+            var span = counts[key] / (double)totalOccurrences * 360;
+            var sector = new PieSector
+            {
+                Key = key,
+                DisplayName = _displayNames.TryGetValue(key, out var name) ? name : key,
+                Hex = _supertypeColors.TryGetValue(key, out var hex) ? hex : "#909099",
+                Count = counts[key],
+                Percentage = counts[key] / (double)totalOccurrences * 100
+            };
+            if (ordered.Count == 1)
+                sector.IsFull = true; // a single sector is the whole circle, not an arc
+            else
+                sector.PathData = BuildArcPath(angle, angle + span);
+            angle += span;
+            return sector;
+        }).ToList();
+    }
+
+    /// <summary>Base supertypes of a type line — the words before the subtype separator.
+    /// Mirrors AnalysisService.ExtractCreatureSubtypes separator handling.</summary>
+    private static IEnumerable<string> ExtractSupertypes(string typeLine)
+    {
+        var separatorPos = -1;
+        foreach (var sep in _typeSeparators)
+        {
+            var idx = typeLine.IndexOf(sep, StringComparison.Ordinal);
+            if (idx >= 0 && (separatorPos < 0 || idx < separatorPos))
+                separatorPos = idx;
+        }
+
+        var firstPart = separatorPos >= 0 ? typeLine[..separatorPos] : typeLine;
+        foreach (var word in firstPart.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (_knownSupertypes.Contains(word))
+                yield return word.ToLowerInvariant();
+    }
+
+    private const double PieCx = 90, PieCy = 90, PieR = 80;
+
+    /// <summary>Slice path from startDeg to endDeg (0° = 12 o'clock, clockwise), invariant-culture.</summary>
+    private static string BuildArcPath(double startDeg, double endDeg)
+    {
+        var p1 = PointOnCircle(startDeg);
+        var p2 = PointOnCircle(endDeg);
+        var largeArc = endDeg - startDeg > 180 ? 1 : 0;
+        return $"M {PieCx.ToString("F0", CultureInfo.InvariantCulture)} {PieCy.ToString("F0", CultureInfo.InvariantCulture)} " +
+               $"L {p1.X.ToString("F2", CultureInfo.InvariantCulture)} {p1.Y.ToString("F2", CultureInfo.InvariantCulture)} " +
+               $"A {PieR.ToString("F0", CultureInfo.InvariantCulture)} {PieR.ToString("F0", CultureInfo.InvariantCulture)} 0 {largeArc} 1 " +
+               $"{p2.X.ToString("F2", CultureInfo.InvariantCulture)} {p2.Y.ToString("F2", CultureInfo.InvariantCulture)} Z";
+    }
+
+    private static (double X, double Y) PointOnCircle(double angleDeg)
+    {
+        var rad = (angleDeg - 90) * Math.PI / 180; // 0° at the top, clockwise
+        return (PieCx + PieR * Math.Cos(rad), PieCy + PieR * Math.Sin(rad));
+    }
+
+    private class TypeChartData
+    {
+        public List<PieSector> Sectors { get; set; } = new();
+        /// <summary>Sectors of the same pie without lands (rescaled) — empty when there are no lands.</summary>
+        public List<PieSector> NoLandSectors { get; set; } = new();
+        public int TotalCards { get; set; }
+        public string DominantType { get; set; } = "—";
+    }
+
+    private class PieSector
+    {
+        public string Key { get; set; } = "";
+        public string DisplayName { get; set; } = "";
         public string Hex { get; set; } = "";
         public int Count { get; set; }
+        /// <summary>Share of all supertype occurrences in this section — display text only.</summary>
         public double Percentage { get; set; }
+        /// <summary>Single-sector pie — render as a full circle instead of an arc path.</summary>
+        public bool IsFull { get; set; }
+        /// <summary>Invariant-culture SVG path data for the sector arc (null when IsFull).</summary>
+        public string? PathData { get; set; }
     }
 }

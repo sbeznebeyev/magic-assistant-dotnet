@@ -3,15 +3,15 @@ using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Core.Commands;
 
-public record AddCardsToDeckCommand(int DeckId, ICollection<IMagicCard> Cards);
+public record AddCardsToDeckCommand(int DeckId, ICollection<ICard> Cards);
 
 public class AddCardsToDeckCommandHandler
 {
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
     private readonly ICollectionStore _collectionStore;
 
     public AddCardsToDeckCommandHandler(
-        ICardStore<MagicCardPhysical> cardStore,
+        ICardStore<MyCard> cardStore,
         ICollectionStore collectionStore)
     {
         _cardStore = cardStore;
@@ -24,8 +24,7 @@ public class AddCardsToDeckCommandHandler
         if (deck == null)
             throw new InvalidOperationException($"Deck '{command.DeckId}' not found");
 
-        var location = Location.FromId(deck.Id, deck.Name, false);
-        var physicals = command.Cards.Select(c => new MagicCardPhysical(c.GetBase(), location, true)).ToList();
+        var physicals = command.Cards.Select(c => new MyCard(c.GetBase(), deck, true)).ToList();
 
         return await _cardStore.AddAllAsync(physicals, ct);
     }

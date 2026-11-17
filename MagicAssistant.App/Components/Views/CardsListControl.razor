@@ -3,28 +3,45 @@
 @using MagicAssistant.App.Shared
 @using MagicAssistant.Core.Commands
 @using MagicAssistant.Core.Queries
+@using MagicAssistant.Data.Model.NavigatorNodes
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject ICardSearchService CardSearch
-@inject GetKBAvailableSetsQueryHandler? KBSetsQueryHandler
+@inject IDeckCardService DeckCardService
+@inject IDbCardStore DbStore
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
+@inject HasCardsQueryHandler? HasCardsHandler
+@inject GetSideboardPresenceQueryHandler? SideboardPresenceHandler
 @inject IJSRuntime JS
 
 <div class="kb-browser">
     @* ── Two-panel layout: Sets sidebar + Splitter + Card grid ── *@
     <div class="kb-body">
         @* ── Left: Sets Sidebar ── *@
-        <div class="sets-sidebar" style="width: @(_sidebarWidth + "px");">
+        <div class="sets-sidebar @(_setsCollapsed ? "collapsed" : "")" style="width: @(_setsCollapsed ? "28px" : _sidebarWidth + "px");">
             <div class="sets-header">
-                <span class="sets-title">KB (sets: @GetDisplayedSetsCount(), cards: @GetDisplayedCardsCount())</span>
+                <span class="sets-title">@(IsLocationMode
+                    ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
+                    : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()})")</span>
+                @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
+                @if (!_setsCollapsed)
+                {
+                    <button class="sets-toggle"
+                            @onclick="ToggleSetsCollapsed"
+                            title="Collapse sets">
+                        <span class="sets-toggle-glyph">&lt;</span>
+                    </button>
+                }
             </div>
+            @* Vertical badge label — visible only in the collapsed 28px strip; clicking it expands the sidebar *@
+            <span class="sets-label" @onclick="ToggleSetsCollapsed" title="Expand sets">Sets</span>
             <div class="sets-search-bar">
                 <input value="@GetSetsInputValue()"
                        @oninput="OnSetsFilterInput"
                        placeholder="Filter sets..."
                        class="sets-search-input" />
-                @if (FilterViewModel.SetCodes.Count > 0 || (!string.IsNullOrEmpty(_setsSearchQuery) && _setsSearchQuery.Length >= 2))
+                @if (FilterViewModel.ActiveCardSets is not null || IsSetsSearchActive)
                 {
                     <button class="sets-clear-btn" @onclick="ClearSetsFilter" title="Clear filter">✕</button>
                 }
@@ -37,17 +54,22 @@
                     }
                     else
                     {
-                        @* "All Sets" option ── *@
-                        <div class="set-item @(FilterViewModel.SetCodes.Count == 0 ? "selected" : "")"
-                             @onclick="@(() => SelectAllSets())">
-                            <span class="set-code">ALL</span>
-                            <span class="set-name">All Sets</span>
-                        </div>
+                        @* "All Sets" option — in location mode the label names the displayed node type.
+                           Hidden while the list is narrowed by search: clearing the filter (✕ / Clear All)
+                           is the only way back to the full list. *@
+                        @if (!IsSetsSearchActive)
+                        {
+                            <div class="set-item @(FilterViewModel.ActiveCardSets is null ? "selected" : "")"
+                                 @onclick="@(() => SelectAllSets())">
+                                <span class="set-code">ALL</span>
+                                <span class="set-name">@GetAllSetsLabel()</span>
+                            </div>
+                        }
                         @foreach (var s in _filteredSets)
                         {
-                            <div class="set-item @(FilterViewModel.SetCodes.Contains(s.Code) ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
-                                 @onclick="@(() => SelectSetFilter(s.Code))">
-                                <span class="set-icon set-symbol set-symbol-@s.Code"></span>
+                            <div class="set-item @(FilterViewModel.ActiveCardSets?.Contains(s.SetCode) == true ? "selected" : "") @(s.ParentSetCode != null ? "subset" : "")"
+                                 @onclick="@(() => SelectSetFilter(s.SetCode))">
+                                <span class="set-icon set-symbol set-symbol-@s.SetCode"></span>
                                 <span class="set-name" title="@s.Name">@s.Name</span>
                                 <span class="set-count">@s.CardCount</span>
                             </div>
@@ -78,18 +100,6 @@
                     </div>
                 </div>
 
-                <div class="sort-area">
-                    <span class="sort-label">Sort:</span>
-                    @foreach (var field in _sortFields)
-                    {
-                        var isActive = FilterViewModel.SortField == field.Value;
-                        <button class="sort-btn @(isActive ? "active" : "")"
-                                @onclick="() => ToggleSort(field.Value)">
-                            @field.Key @(isActive && !FilterViewModel.SortAsc ? "▲" : (isActive ? "▼" : ""))
-                        </button>
-                    }
-                </div>
-
                 @* ── View Mode: list / gallery toggle ── *@
                 <div class="view-mode-area">
                     <button class="view-btn @(_viewMode == "list" ? "active" : "")"
@@ -115,7 +125,7 @@
                         }
                     </select>
                     <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
-                    <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
+                    <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" disabled="@(!HasActiveFilters)" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
                 </div>
             </div>
 
@@ -134,6 +144,7 @@
                                      CurrentPage="@_currentPage"
                                      TotalPages="@_totalPages"
                                      PageSize="@_pageSize"
+                                     Counts="GetCountMap()"
                                      SelectedCardId="@_selectedCardId"
                                      OnCardClicked="SelectCard"
                                      OnCardSideChanged="OnCardSideChanged"
@@ -147,6 +158,7 @@
                                   CurrentPage="@_currentPage"
                                   TotalPages="@_totalPages"
                                   PageSize="@_pageSize"
+                                  Counts="GetCountMap()"
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
                                   OnPrevPage="PrevPage"
@@ -159,10 +171,27 @@
                                   CurrentPage="@_currentPage"
                                   TotalPages="@_totalPages"
                                   PageSize="@_pageSize"
+                                  Physicals="_physicalByCardId"
+                                  Locked="@CurrentCollectionLocked"
+                                  PinnedLocked="@PinnedCollectionLocked"
+                                  OnCountChanged="ChangeCardCount"
+                                  OnEditRequested="EditLocationCard"
+                                  OnSplitRequested="SplitLocationCard"
+                                  OnMoveToPinnedRequested="MoveLocationCardToPinned"
+                                  PinnedCounts="_pinnedCountByCardId"
+                                  SbPresence="_sbPresenceByCardId"
+                                  ViewNodeKind="@FilterViewModel.CurrentCollectionNodeType"
+                                  SelectedIsPinned="@(PinnedCollectionId.HasValue && PinnedCollectionId == FilterViewModel.CurrentCollectionId)"
+                                  PinnedMoveLabel="@PinnedMoveLabel"
+                                  OnKbAddRequested="AddCardToPinned"
+                                  OnKbRemoveRequested="RemoveCardFromPinned"
                                   SelectedCardId="@_selectedCardId"
                                   OnCardClicked="SelectCard"
                                   OnPrevPage="PrevPage"
-                                  OnNextPage="NextPage" />
+                                  OnNextPage="NextPage"
+                                  SortField="@FilterViewModel.SortField"
+                                  SortAsc="@FilterViewModel.SortAsc"
+                                  OnSortColumnClicked="ToggleSort" />
                 }
             }
 
@@ -170,16 +199,37 @@
             @if (!_loading && !_displayCards.Any())
             {
                 <div class="kb-empty">
-                    @if (HasActiveFilters)
+                    @if (!IsLocationMode)
                     {
-                        <span class="empty-filters-msg">No cards match the selected filters</span>
+                        @if (FilterViewModel.ActiveCardSets is { Count: > 0 } && !_selectedSetHasCards)
+                        {
+                            @* Direct DB check (HasCardsQuery) — no filter inference: the selected set
+                               has no cards in the KB, so offer to sync it. Sync is a KB-only operation —
+                               collection/deck/sideboard display never offers it. *@
+                            <span>No cards from the selected set in knowledge base yet.</span>
+                            <button class="sync-btn-inline" @onclick="OnSyncClick">
+                                Sync from Scryfall
+                            </button>
+                        }
+                        else if (HasActiveFilters)
+                        {
+                            <span class="empty-filters-msg">No cards match the selected filters</span>
+                        }
+                        else
+                        {
+                            <span>No cards in knowledge base yet.</span>
+                        }
+                    }
+                    else if (GetLocationTotalCount() == 0)
+                    {
+                        @* The location itself is empty — the count check precedes any filter inference:
+                           an empty node reports as empty even when filters happen to be active. *@
+                        <span>No cards in the @GetLocationTypeLabel() yet.</span>
                     }
                     else
                     {
-                        <span>No cards in knowledge base yet.</span>
-                        <button class="sync-btn-inline" @onclick="OnSyncClick">
-                            Sync from Scryfall
-                        </button>
+                        @* The location has cards but none displayed — filters are hiding them. *@
+                        <span class="empty-filters-msg">No cards match the selected filters</span>
                     }
                 </div>
             }
@@ -191,7 +241,22 @@
     private int _pageSize = 50; // cards per page (adjustable from the gallery view)
 
     // Data
-    private List<MagicCard> _displayCards = new();
+    private List<Card> _displayCards = new();
+
+    /// <summary>Direct DB check (HasCardsQuery): does the selected set have cards in the KB?
+    /// Only meaningful when the displayed list is empty and exactly a set scope is active.</summary>
+    private bool _selectedSetHasCards;
+
+    /// <summary>Physical instances of cards in the current location (deck mode). Null = KB mode.</summary>
+    private Dictionary<Guid, MyCard>? _physicalByCardId;
+
+    /// <summary>Total copies of each displayed card in the pinned collection (KB mode with a pinned target only —
+    /// deck mode shows the current deck's count in the Total column instead). Null otherwise.</summary>
+    private Dictionary<Guid, int>? _pinnedCountByCardId;
+
+    /// <summary>Deck view only: CardId → the deck's sideboard holds ≥1 copy. Null = SB badges hidden.</summary>
+    private Dictionary<Guid, bool>? _sbPresenceByCardId;
+    private int? _previousPinnedCollectionId;
     private int _totalCount;
     private int _currentPage = 1;
     private int _totalPages = 0;
@@ -201,6 +266,9 @@
     private string _nameInputBuffer = "";
     private System.Threading.Timer? _nameDebounceTimer;
     private int _debounceSequence;
+
+    /// <summary>Last seen FilterViewModel.ClearGeneration — detects external resets (Clear All).</summary>
+    private int _lastClearGeneration;
 
     // Static options
     private static readonly string[] _rarities = { "common", "uncommon", "rare", "mythic" };
@@ -215,9 +283,15 @@
         ("sorcery", "Sorcery"),
     };
 
-    // Sets (loaded from KB via GetKBAvailableSetsQuery)
-    private List<CardSetDto> _sets = new();
-    private List<CardSetDto> _filteredSets = new();
+    // Sets: lazy DB-backed view scoped by FilterViewModel.FilteredSetCodes (created per mount —
+    // the component remounts on every navigation @key, so a fresh collection costs at most one small query).
+    private FilteredCardSetsCollection? _setCollection;
+
+    /// <summary>Last loaded scope list from the collection — the base for the in-memory search narrowing.</summary>
+    private List<CardSet> _scopeSets = new();
+
+    /// <summary>Search text narrowing the displayed set list (in memory only — never touches FilteredSetCodes).</summary>
+    private List<CardSet> _filteredSets = new();
     private string _setsSearchQuery = "";
 
     // Splitter / Resizable sidebar
@@ -226,6 +300,12 @@
     private const int MinSidebarWidth = 160;
     private const int MaxSidebarWidth = 500;
     private bool _isDragging;
+
+    /// <summary>Collapse state of the sets sidebar (toggle button in the sets-header, mirrors MainLayout panel toggles).
+    /// Persisted like the splitter position — the component remounts on every navigation (@key),
+    /// so a plain bool would reset on each deck click.</summary>
+    private bool _setsCollapsed;
+    private const string SetsCollapsedKey = "KBCardsListControl.SetsCollapsed";
 
     // View mode (list / gallery) — persisted like other UI settings
     private string _viewMode = "list";
@@ -237,16 +317,6 @@
 
     // Refresh trigger tracking
     private int _previousRefreshTrigger;
-    /// <summary>Display label → internal sort field name (matches CardListFilter.SortFields).</summary>
-    private static readonly Dictionary<string, string> _sortFields = new()
-    {
-        ["Name"] = "Name",
-        ["CMC"] = "CmcNumber",
-        ["Type"] = "Type",
-        ["Set"] = "SetCode",
-        ["Rarity"] = "Rarity",
-    };
-
     // ── Parameters ──────────────────────────────────────
     /// <summary>Central filter/sort state shared with CardFilterDialog.</summary>
     [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
@@ -258,13 +328,47 @@
     [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnCardSideChanged { get; set; }
     [Parameter] public int RefreshTrigger { get; set; }
 
+    /// <summary>Shared in-memory queue of the last card actions — count changes are recorded here for LastActions.</summary>
+    /// <summary>Records an Add/Sub card operation in the rolling LastActions history.
+    /// Target = the collection the card was added to / removed from (current in deck mode, fixed in KB mode).</summary>
+    [Parameter] public EventCallback<CardOperationRecord> OnCardOperation { get; set; }
+
+    /// <summary>Edit requested for a location card (deck mode only).</summary>
+    [Parameter] public EventCallback<MyCard> OnEditCard { get; set; }
+
+    /// <summary>Split requested for a location card (deck/sideboard views — any count, the whole row can move).</summary>
+    [Parameter] public EventCallback<MyCard> OnSplitCard { get; set; }
+
+    /// <summary>Move-to-pinned requested from a row (collection view — MainLayout opens MoveDialog).</summary>
+    [Parameter] public EventCallback<MyCard> OnMoveCardToPinned { get; set; }
+
+    /// <summary>Display label of the pinned move target (MainLayout.PinnedMoveLabel);
+    /// null = no valid target — the row's ⇄ stays hidden in collection view.</summary>
+    [Parameter] public string? PinnedMoveLabel { get; set; }
+
+    /// <summary>Pinned operation target (MainLayout._pinnedCollection.CollectionId).
+    /// KB-mode (+) and quick Move work against it.</summary>
+    [Parameter] public int? PinnedCollectionId { get; set; }
+
+    /// <summary>The displayed collection is locked — its card-mutation controls (−/+, ✎, ✂) are hidden.</summary>
+    [Parameter] public bool CurrentCollectionLocked { get; set; }
+
+    /// <summary>The pinned collection is locked — KB (+) is hidden and the row ⇄ Move button
+    /// disappears everywhere (strict reading: a locked pin is no destination).</summary>
+    [Parameter] public bool PinnedCollectionLocked { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         FilterViewModel.Changed += OnFilterChanged;
+        _lastClearGeneration = FilterViewModel.ClearGeneration;
+        _previousPinnedCollectionId = PinnedCollectionId;
+        // Restore set search text across component remounts (@key change on navigation)
+        _setsSearchQuery = FilterViewModel.SetSearchText;
+        _setCollection = new FilteredCardSetsCollection(FilterViewModel, DbStore);
         await LoadSplitterSettingsAsync();
         await LoadViewModeAsync();
         await LoadPageSizeAsync();
-        await LoadSetsFromKB();
+        await LoadSetsCollapsedAsync();
         await LoadCounts();
         await ApplyFiltersAndPagination();
     }
@@ -276,6 +380,28 @@
         _currentPage = 1;
         InvokeAsync(async () =>
         {
+            // Sync local set-search state when the filter was cleared through the channel
+            // (toolbar ✕ / CardFilterDialog Clear All) — the input must not keep stale text.
+            if (string.IsNullOrEmpty(FilterViewModel.SetSearchText) && !string.IsNullOrEmpty(_setsSearchQuery))
+            {
+                _setsSearchQuery = string.Empty;
+                ApplySetsFilter();  // re-narrow the last loaded scope list
+            }
+
+            // Detect an external reset via ClearGeneration: after Clear All the debounced name buffer
+            // must not keep stale text — and a pending debounce timer must not resurrect the filter.
+            if (FilterViewModel.ClearGeneration != _lastClearGeneration)
+            {
+                _lastClearGeneration = FilterViewModel.ClearGeneration;
+                if (string.IsNullOrEmpty(FilterViewModel.NameFilter))
+                {
+                    _nameInputBuffer = string.Empty;
+                    _nameDebounceTimer?.Dispose();
+                    _nameDebounceTimer = null;
+                    _debounceSequence++;
+                }
+            }
+
             await ApplyFiltersAndPagination();
             StateHasChanged();
         });
@@ -298,37 +424,22 @@
         }
     }
 
-    // ── Sets Loading ──────────────────────────────────────
-    private async Task LoadSetsFromKB()
-    {
-        try
-        {
-            var sets = await KBSetsQueryHandler!.Handle(new GetKBAvailableSetsQuery());
-            _sets = sets.Select(DtoHelper.ToCardSetDto)
-                .OrderByDescending(s => s.ReleasedAt)
-                .ThenBy(s => s.ParentSetCode)
-                .ToList();
-            ApplySetsFilter();
-        }
-        catch (Exception ex)
-        {
-            _sets = new List<CardSetDto>();
-            _filteredSets = new List<CardSetDto>();
-        }
-    }
+    // ── Sets: lazy DB collection + in-memory search narrowing ────────────
 
     private void OnSetsFilterInput(ChangeEventArgs e)
     {
-        // Typing in the input = search mode; clear any active set filter
-        FilterViewModel.SetNewSetCodeFilter(null);
-        _setsSearchQuery = e.Value?.ToString() ?? string.Empty;
-        ApplySetsFilter();
+        var text = e.Value?.ToString() ?? string.Empty;
+        _setsSearchQuery = text;
+        FilterViewModel.SetSearchText = text;  // canonical state — survives component remounts
+        ApplySetsFilter();                      // instant sidebar narrowing only — the card grid
+                                                // follows the explicit single selection, not the search text
         StateHasChanged();
     }
 
     private async Task ClearSetsFilter()
     {
-        FilterViewModel.SetNewSetCodeFilter(null);
+        FilterViewModel.SetActiveCardSets(null);
+        FilterViewModel.SetSearchText = string.Empty;
         _setsSearchQuery = "";
         ApplySetsFilter();
         await OnCardSelected.InvokeAsync((Guid?)null);
@@ -337,85 +448,143 @@
 
     private string GetSetsInputValue()
     {
-        // Show set codes when sets are selected as filter; otherwise show search text
-        if (FilterViewModel.SetCodes.Count == 1)
-            return FilterViewModel.SetCodes[0];
-        if (FilterViewModel.SetCodes.Count > 1)
-            return $"{FilterViewModel.SetCodes.Count} sets";
+        // The input is exclusively for set-list search. The selected set code is deliberately NOT shown here:
+        // a stale code rendered into the field would be appended to on the next keystroke and leak into
+        // the search filter. Selection state lives in the list highlight (and the ✕ button), not in this text.
         return _setsSearchQuery;
     }
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
-    private int GetDisplayedSetsCount()
-    {
-        if (FilterViewModel.SetCodes.Count > 0)
-            return FilterViewModel.SetCodes.Count;  // Sets selected
-        if (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
-            return _filteredSets.Count;  // Text-filtered sets
-        return _sets.Count;  // All sets
-    }
+    private int GetDisplayedSetsCount() => _filteredSets.Count;
 
     private int GetDisplayedCardsCount()
     {
-        if (FilterViewModel.SetCodes.Count > 0)
-        {
-            // Selected sets: sum of declared CardCount from set metadata
-            return _sets.Where(s => FilterViewModel.SetCodes.Contains(s.Code))
-                .Sum(s => s.CardCount);
-        }
-        if (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
-        {
-            // Text-filtered sets: sum of declared CardCount from matching sets
-            return _filteredSets.Sum(s => s.CardCount);
-        }
-        // No filter: total cards from DB
+        if (IsLocationMode)
+            // Unique cards in the current node, narrowed by the active set when one is clicked.
+            return _physicalByCardId?.Values
+                .Count(p => FilterViewModel.ActiveCardSets is null || p.Card.SetCode == FilterViewModel.ActiveCardSets[0]) ?? 0;
+        if (FilterViewModel.ActiveCardSets is { Count: 1 })
+            return _filteredSets.FirstOrDefault(s => s.SetCode == FilterViewModel.ActiveCardSets![0])?.CardCount ?? 0;
+        // KB, no set selected: total cards from DB
         return _totalCount;
     }
 
+    /// <summary>Location mode only: all card copies in the current node (SUM of physical counts —
+    /// same semantics as the tree's CardCount). 0 outside location mode or before the first load.</summary>
+    private int GetLocationTotalCount() =>
+        _physicalByCardId?.Values.Sum(p => p.Count) ?? 0;
+
+    /// <summary>True while the sidebar list is actually narrowed by the search input (2+ chars).
+    /// ALL is hidden in this state; clearing the filter (✕ / Clear All) is the only way back.</summary>
+    private bool IsSetsSearchActive => !string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2;
+
     private void ApplySetsFilter()
     {
-        if (string.IsNullOrWhiteSpace(_setsSearchQuery) || _setsSearchQuery.Length < 2)
+        // Base list = the lazy DB collection scoped by FilteredSetCodes (all sets in KB, node's sets in location mode).
+        if (!IsSetsSearchActive)
         {
-            _filteredSets = _sets;
+            _filteredSets = _scopeSets;
         }
         else
         {
             var q = _setsSearchQuery.ToLowerInvariant();
-            _filteredSets = _sets
+            _filteredSets = _scopeSets
                 .Where(s => s.Name.ToLowerInvariant().Contains(q) ||
-                            s.Code.ToLowerInvariant().Contains(q))
+                            s.SetCode.ToLowerInvariant().Contains(q))
                 .ToList();
         }
     }
 
-    private async Task SelectSetFilter(string setCode)
+    /// <summary>Location mode: scopes the set list to this node's sets. While the scope is in auto mode it is
+    /// filled with the node's codes; an explicit user selection (Sets filter in Card Filter) survives and is
+    /// trimmed to the node's codes — if nothing survives, the scope falls back to the full node scope.</summary>
+    private void ApplyLocationScope(IEnumerable<string> setCodes)
     {
-        // Toggle: if already selected, remove it; otherwise add it
-        if (FilterViewModel.SetCodes.Contains(setCode))
+        var codes = setCodes.Distinct().ToList();
+        if (FilterViewModel.SetScopeAuto)
         {
-            FilterViewModel.SetCodes.Remove(setCode);
+            FilterViewModel.SetNodeScope(codes);
         }
         else
         {
-            FilterViewModel.SetCodes.Add(setCode);
+            var kept = FilterViewModel.FilteredSetCodes
+                .Where(c => codes.Contains(c, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (kept.Count == 0)
+            {
+                FilterViewModel.ResetSetScope();
+                FilterViewModel.SetNodeScope(codes);   // back to the full node scope
+            }
+            else if (kept.Count < FilterViewModel.FilteredSetCodes.Count)
+            {
+                FilterViewModel.SetFilteredSetCodes(kept);  // drop codes absent in this node
+            }
         }
-        _setsSearchQuery = "";  // Clear search so input shows the set code(s)
+        if (FilterViewModel.ActiveCardSets is not null
+            && !codes.Contains(FilterViewModel.ActiveCardSets[0], StringComparer.OrdinalIgnoreCase))
+            FilterViewModel.SetActiveCardSets(null);
+    }
+
+    private async Task SelectSetFilter(string setCode)
+    {
+        // Click = activate exactly this set for the card grid (ActiveCardSets). The set-list scope
+        // (FilteredSetCodes) is untouched — the sidebar keeps showing the full scoped list.
+        // Clicking the already-active set is a no-op; ALL / ✕ clear the selection.
+        if (FilterViewModel.ActiveCardSets is { Count: 1 } && FilterViewModel.ActiveCardSets[0] == setCode) return;
+
+        FilterViewModel.SetActiveCardSets(setCode);
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
     }
 
     private async Task SelectAllSets()
     {
-        FilterViewModel.SetNewSetCodeFilter(null);
-        _setsSearchQuery = "";  // Clear search text too
+        // ALL resets the selection only — the scoped list stays as is.
+        FilterViewModel.SetActiveCardSets(null);
         await OnCardSelected.InvokeAsync((Guid?)null);
         FilterViewModel.Apply();  // single channel: Changed → OnFilterChanged
     }
 
     // ── Splitter / Resize ──────────────────────────────────────
+    /// <summary>Toggle the sets sidebar between full and collapsed (28px strip with the toggle only).
+    /// Render is automatic after the handler — no StateHasChanged.</summary>
+    private async Task ToggleSetsCollapsed()
+    {
+        _setsCollapsed = !_setsCollapsed;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(SetsCollapsedKey, _setsCollapsed ? "1" : "0"));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    private async Task LoadSetsCollapsedAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(SetsCollapsedKey));
+            _setsCollapsed = json == "1";
+        }
+        catch
+        {
+            // default: expanded
+        }
+    }
+
     private async Task OnSplitterMouseDown(MouseEventArgs e)
     {
         if (_jsModule is null) return;
+
+        // Dragging the splitter while collapsed expands the sidebar first — the drag then resizes it.
+        if (_setsCollapsed)
+            _setsCollapsed = false;
 
         _isDragging = true;
         StateHasChanged();
@@ -475,10 +644,20 @@
         {
             _previousRefreshTrigger = RefreshTrigger;
             _currentPage = 1;
-            await LoadSetsFromKB();   // reload sets list after sync
-            ApplySetsFilter();         // re-apply search filter on sets
-            await LoadCounts();        // refresh total card count
+            _setCollection?.Invalidate();  // sync may have added new sets — force a DB reload
+            await LoadCounts();            // refresh total card count
             await ApplyFiltersAndPagination();
+        }
+
+        // Pinned target changed while KB is displayed — refresh pinned totals without re-querying cards
+        if (PinnedCollectionId != _previousPinnedCollectionId)
+        {
+            _previousPinnedCollectionId = PinnedCollectionId;
+            if (FilterViewModel.CurrentCollectionId is null)
+            {
+                _pinnedCountByCardId = PinnedCollectionId.HasValue ? await LoadPinnedCountsAsync(_displayCards) : null;
+                StateHasChanged();
+            }
         }
     }
 
@@ -487,23 +666,24 @@
         await OnOpenFilter.InvokeAsync();
     }
 
-    /// <summary>Clear all active filters and re-query.</summary>
+    /// <summary>Clear all active filters and re-query. Inert while no filter is set — the button
+    /// is disabled in that state; this guard keeps the callback itself inert even if a future
+    /// caller invokes it directly.</summary>
     private void OnClearFiltersClick()
     {
+        if (!HasActiveFilters) return;
         FilterViewModel.ClearAndApply();
     }
 
     private async Task OnSyncClick()
     {
-        if (FilterViewModel.SetCodes.Count == 1)
-        {
-            await OnOpenSync.InvokeAsync(FilterViewModel.SetCodes[0]);
-        }
-        else
-        {
-            // No set or multiple sets selected — open sync dialog without pre-selected set
-            await OnOpenSync.InvokeAsync(string.Empty);
-        }
+        // Defense in depth: the button is not rendered in location mode, and this guard
+        // keeps the callback itself inert even if a future caller invokes it there.
+        if (IsLocationMode) return;
+
+        // The button only renders when a set scope is active, so [0] is always the target.
+        if (FilterViewModel.ActiveCardSets is { Count: > 0 })
+            await OnOpenSync.InvokeAsync(FilterViewModel.ActiveCardSets[0]);
     }
 
     private async Task LoadCounts()
@@ -630,6 +810,35 @@
         _loading = true;
         try
         {
+            // Location mode: load physical instances first — needed both for per-card counts/actions
+            // and to scope the sidebar set list to this node's distinct sets.
+            if (FilterViewModel.CurrentCollectionId.HasValue)
+            {
+                var physical = await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value);
+                _physicalByCardId = physical.ToDictionary(p => p.Card.Id, p => p);
+                ApplyLocationScope(physical.Select(p => p.Card.SetCode).OfType<string>());
+            }
+            else
+            {
+                _physicalByCardId = null;
+                // KB mode: drop only the stale location-mode auto-fill (node codes from a previous visit);
+                // an explicit user selection (Sets filter in Card Filter) carries over to the KB list.
+                if (FilterViewModel.SetScopeAuto && FilterViewModel.FilteredSetCodes.Count > 0)
+                    FilterViewModel.ResetSetScope();
+            }
+
+            // Load the scoped set list for the sidebar (lazy DB view of FilteredSetCodes),
+            // then narrow it by the search text in memory. An empty node has no sets at all —
+            // loading with an empty scope would fall back to the full KB, so short-circuit it.
+            // Display order is applied here as a guard: newest release first, then by parent set code.
+            _scopeSets = _physicalByCardId is { Count: 0 }
+                ? new List<CardSet>()
+                : (await _setCollection!.EnsureLoadedAsync())
+                    .OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue)
+                    .ThenBy(s => s.ParentSetCode)
+                    .ToList();
+            ApplySetsFilter();
+
             // FilterViewModel.SortField already matches CardListFilter.SortFields values
             var sortField = FilterViewModel.SortField;
 
@@ -639,14 +848,15 @@
 
             var filter = new CardListFilter
             {
-                SetCodes = FilterViewModel.SetCodes.Count > 0 ? FilterViewModel.SetCodes : null,
+                SetCodes = FilterViewModel.GetEffectiveSetCodes(),
                 Rarity = FilterViewModel.Rarity.Count > 0 ? FilterViewModel.Rarity : null,
                 SortField = sortField,
                 SortAsc = FilterViewModel.SortAsc,
                 Page = _currentPage,
                 PageSize = _pageSize,
                 NameFilter = effectiveNameFilter,
-                Query = null,
+                Query = string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery) ? null : FilterViewModel.SearchQuery.Trim(),
+                LocationFilter = FilterViewModel.CurrentCollectionId,
                 TypeFilters = FilterViewModel.TypeFilter.Count > 0 ? FilterViewModel.TypeFilter : null,
                 Artist = string.IsNullOrEmpty(FilterViewModel.Artist) ? null : FilterViewModel.Artist,
                 ColorType = string.IsNullOrEmpty(FilterViewModel.ColorType) ? null : FilterViewModel.ColorType,
@@ -663,24 +873,66 @@
                 LayoutFilter = string.IsNullOrEmpty(FilterViewModel.LayoutFilter) ? null : FilterViewModel.LayoutFilter,
                 LegalityFilter = string.IsNullOrEmpty(FilterViewModel.LegalityFilter) ? null : FilterViewModel.LegalityFilter,
                 GameChangerFilter = FilterViewModel.GameChangerFilter,
+                // Collection filters (location mode)
+                Ownership = FilterViewModel.Ownership,
+                MinCount = ParseCountFilter(FilterViewModel.MinCount),
+                MaxCount = ParseCountFilter(FilterViewModel.MaxCount),
+                MinPrice = ParsePriceFilter(FilterViewModel.MinPrice),
+                MaxPrice = ParsePriceFilter(FilterViewModel.MaxPrice),
+                IsFoil = FilterViewModel.IsFoil,
+                HasForTrade = FilterViewModel.HasForTrade,
+                HasComment = FilterViewModel.HasComment,
             };
 
             var result = await CardSearch!.GetPagedAsync(filter);
-            _displayCards = result.Cards.Cast<MagicCard>().ToList();
+            _displayCards = result.Cards.Cast<Card>().ToList();
             _totalCount = result.TotalCount;
             _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
+
+            // KB mode with a pinned target: totals of the displayed cards in the pinned collection
+            // (deck mode shows the current deck's count in the Total column — no pinned query needed)
+            _pinnedCountByCardId = FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue
+                ? await LoadPinnedCountsAsync(_displayCards)
+                : null;
+
+            // Deck view: read-only SB badges — one bulk query for the whole page answers which
+            // displayed cards also sit in the sideboard. Sideboard/collection/KB views: no badges.
+            _sbPresenceByCardId = FilterViewModel.CurrentCollectionId is { } deckId
+                                  && FilterViewModel.CurrentCollectionNodeType == NodeType.Deck
+                ? await LoadSideboardPresenceAsync(deckId)
+                : null;
         }
         catch
         {
-            _displayCards = new List<MagicCard>();
+            _displayCards = new List<Card>();
             _totalCount = 0;
             _totalPages = 0;
+            _sbPresenceByCardId = null;
         }
         finally
         {
             _loading = false;
+            await RefreshSelectedSetHasCardsAsync();
         }
+    }
+
+    /// <summary>
+    /// Direct DB check for the sync button: when the displayed list is empty and a set scope is
+    /// active, asks HasCardsQuery whether that set actually has cards in the knowledge base.
+    /// No filter inference — the answer comes from the database itself.
+    /// </summary>
+    private async Task RefreshSelectedSetHasCardsAsync()
+    {
+        if (_displayCards.Count > 0
+            || FilterViewModel.CurrentCollectionId.HasValue
+            || FilterViewModel.ActiveCardSets is not { Count: > 0 })
+        {
+            _selectedSetHasCards = false;
+            return;
+        }
+
+        _selectedSetHasCards = await HasCardsHandler!.Handle(new HasCardsQuery(FilterViewModel.ActiveCardSets[0]));
     }
 
     /// <summary>Parse a numeric property filter from operator string + value string.
@@ -692,6 +944,112 @@
             return null;
 
         return new NumericPropertyFilter { Operator = op, Value = num };
+    }
+
+    /// <summary>Parse a card count filter (Deck.Count). Returns null if empty/non-integer (filter inactive).</summary>
+    private static int? ParseCountFilter(string value) =>
+        int.TryParse(value?.Trim(), out var num) ? num : null;
+
+    /// <summary>Parse a price filter in USD (Cards.Usd). Returns null if empty/non-numeric (filter inactive).</summary>
+    private static float? ParsePriceFilter(string value) =>
+        float.TryParse(value?.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var num)
+            ? num : null;
+
+    // ── Location mode: per-card actions ───────────────────────────────────
+    private Dictionary<Guid, int>? GetCountMap() =>
+        _physicalByCardId?.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
+
+    private async Task ChangeCardCount((MyCard card, int delta) e)
+    {
+        if (!FilterViewModel.CurrentCollectionId.HasValue) return;
+        var (card, delta) = e;
+        var newCount = card.Count + delta;
+        if (newCount < 0) return;
+
+        if (newCount == 0)
+            await DeckCardService.RemoveCardsAsync(FilterViewModel.CurrentCollectionId.Value, new[] { card.Id });
+        else
+            await DeckCardService.UpdateCardAsync(FilterViewModel.CurrentCollectionId.Value, card.Id,
+                new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = newCount });
+
+        // Record the operation in the rolling LastActions history — labeled with the target collection.
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(
+            FilterViewModel.CurrentCollectionId.Value, card.Card,
+            Math.Abs(delta), delta > 0 ? LastActionOperationEnum.Add : LastActionOperationEnum.Sub));
+
+        // Re-query current page + refresh count map (no page reset)
+        await ApplyFiltersAndPagination();
+    }
+
+    private async Task EditLocationCard(MyCard card) => await OnEditCard.InvokeAsync(card);
+
+    /// <summary>Any count, including a single copy — the whole row moves deck↔sideboard.</summary>
+    private async Task SplitLocationCard(MyCard card) => await OnSplitCard.InvokeAsync(card);
+
+    private async Task MoveLocationCardToPinned(MyCard card) => await OnMoveCardToPinned.InvokeAsync(card);
+
+    /// <summary>One grouped query over Deck: total copies of each displayed card in the pinned collection.</summary>
+    /// <summary>Deck view: which of the displayed cards have ≥1 copy in the deck's sideboard.
+    /// One GetSideboardPresenceQuery per page — no per-row round-trips.</summary>
+    private async Task<Dictionary<Guid, bool>?> LoadSideboardPresenceAsync(int deckId)
+    {
+        if (SideboardPresenceHandler is null || _displayCards.Count == 0)
+            return null;
+
+        return await SideboardPresenceHandler.Handle(
+            new GetSideboardPresenceQuery(deckId, _displayCards.Select(c => c.Id).ToList()));
+    }
+
+    private async Task<Dictionary<Guid, int>> LoadPinnedCountsAsync(List<Card> cards)
+    {
+        if (cards.Count == 0 || PinnedCollectionId is null)
+            return new Dictionary<Guid, int>();
+
+        var counts = await DeckCardService.GetDeckCardCountsAsync(
+            new[] { PinnedCollectionId.Value },
+            cards.Select(c => c.Id).ToList());
+
+        return counts.ToDictionary(kv => kv.Key.CardId, kv => kv.Value);
+    }
+
+    /// <summary>KB mode: add one copy of the card to the pinned collection (merge semantics if already present).</summary>
+    private async Task AddCardToPinned(Card card)
+    {
+        if (!PinnedCollectionId.HasValue) return;
+
+        await DeckCardService.MaterializeFromIdsAsync(PinnedCollectionId.Value, new[] { card.Id });
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(PinnedCollectionId.Value, card, 1, LastActionOperationEnum.Add));
+
+        // Keep the pinned-total column in sync (same total LastActions shows) — immutable update so
+        // Blazor detects the parameter change on CardListView.
+        var current = _pinnedCountByCardId ?? new Dictionary<Guid, int>();
+        _pinnedCountByCardId = new Dictionary<Guid, int>(current) { [card.Id] = current.GetValueOrDefault(card.Id) + 1 };
+        StateHasChanged();
+    }
+
+    /// <summary>KB mode: remove one copy of the card from the pinned collection (full removal when the count hits 0).</summary>
+    private async Task RemoveCardFromPinned(Card card)
+    {
+        if (!PinnedCollectionId.HasValue) return;
+
+        var current = _pinnedCountByCardId?.GetValueOrDefault(card.Id) ?? 0;
+        if (current <= 0) return;
+
+        if (current == 1)
+            await DeckCardService.RemoveCardsAsync(PinnedCollectionId.Value, new[] { card.Id });
+        else
+            await DeckCardService.UpdateCardAsync(PinnedCollectionId.Value, card.Id,
+                new Dictionary<MagicCardField, object?> { [MagicCardField.Count] = current - 1 });
+
+        await OnCardOperation.InvokeAsync(new CardOperationRecord(PinnedCollectionId.Value, card, 1, LastActionOperationEnum.Sub));
+
+        // Keep the pinned-total column in sync — immutable update so Blazor detects the parameter change.
+        var counts = _pinnedCountByCardId ?? new Dictionary<Guid, int>();
+        var updated = new Dictionary<Guid, int>(counts);
+        if (current - 1 <= 0) updated.Remove(card.Id);
+        else updated[card.Id] = current - 1;
+        _pinnedCountByCardId = updated;
+        StateHasChanged();
     }
 
     // ── Sort — through single channel ────────────────────
@@ -813,18 +1171,45 @@
     // ── Selection ───────────────────────────────────────
     private Guid? _selectedCardId;
 
-    private async Task SelectCard(MagicCard card)
+    private async Task SelectCard(Card card)
     {
         _selectedCardId = card.Id;
         await OnCardSelected.InvokeAsync(card.Id);
     }
 
-    /// <summary>True when at least one filter is actively set in FilterViewModel.</summary>
+    /// <summary>True when a collection/deck/sideboard is displayed (location mode) — the control
+    /// then only shows KB cards filtered by membership; Sync is not available in this mode.</summary>
+    private bool IsLocationMode => FilterViewModel.CurrentCollectionId.HasValue;
+
+    /// <summary>Label of the first sidebar item: "All Sets" in KB mode, "All sets of collection/deck/sideboard"
+    /// when a location is displayed (the node type arrives with the navigation state — no DB lookup).</summary>
+    private string GetAllSetsLabel() => FilterViewModel.CurrentCollectionNodeType switch
+    {
+        NodeType.Collection => "All sets of collection",
+        NodeType.Deck => "All sets of deck",
+        NodeType.Sideboard => "All sets of sideboard",
+        _ => "All Sets"
+    };
+
+    /// <summary>Singular node label for empty-state messages: "deck" / "collection" / "sideboard".
+    /// The node type arrives with the navigation state — no DB lookup.</summary>
+    private string GetLocationTypeLabel() => FilterViewModel.CurrentCollectionNodeType switch
+    {
+        NodeType.Collection => "collection",
+        NodeType.Deck => "deck",
+        NodeType.Sideboard => "sideboard",
+        _ => "location"
+    };
+
+    /// <summary>True when at least one card filter is actively set in FilterViewModel.
+    /// The set scope (ActiveCardSets) and location mode itself are excluded on purpose:
+    /// the set scope has its own clear button in the sidebar, and a bare location is not a filter.</summary>
     private bool HasActiveFilters =>
-        FilterViewModel.SetCodes.Count > 0
+        (!string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2)
         || FilterViewModel.Rarity.Count > 0
         || FilterViewModel.TypeFilter.Count > 0
         || !string.IsNullOrWhiteSpace(FilterViewModel.NameFilter)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery)
         || !string.IsNullOrWhiteSpace(FilterViewModel.Artist)
         || !string.IsNullOrWhiteSpace(FilterViewModel.ColorType)
         || (FilterViewModel.ColorFilters.Any(kvp => kvp.Value))
@@ -836,14 +1221,23 @@
         || !string.IsNullOrWhiteSpace(FilterViewModel.CmcValue)
         || !string.IsNullOrWhiteSpace(FilterViewModel.LayoutFilter)
         || !string.IsNullOrWhiteSpace(FilterViewModel.LegalityFilter)
-        || FilterViewModel.GameChangerFilter;
+        || FilterViewModel.GameChangerFilter
+        // Collection filters (location mode)
+        || FilterViewModel.Ownership != "all"
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MinCount)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MaxCount)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MinPrice)
+        || !string.IsNullOrWhiteSpace(FilterViewModel.MaxPrice)
+        || FilterViewModel.IsFoil
+        || FilterViewModel.HasForTrade
+        || FilterViewModel.HasComment;
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
         // Unsubscribe from FilterViewModel
         FilterViewModel.Changed -= OnFilterChanged;
 
-        // Dispose debounce timer
+        // Dispose debounce timers
         _nameDebounceTimer?.Dispose();
 
         // Microsoft Learn pattern: try-catch JSDisconnectedException

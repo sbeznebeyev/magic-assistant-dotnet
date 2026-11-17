@@ -4,30 +4,117 @@
    loading, filtering, pagination state and selection. *@
 @using System.Text
 @using MagicAssistant.App.Components.Shared
+@using MagicAssistant.Data.Model.NavigatorNodes
 
 <div class="card-list-view">
     <div class="table-wrapper">
         <table class="card-table">
             <thead>
                 <tr>
-                    <th class="col-num">#</th>
-                    <th class="col-name">Name</th>
-                    <th class="col-cmc">CMC</th>
+                    @if (IsDeckMode || PinnedCounts != null)
+                    {
+                        <th class="col-total">Total</th>
+                    }
+                    @if (!IsDeckMode)
+                    {
+                        <th class="col-num">#</th>
+                    }
+                    @* Sortable headers: click = switch sort to this column (ascending if new),
+                       repeat click on the same header toggles the direction. *@
+                    <th class="col-name sortable @(IsSorted(CardListFilter.SortFields.Name) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.Name))">Name<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Name)</span></th>
+                    <th class="col-cmc sortable @(IsSorted(CardListFilter.SortFields.CmcNumber) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.CmcNumber))">CMC<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.CmcNumber)</span></th>
                     <th class="col-cost">Cost</th>
-                    <th class="col-rarity">Rarity</th>
-                    <th class="col-set">Set</th>
-                    <th class="col-type">Type</th>
+                    <th class="col-rarity sortable @(IsSorted(CardListFilter.SortFields.Rarity) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.Rarity))">Rarity<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Rarity)</span></th>
+                    <th class="col-set sortable @(IsSorted(CardListFilter.SortFields.SetCode) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.SetCode))">Set<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.SetCode)</span></th>
+                    <th class="col-type sortable @(IsSorted(CardListFilter.SortFields.Type) ? "sorted" : "")"
+                        @onclick="@(() => SortHeader(CardListFilter.SortFields.Type))">Type<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Type)</span></th>
                 </tr>
             </thead>
             <tbody>
                 @for (var i = 0; i < Cards.Count; i++)
                 {
                     var card = Cards[i];
+                    var physical = Physicals?.GetValueOrDefault(card.Id);
                     <tr class="@(SelectedCardId == card.Id ? "selected" : "")"
                         @onclick="() => SelectCard(card)">
-                        <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
+                        @if (IsDeckMode)
+                        {
+                            @* Deck mode: the Total column replaces the old count column — always > 0, because a
+                               card whose count drops to 0 disappears from the deck *@
+                            <td class="col-total">
+                                @if (physical != null && !Locked)
+                                {
+                                    <div class="count-control">
+                                        <button class="count-btn" @onclick:stopPropagation="true"
+                                                @onclick="() => ChangeCount(physical, -1)" title="Decrease count">−</button>
+                                        <span class="count-value">@physical.Count</span>
+                                        <button class="count-btn" @onclick:stopPropagation="true"
+                                                @onclick="() => ChangeCount(physical, 1)" title="Increase count">+</button>
+                                    </div>
+                                }
+                                else if (physical != null)
+                                {
+                                    @* Locked location — count is shown read-only, no mutation buttons *@
+                                    <span class="count-value">@physical.Count</span>
+                                }
+                            </td>
+                        }
+                        else if (PinnedCounts != null)
+                        {
+                            @* KB mode with a pinned target — unified with deck mode: [−] total [+] in the
+                               leftmost column; − is hidden when the total is 0 (only possible here, never in
+                               deck mode); locked pinned → read-only value *@
+                            var pinnedTotal = PinnedCounts.GetValueOrDefault(card.Id);
+                            <td class="col-total">
+                                @if (!PinnedLocked)
+                                {
+                                    <div class="count-control">
+                                        @if (pinnedTotal > 0)
+                                        {
+                                            <button class="count-btn" @onclick:stopPropagation="true"
+                                                    @onclick="() => RemoveFromFixed(card)" title="Remove from fixed collection">−</button>
+                                        }
+                                        <span class="count-value">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</span>
+                                        <button class="count-btn" @onclick:stopPropagation="true"
+                                                @onclick="() => AddToFixed(card)" title="Add to fixed collection">+</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="count-value">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</span>
+                                }
+                            </td>
+                        }
+                        @if (!IsDeckMode)
+                        {
+                            <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
+                        }
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
+                            @* Read-only sideboard-presence capsule (deck view only): rendered only
+                               on rows whose card has ≥1 copy in the sideboard — off badges are not
+                               placed at all, so their space collapses. *@
+                            @if (SbPresence?.GetValueOrDefault(card.Id) == true)
+                            {
+                                <span class="sb-badge" title="Copies in the sideboard">SB</span>
+                            }
+                            @if (physical != null && !Locked)
+                            {
+                                <button class="edit-btn" @onclick:stopPropagation="true"
+                                        @onclick="() => EditCard(physical)" title="Edit card">✎</button>
+                                @* ⇄ Move — visibility and tooltip follow the Move rules table (MoveButtonVisible);
+                                   valid pinned target → MoveDialog, otherwise deck↔sideboard pile move (SplitDialog). *@
+                                @if (MoveButtonVisible)
+                                {
+                                    <button class="move-btn" @onclick:stopPropagation="true"
+                                            @onclick="() => MoveCard(physical)"
+                                            title="@MoveTooltip">⇄</button>
+                                }
+                            }
                         </td>
                         <td class="col-cmc">@(card.CmcNumber > 0 ? FormatCmc(card.CmcText) : "—")</td>
                         <td class="col-cost"><MagicText Text="@ManaCost(card)" /></td>
@@ -56,7 +143,7 @@
 
 @code {
     /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
-    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+    [Parameter] public IReadOnlyList<Card> Cards { get; set; } = Array.Empty<Card>();
 
     /// <summary>1-based index of the current page (used for the global row number in "#").</summary>
     [Parameter] public int CurrentPage { get; set; } = 1;
@@ -69,7 +156,7 @@
     [Parameter] public Guid? SelectedCardId { get; set; }
 
     /// <summary>Card row clicked.</summary>
-    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+    [Parameter] public EventCallback<Card> OnCardClicked { get; set; }
 
     /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
     [Parameter] public EventCallback OnPrevPage { get; set; }
@@ -77,13 +164,85 @@
     /// <summary>Next → requested (parent re-queries page CurrentPage + 1).</summary>
     [Parameter] public EventCallback OnNextPage { get; set; }
 
+    /// <summary>Physical instances of the cards in the current location (deck/sideboard/collection).
+    /// Null = KB mode — no count controls rendered.</summary>
+    [Parameter] public Dictionary<Guid, MyCard>? Physicals { get; set; }
+
+    /// <summary>Count changed by ±1 (location mode only).</summary>
+    [Parameter] public EventCallback<(MyCard card, int delta)> OnCountChanged { get; set; }
+
+    /// <summary>Edit requested for a location card.</summary>
+    [Parameter] public EventCallback<MyCard> OnEditRequested { get; set; }
+
+    /// <summary>Split requested for a location card — any count, including a single copy
+    /// (the whole row moves deck↔sideboard).</summary>
+    [Parameter] public EventCallback<MyCard> OnSplitRequested { get; set; }
+
+    /// <summary>Total copies of each displayed card in the pinned collection (leftmost column, KB mode with a
+    /// pinned target only — in deck mode the Total column shows the current deck's count instead).
+    /// Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
+    [Parameter] public Dictionary<Guid, int>? PinnedCounts { get; set; }
+
+    /// <summary>Deck view only: CardId → the deck's sideboard holds ≥1 copy of the card (one bulk
+    /// query per page). Null = the read-only SB capsule is hidden (KB/sideboard/collection view).</summary>
+    [Parameter] public Dictionary<Guid, bool>? SbPresence { get; set; }
+
+    /// <summary>Node type of the viewed location — drives ⇄ per the Move rules table: a Collection needs a
+    /// pinned target to show the button at all; Deck/Sideboard without one fall back to the pile move
+    /// (SplitDialog). Null (KB/unknown) — button hidden.</summary>
+    [Parameter] public NodeType? ViewNodeKind { get; set; }
+
+    /// <summary>The viewed node IS the pinned node — rule 0: the ⇄ button is hidden entirely.</summary>
+    [Parameter] public bool SelectedIsPinned { get; set; }
+
+    /// <summary>Display label of the pinned move target — "Name", or "&lt;deck&gt; (sideboard)" for a pinned
+    /// sideboard. Null = no valid target (nothing pinned / pinned is the viewed node) — button hidden.</summary>
+    [Parameter] public string? PinnedMoveLabel { get; set; }
+
+    /// <summary>Move requested with a valid pinned target (any location mode) — move part of a card
+    /// pile to the pinned node (MoveDialog).</summary>
+    [Parameter] public EventCallback<MyCard> OnMoveToPinnedRequested { get; set; }
+
+    /// <summary>The displayed collection is locked — −/+ and ✎/✂ are hidden, count shown read-only.</summary>
+    [Parameter] public bool Locked { get; set; }
+
+    /// <summary>The pinned collection is locked — KB (+) is hidden.</summary>
+    [Parameter] public bool PinnedLocked { get; set; }
+
+    /// <summary>Active sort field (internal name from CardListFilter.SortFields) — the matching header shows the indicator.</summary>
+    [Parameter] public string SortField { get; set; } = "";
+
+    /// <summary>Sort direction for the active field (true = ascending).</summary>
+    [Parameter] public bool SortAsc { get; set; } = true;
+
+    /// <summary>Sortable column header clicked — parent switches/toggles sorting by the given internal field name.</summary>
+    [Parameter] public EventCallback<string> OnSortColumnClicked { get; set; }
+
+    /// <summary>(+) pressed in KB mode — add one copy of the card to the fixed collection.</summary>
+    [Parameter] public EventCallback<Card> OnKbAddRequested { get; set; }
+
+    /// <summary>(−) pressed in KB mode — remove one copy of the card from the fixed collection.</summary>
+    [Parameter] public EventCallback<Card> OnKbRemoveRequested { get; set; }
+
+    /// <summary>Deck/location mode — physical instances are provided for every displayed card.</summary>
+    private bool IsDeckMode => Physicals is not null;
+
     private bool HasPrev => CurrentPage > 1;
     private bool HasNext => CurrentPage < TotalPages;
 
-    private async Task SelectCard(MagicCard card)
+    private async Task SelectCard(Card card)
     {
         await OnCardClicked.InvokeAsync(card);
     }
+
+    // ── Column-header sorting ───────────────────────────
+    private bool IsSorted(string field) => SortField == field;
+
+    /// <summary>Indicator for the active column: ▼ ascending / ▲ descending (same semantics as the old toolbar buttons).</summary>
+    private string SortIndicator(string field) =>
+        !IsSorted(field) ? "" : SortAsc ? "▼" : "▲";
+
+    private async Task SortHeader(string field) => await OnSortColumnClicked.InvokeAsync(field);
 
     private async Task PrevPage()
     {
@@ -95,8 +254,54 @@
         await OnNextPage.InvokeAsync();
     }
 
+    private async Task ChangeCount(MyCard card, int delta)
+    {
+        await OnCountChanged.InvokeAsync((card, delta));
+    }
+
+    private async Task EditCard(MyCard card) => await OnEditRequested.InvokeAsync(card);
+
+    private async Task SplitCard(MyCard card) => await OnSplitRequested.InvokeAsync(card);
+
+    // ── ⇄ Move rules (the table) ────────────────────────────────────────────
+    // 0) selected == pinned     → hidden
+    // 1) collection, no pinned  → hidden
+    // 2) collection + pinned    → MoveDialog,  "Move to <pinned>"
+    // 3) deck,       no pinned  → SplitDialog, "Move to sideboard"
+    // 4) deck + pinned          → MoveDialog,  "Move to <pinned>"
+    // 5) sideboard,  no pinned  → SplitDialog, "Move to deck" (slider: deck left, sideboard right)
+    // 6) sideboard + pinned     → MoveDialog,  "Move to <pinned>"
+    // A locked pin is not a target — and by strict reading: a pinned-but-locked destination hides
+    // the ⇄ button everywhere (no pile-move fallback in deck/sideboard views).
+    private bool HasPinnedTarget => PinnedMoveLabel is not null && !PinnedLocked;
+
+    private bool MoveButtonVisible => !SelectedIsPinned && !PinnedLocked && ViewNodeKind switch
+    {
+        NodeType.Collection => HasPinnedTarget,
+        NodeType.Deck or NodeType.Sideboard => true,
+        _ => false,
+    };
+
+    private string MoveTooltip => HasPinnedTarget
+        ? $"Move to {PinnedMoveLabel}"
+        : ViewNodeKind == NodeType.Sideboard ? "Move to deck" : "Move to sideboard";
+
+    /// <summary>⇄ handler — one dedicated async method (guide rule 9: no raw InvokeAsync in lambdas);
+    /// routes by the rules table: valid pinned target → MoveDialog, otherwise deck↔sideboard split.</summary>
+    private async Task MoveCard(MyCard card)
+    {
+        if (HasPinnedTarget)
+            await OnMoveToPinnedRequested.InvokeAsync(card);
+        else
+            await OnSplitRequested.InvokeAsync(card);
+    }
+
+    private async Task AddToFixed(Card card) => await OnKbAddRequested.InvokeAsync(card);
+
+    private async Task RemoveFromFixed(Card card) => await OnKbRemoveRequested.InvokeAsync(card);
+
     /// <summary>Mana cost for the Cost column; double-sided cards show "front // back".</summary>
-    private static string ManaCost(MagicCard magicCard)
+    private static string ManaCost(Card magicCard)
     {
         if (!string.IsNullOrWhiteSpace(magicCard.ManaCost))
             return magicCard.ManaCost;

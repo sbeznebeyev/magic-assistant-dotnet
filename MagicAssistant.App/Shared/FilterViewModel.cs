@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.App.Shared;
 
@@ -45,11 +46,32 @@ public class FilterViewModel
     /// <summary>Fired when Apply() is called — subscribers should re-query.</summary>
     public event Action? Changed;
 
+    /// <summary>Increments on every Clear() call — subscribers use it to detect an external reset
+    /// and sync their local input state (e.g. the debounced name-filter buffer in CardsListControl).</summary>
+    public int ClearGeneration { get; private set; }
+
     // ── Filter properties ──
 
-    /// <summary>Set code filters — multiple values combined as OR expression (set1 OR set2 OR ...).
-    /// External components should use <see cref="SetNewSetCodeFilter(string)" /> instead of mutating directly.</summary>
-    public List<string> SetCodes { get; set; } = new();
+    /// <summary>Scope of the displayed set list (FilteredCardSetsCollection). Empty = all sets in the KB.
+    /// Written by location-mode auto-fill (the node's card set codes), by the explicit Sets filter in Card Filter,
+    /// and reset by <see cref="Clear" />. Set clicks and the sidebar search text do NOT touch it.</summary>
+    public List<string> FilteredSetCodes { get; set; } = new();
+
+    /// <summary>True while <see cref="FilteredSetCodes"/> holds the location-mode auto-fill (the current node's
+    /// set codes). An explicit user choice (the Sets filter in Card Filter) switches it off until
+    /// <see cref="ResetSetScope" /> is called.</summary>
+    public bool SetScopeAuto { get; private set; } = true;
+
+    /// <summary>Set selection made by clicking a set in the sidebar. Null = no selection —
+    /// the card filter then falls back to <see cref="FilteredSetCodes" />.
+    /// A click sets exactly one code; ALL / ✕ / <see cref="Clear" /> reset it to null.</summary>
+    public List<string>? ActiveCardSets { get; set; }
+
+    /// <summary>Text from the "Filter sets..." sidebar input. Narrows only the visible set list in
+    /// CardsListControl's sidebar — the card grid follows the explicit single selection, not the search text.
+    /// The property persists across component remounts (e.g. deck → Knowledge Base), so an active set search
+    /// survives navigation. Reset by <see cref="Clear()" />.</summary>
+    public string SetSearchText { get; set; } = string.Empty;
 
     /// <summary>Rarity filters — multiple values combined as OR expression (common OR uncommon OR ...).
     /// External components should use <see cref="SetNewRarityFilter(string)" /> instead of mutating directly.</summary>
@@ -57,6 +79,9 @@ public class FilterViewModel
 
     /// <summary>Name filter (debounced in CardsListControl, 3+ chars).</summary>
     public string NameFilter { get; set; } = string.Empty;
+
+    /// <summary>FTS5 full-text search query (raw FTS syntax: "phrase", name:term, OR/AND/NOT). Empty = inactive.</summary>
+    public string SearchQuery { get; set; } = string.Empty;
 
     /// <summary>Card type filters — multiple values combined as OR expression (item1 OR item2 OR ...).</summary>
     /// <remarks>External components should use <see cref="SetNewTypeFilter(string)" /> and
@@ -116,34 +141,98 @@ public class FilterViewModel
     /// <summary>When true, filters only Game Changer cards (Commander banned list). False = no filter.</summary>
     public bool GameChangerFilter { get; set; }
 
+    // ── Collection filters (active only when CurrentCollectionId is set) ──
+
+    /// <summary>Ownership filter: "all" | "owned" | "borrowed". Default "all" = no filter.</summary>
+    public string Ownership { get; set; } = "all";
+
+    /// <summary>Minimum card count in the location (Deck.Count). Parsed at query time. Empty string = inactive.</summary>
+    public string MinCount { get; set; } = string.Empty;
+
+    /// <summary>Maximum card count in the location (Deck.Count). Parsed at query time. Empty string = inactive.</summary>
+    public string MaxCount { get; set; } = string.Empty;
+
+    /// <summary>Minimum price in USD (Cards.Usd). Parsed at query time. Empty string = inactive.</summary>
+    public string MinPrice { get; set; } = string.Empty;
+
+    /// <summary>Maximum price in USD (Cards.Usd). Parsed at query time. Empty string = inactive.</summary>
+    public string MaxPrice { get; set; } = string.Empty;
+
+    /// <summary>Foil filter — carried to the DB layer, not used in SQL yet (no foil flag column exists).</summary>
+    public bool IsFoil { get; set; }
+
+    /// <summary>Only cards marked For Trade (Deck.ForTradeCount &gt; 0).</summary>
+    public bool HasForTrade { get; set; }
+
+    /// <summary>Only cards with a non-empty comment (Deck.Comment).</summary>
+    public bool HasComment { get; set; }
+
+    // ── Current collection (navigation state) ──
+
+    /// <summary>Collection node Id currently displayed in the card list (deck/sideboard/collection/folder).
+    /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
+    public int? CurrentCollectionId { get; set; }
+
+    /// <summary>Node type of <see cref="CurrentCollectionId"/> (Collection/Deck/Sideboard — folders never select).
+    /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
+    public NodeType? CurrentCollectionNodeType { get; set; }
+
     // ── Sort properties ──
 
     public string SortField { get; set; } = "Name";
 
     public bool SortAsc { get; set; } = true;
 
-    /// <summary>Peresozdaet SetCodes как новый List&lt;string&gt; с одним значением.
-    /// Если строка пустая — создаёт пустой список.
-    /// Это единственный способ изменить фильтр сетов из внешних компонентов (тулбар/сайдбар).</summary>
-    /// <param name="value">Set code string, or empty/whitespace to clear the list.</param>
-    public void SetNewSetCodeFilter(string? value)
+    /// <summary>Explicit user choice of the set-list scope (e.g. the Sets filter in Card Filter).
+    /// Null/empty = all sets in the KB. Disables location-mode auto-fill until <see cref="ResetSetScope" />.</summary>
+    public void SetFilteredSetCodes(IEnumerable<string>? codes)
     {
-        SetCodes = string.IsNullOrWhiteSpace(value)
+        FilteredSetCodes = NormalizeSetCodes(codes);
+        SetScopeAuto = false;
+    }
+
+    /// <summary>Location-mode auto-fill: the current node's set codes. Keeps auto mode on.</summary>
+    public void SetNodeScope(IEnumerable<string>? codes) => FilteredSetCodes = NormalizeSetCodes(codes);
+
+    /// <summary>Back to "no explicit scope": empty list (all sets in KB / node scope in location mode)
+    /// and auto mode restored.</summary>
+    public void ResetSetScope()
+    {
+        FilteredSetCodes = new List<string>();
+        SetScopeAuto = true;
+    }
+
+    private static List<string> NormalizeSetCodes(IEnumerable<string>? codes) =>
+        codes is null
             ? new List<string>()
-            : new List<string> { value.Trim() };
+            : codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToList();
+
+    /// <summary>Set the clicked-set selection. Null/empty clears it (back to the scope filter).</summary>
+    public void SetActiveCardSets(string? setCode)
+    {
+        ActiveCardSets = string.IsNullOrWhiteSpace(setCode)
+            ? null
+            : new List<string> { setCode.Trim() };
     }
 
-    /// <summary>Replace SetCodes with a collection of values.</summary>
-    public void SetSetCodes(IEnumerable<string> values)
+    /// <summary>Effective card-grid set filter.
+    /// - ActiveCardSets null or empty → the scope (FilteredSetCodes) alone decides; null if it is empty.
+    /// - ActiveCardSets non-empty → intersected with the scope: an open scope (all sets) passes the
+    ///   clicked set through unchanged, a narrowed scope keeps only the overlap. An empty intersection
+    ///   returns an EMPTY list — "no candidate sets" — which the SQL layer resolves as zero cards,
+    ///   distinct from null ("no set filtering at all").</summary>
+    public List<string>? GetEffectiveSetCodes()
     {
-        SetCodes = new List<string>(values);
-    }
+        if (ActiveCardSets is not { Count: > 0 })
+            return FilteredSetCodes.Count > 0 ? FilteredSetCodes : null;
 
-    /// <summary>Превращает текущий список сетов в выражение "set1 OR set2 OR ...".
-    /// Используется при построении SQL-запроса через CardListFilter.SetCodes.</summary>
-    public string GetSetCodesOrExpression()
-    {
-        return string.Join(" OR ", SetCodes.Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (FilteredSetCodes.Count == 0)
+            return ActiveCardSets;
+
+        var intersection = ActiveCardSets
+            .Where(c => FilteredSetCodes.Contains(c, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        return intersection;
     }
 
     /// <summary>Peresozdaet TypeFilter как новый List&lt;string&gt; с одним значением.
@@ -201,9 +290,16 @@ public class FilterViewModel
     /// <summary>Reset all filters and sort to defaults without notifying.</summary>
     public void Clear()
     {
-        SetCodes = new List<string>();
+        ClearGeneration++;
+        // In location mode (collection/deck/sideboard) the set scope is driven by the node,
+        // so Card Filter must not reset it; only the KB mode resets it back to "all sets".
+        if (CurrentCollectionId == null)
+            ResetSetScope();
+        ActiveCardSets = null;
+        SetSearchText = string.Empty;
         Rarity = new List<string>();
         NameFilter = string.Empty;
+        SearchQuery = string.Empty;
         TypeFilter = new List<string>();
         Artist = string.Empty;
         ColorType = string.Empty;
@@ -234,5 +330,15 @@ public class FilterViewModel
         LayoutFilter = string.Empty;
         LegalityFilter = string.Empty;
         GameChangerFilter = false;
+
+        // Collection filters (location mode)
+        Ownership = "all";
+        MinCount = string.Empty;
+        MaxCount = string.Empty;
+        MinPrice = string.Empty;
+        MaxPrice = string.Empty;
+        IsFoil = false;
+        HasForTrade = false;
+        HasComment = false;
     }
 }

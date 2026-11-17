@@ -1,0 +1,142 @@
+@*
+    ContextStrip — status strip at the top of the center panel (where SearchControl used to live).
+    A single bar in three sections:
+      left   — selected (displayed) collection, or the KB variant ("KnowledgeBase Cards") when no
+               collection is displayed; stats "(x/y)" pushed to the outer left edge, name pushed
+               right toward the arrow.
+      middle — gold arrow pointing right (inline SVG, 24×24).
+      right  — pinned collection (deck/collection/sideboard only); name pushed left toward the
+               arrow, stats "(x/y)" pushed to the outer right edge. Nothing pinned → an
+               italic hint framed by gold dashes: "pin collection/deck/sideboard to set
+               destination".
+    Velvet base (demo variant 3): burgundy velvet panel, cream names, dusty-rose stats.
+    Names are 14px — 2px over the pill's 12px to even out the all-caps size illusion —
+    and start with a capital letter; stats show "(x/y)" with a "unique: x, total: y" tooltip.
+    A sideboard on either side shows its deck's name plus a gold "Sideboard" pill (the
+    CreaturePage badge design) in place of the " (sb)" name suffix.
+*@
+@using MagicAssistant.Data.Model.NavigatorNodes
+@inject IDeckCardService DeckCardService
+
+<div class="context-strip">
+    @* Left half — selected (always filled: KB variant or collection/deck/sideboard) *@
+    <div class="context-half context-selected">
+        @if (SelectedCollection.CollectionId.HasValue)
+        {
+            <span class="context-stats" title="unique: @_selectedUnique, total: @_selectedTotal">(@_selectedUnique/@_selectedTotal)</span>
+            <span class="context-name" title="@SelectedCollection.Name">@DisplayNameOf(SelectedCollection)</span>
+            @* Sideboard view: deck name + pill badge instead of the " (sb)" name suffix. *@
+            @if (IsSideboard(SelectedCollection))
+            {
+                <span class="sideboard-badge">Sideboard</span>
+            }
+        }
+        else
+        {
+            @* KB panel — replaces the selected half when no collection is displayed *@
+            <span class="context-name">KnowledgeBase Cards</span>
+        }
+    </div>
+
+    @* Middle — gold arrow pointing right *@
+    <div class="context-arrow" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 12H18" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round"></path>
+            <path d="M13 6L19 12L13 18" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+    </div>
+
+    @* Right half — pinned *@
+    <div class="context-half context-pinned">
+        @if (PinnedCollection.CollectionId.HasValue)
+        {
+            <span class="context-name" title="@PinnedCollection.Name">@DisplayNameOf(PinnedCollection)</span>
+            @if (IsSideboard(PinnedCollection))
+            {
+                <span class="sideboard-badge">Sideboard</span>
+            }
+            <span class="context-stats" title="unique: @_pinnedUnique, total: @_pinnedTotal">(@_pinnedUnique/@_pinnedTotal)</span>
+        }
+        else
+        {
+            <span class="context-hint">pin collection/deck/sideboard to set destination</span>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Pinned operation target (deck/collection/sideboard; null id = nothing pinned).</summary>
+    [Parameter] public LockableCollection PinnedCollection { get; set; } = new();
+
+    /// <summary>Currently displayed collection (null id = Knowledge Base mode).</summary>
+    [Parameter] public LockableCollection SelectedCollection { get; set; } = new();
+
+    /// <summary>Bumped by MainLayout whenever card counts in either context may have changed.</summary>
+    [Parameter] public int RefreshTrigger { get; set; }
+
+    /// <summary>Sideboard nodes carry "deckName (sb)" — the store keeps this suffix through
+    /// create, rename and import (SqliteCollectionStore). The strip shows the deck name plus
+    /// a badge instead; a directly renamed sideboard keeps its custom name and just gains the badge.</summary>
+    private static bool IsSideboard(LockableCollection c) => c.NodeType == NodeType.Sideboard;
+
+    /// <summary>Deck/collection/sideboard display name: the " (sb)" suffix is replaced by the
+    /// pill, and the first letter is capitalized for display (the stored name is untouched).</summary>
+    private static string DisplayNameOf(LockableCollection c)
+    {
+        var name = c.Name ?? string.Empty;
+        if (IsSideboard(c) && name.EndsWith(" (sb)", StringComparison.Ordinal))
+            name = name[..^" (sb)".Length];
+        return name.Length > 0 ? char.ToUpper(name[0]) + name[1..] : name;
+    }
+
+    private int _pinnedUnique;
+    private int _pinnedTotal;
+    private int _selectedUnique;
+    private int _selectedTotal;
+
+    /// <summary>Last loaded context ids — null = "nothing loaded yet" (the first load is forced by the trigger mismatch).</summary>
+    private int? _loadedPinnedId;
+    private int? _loadedSelectedId;
+    private int _loadedTrigger = -1;
+    private int _loadGeneration;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var pinnedChanged = PinnedCollection.CollectionId != _loadedPinnedId;
+        var selectedChanged = SelectedCollection.CollectionId != _loadedSelectedId;
+
+        if (RefreshTrigger != _loadedTrigger || pinnedChanged || selectedChanged)
+            await LoadStatsAsync();
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _loadedPinnedId = PinnedCollection.CollectionId;
+        _loadedSelectedId = SelectedCollection.CollectionId;
+        _loadedTrigger = RefreshTrigger;
+        var generation = ++_loadGeneration;
+
+        var pinned = await LoadContextStatsAsync(PinnedCollection.CollectionId);
+        if (generation != _loadGeneration) return;  // superseded by a newer load
+        (_pinnedUnique, _pinnedTotal) = pinned;
+
+        var selected = await LoadContextStatsAsync(SelectedCollection.CollectionId);
+        if (generation != _loadGeneration) return;
+        (_selectedUnique, _selectedTotal) = selected;
+    }
+
+    /// <summary>unique = distinct cards in the node, total = sum of their counts (one row per card in Deck).</summary>
+    private async Task<(int Unique, int Total)> LoadContextStatsAsync(int? collectionId)
+    {
+        if (collectionId is not int id) return (0, 0);
+        try
+        {
+            var cards = await DeckCardService.GetDeckCardsAsync(id);
+            return (cards.Count, cards.Sum(c => c.Count));
+        }
+        catch
+        {
+            return (0, 0);  // unreachable/deleted node — zeros instead of an error UI
+        }
+    }
+}

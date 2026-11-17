@@ -1,173 +1,676 @@
-@using MagicAssistant.Data.DbModel
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
 @using MagicAssistant.Data.Model
-@using MagicAssistant.Data.Model.NavigatorNodes
-@inject IDeckManagementService DeckManagement
 @inject IDeckImportExportService ImportExport
+@inject ICardImageLoader ImageLoader
+@inject GetSyncProgressQueryHandler SyncProgressQuery
+@inject GetUserSettingQueryHandler GetSettingQueryHandler
+@inject SaveUserSettingCommandHandler SaveSettingCommandHandler
 
-<div class="dialog-overlay" @onclick="OnOverlayClick">
+<div class="dialog-overlay">
     <div class="dialog-box" @onclick:stopPropagation="true">
-        <div class="dialog-title">📜 Import Legacy Deck</div>
+        @* The import always merges into the selected navigator node — its name lives in the
+           title, gold, same technology as DeckImportWizard's fixed-target mode. *@
+        <div class="dialog-title"><span>📜 Import to </span><span class="target-name">@(TargetName ?? "?")</span></div>
 
-        <div style="color:#888;font-size:0.9em;margin-bottom:12px;">
-            For old Magic Assistant XML files with Gatherer IDs and full set names (e.g. "Core Set 2019").<br />
-            Cards will be resolved against the knowledge base.
-        </div>
-
-        @if (_importing)
+        @switch (_state)
         {
-            <div class="dialog-loading">Importing...</div>
-        }
-        else
-        {
-            @* ── Step 1: Select File ── *@
-            <div class="form-group">
-                <label>Select XML File</label>
-                <InputFile OnChange="OnFileSelected" accept=".xml" class="file-input" />
-                @if (_fileName != null)
-                {
-                    <div class="file-info">✓ @_fileName</div>
-                }
-            </div>
+            case WizardState.FileSelection:
+                <div class="dialog-subtitle">
+                    For old Magic Assistant XML files with Gatherer IDs and full set names (e.g. "Core Set 2019").<br />
+                    Cards are resolved against the knowledge base.
+                </div>
 
-            @* ── Step 2: Target Deck ── *@
-            <div class="form-group">
-                <label>Import to</label>
-                <select @bind="_importMode" class="dialog-select">
-                    <option value="new">New deck (creates from file name)</option>
-                    @foreach (var deck in _existingDecks)
+                @* ── Step 1: Select File ── *@
+                <div class="form-group">
+                    <label>Select XML File</label>
+                    <InputFile OnChange="OnFileSelected" accept=".xml" class="file-input" />
+                    @if (_fileName != null)
                     {
-                        <option value="@deck.Id">@deck.Name (add to existing)</option>
+                        <div class="file-info">✓ @_fileName</div>
                     }
-                </select>
-            </div>
+                </div>
 
-            @if (!string.IsNullOrEmpty(_error))
-            {
-                <div class="dialog-error">@_error</div>
-            }
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="dialog-error">@_error</div>
+                }
 
-            <div class="dialog-actions">
-                <button class="btn-primary" @onclick="OnImport"
-                        disabled="@(_fileName == null)">
-                    Import Legacy
-                </button>
-                <button class="btn-secondary" @onclick="Close">Cancel</button>
-            </div>
+                <div class="dialog-actions">
+                    <button class="btn-primary" @onclick="OnImport" disabled="@(_fileName == null)">
+                        Import
+                    </button>
+                    <button class="btn-secondary" @onclick="Close">Cancel</button>
+                </div>
+                break;
+
+            case WizardState.Checking:
+            case WizardState.Resolving:
+                @* Throbber covers the slow check + batch resolution (seconds on big decks);
+                   the switch leaves this case once the unresolved table / next step renders,
+                   so hiding is automatic — no flag to forget. *@
+                <div class="dialog-loading">
+                    <span class="dialog-spinner" role="status" aria-label="Resolving cards…"></span>
+                    <div>@(_state == WizardState.Checking ? "Checking sets..." : "Resolving cards...")</div>
+                </div>
+                break;
+
+            case WizardState.SetPrompt:
+                <div class="missing-sets-header">Some sets are not in the knowledge base yet (metadata only):</div>
+                <ul class="missing-set-list">
+                    @foreach (var s in _check!.MissingSets)
+                    {
+                        <li><strong>@s.Name</strong> <span class="set-code">@s.Code</span> — @s.CardsInFile card(s) in file</li>
+                    }
+                </ul>
+
+                @if (_check.UnknownSets.Count > 0)
+                {
+                    <div class="dialog-error">Unknown sets (not found in set list): @string.Join(", ", _check.UnknownSets)</div>
+                }
+
+                <div class="form-group language-group">
+                    <label>Card languages</label>
+                    <div class="language-toggles">
+                        @foreach (var lang in AllLanguages)
+                        {
+                            <button type="button"
+                                    class="lang-toggle @(_languages.Contains(lang) ? "active" : "")"
+                                    @onclick="() => ToggleLanguage(lang)">
+                                @lang
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="check-label">
+                        <input type="checkbox" @bind="_downloadImages" />
+                        Download card images (slower)
+                    </label>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="dialog-error">@_error</div>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn-primary" @onclick="OnSyncAndContinue" disabled="@(_languages.Length == 0)">
+                        Download &amp; Import
+                    </button>
+                    <button class="btn-secondary" @onclick="() => _state = WizardState.FileSelection">Back</button>
+                </div>
+                break;
+
+            case WizardState.Syncing:
+                <div class="sync-progress-section">
+                    <div class="progress-set-name">
+                        @(_currentSyncSetCode ?? "Starting...")
+                        @if (_syncTotal > 1)
+                        {
+                            <span class="sync-count">@(_syncIndex >= 0 ? $" — set {_syncIndex + 1} of {_syncTotal}" : "")</span>
+                        }
+                    </div>
+
+                    @if (_syncProgress != null)
+                    {
+                        <div class="phase-indicator">
+                            <span class="phase-message">@_syncProgress.Message</span>
+                        </div>
+
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" style="width: @_syncProgress.ProgressPercent%"></div>
+                        </div>
+
+                        <div class="progress-stats">
+                            <span>Cards: @_syncProgress.ReadyCardsToSave / @_syncProgress.TotalCards</span>
+                            @if (_downloadImages)
+                            {
+                                <span>Images: @_syncProgress.ImagesDownloaded</span>
+                                @if (_syncProgress.ImagesFailed > 0)
+                                {
+                                    <span class="fail">(@_syncProgress.ImagesFailed failed)</span>
+                                }
+                            }
+                        </div>
+                    }
+
+                    <button class="cancel-btn" @onclick="CancelSync">Cancel</button>
+                </div>
+                break;
+
+            case WizardState.UnresolvedTable:
+                <div class="unresolved-header">
+                    @_rows.Count card(s) not found in the knowledge base. Search and pick a match for each — import starts only when every row is mapped.
+                </div>
+
+                <div class="unresolved-scroll">
+                <table class="unresolved-table">
+                    <thead>
+                        <tr><th>Card</th><th>Match in KB</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td class="row-name">
+                                    @row.Name
+                                    @if (!string.IsNullOrEmpty(row.SetCode))
+                                    {
+                                        <span class="row-set">@row.SetCode</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (row.SelectedId.HasValue)
+                                    {
+                                        <div class="selected-chip">
+                                            ✓ @row.SelectedLabel
+                                            <button type="button" class="chip-clear" @onclick="() => OnClearSelection(row)">✕</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <input class="row-search"
+                                               placeholder="Search (3+ chars)..."
+                                               value="@row.SearchText"
+                                               @oninput="e => OnRowSearchInput(row, e)" />
+                                        @if (row.Results is { Count: > 0 })
+                                        {
+                                            <div class="search-results" @onmouseleave="OnHoverLeave">
+                                                @foreach (var m in row.Results)
+                                                {
+                                                    <button type="button" class="result-item"
+                                                            @onclick="() => OnSelectMatch(row, m)"
+                                                            @onmouseenter="() => OnHoverResult(m)">
+                                                        <span class="result-name">@(m.PrintedName ?? m.Name)</span>
+                                                        <span class="result-meta">@(string.IsNullOrEmpty(m.SetCode) ? "?" : m.SetCode) · CMC @(m.CmcNumber?.ToString() ?? "—")</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="dialog-error">@_error</div>
+                }
+
+                <div class="dialog-actions">
+                    <button class="btn-primary" @onclick="OnCommitFromTable" disabled="@(_importCards == null)">
+                        @(_importCards is { } ready ? $"Import {ready.Sum(c => c.Count)} card(s)" : "Import")
+                    </button>
+                    <button class="btn-secondary" @onclick="Close">Cancel</button>
+                </div>
+                break;
+
+            case WizardState.Committing:
+                @* Same throbber: the 10k-card merge is synchronous dispatcher work too. *@
+                <div class="dialog-loading">
+                    <span class="dialog-spinner" role="status" aria-label="Importing…"></span>
+                    <div>Importing...</div>
+                </div>
+                break;
         }
     </div>
+
+    @if (_state == WizardState.UnresolvedTable)
+    {
+        @* Preview window — flex sibling of dialog-box, docked to its right (gap 12px).
+           Space is always reserved so the centered dialog doesn't shift on hover. *@
+        <div class="card-preview" @onclick:stopPropagation="true" style="@(_hoverCard is null ? "visibility:hidden" : "")">
+            @if (_hoverCard is not null)
+            {
+                @if (ImageHelper.GetImageUrl(_hoverCard, true) is { } imgUrl && ImageLoader.FrontExists(_hoverCard))
+                {
+                    <div class="card-preview-img-wrap">
+                        <img src="@imgUrl" alt="@(_hoverCard.PrintedName ?? _hoverCard.Name)" class="card-preview-img" />
+                    </div>
+                }
+                else
+                {
+                    @* Lazy: the image is downloaded on hover and pops in when the file lands. *@
+                    <div class="card-preview-empty">
+                        <span>🖼</span>
+                        <span>@(ImageLoader.Failed(_hoverCard) ? "Image not downloaded" : "Downloading image...")</span>
+                    </div>
+                }
+            }
+        </div>
+    }
 </div>
 
 @code {
+    private enum WizardState
+    {
+        FileSelection,
+        Checking,
+        SetPrompt,
+        Syncing,
+        Resolving,
+        UnresolvedTable,
+        Committing
+    }
+
+    private class UnresolvedRow
+    {
+        public required string Name { get; init; }
+        public required string? SetCode { get; init; }
+        public string Key => $"{Name}|{SetCode}";
+        public string SearchText { get; set; } = "";
+        public IReadOnlyList<Card>? Results { get; set; }
+        public Guid? SelectedId { get; set; }
+        public string? SelectedLabel { get; set; }
+    }
+
+    private static readonly string[] AllLanguages = ["en", "ru", "es", "fr", "de", "it", "pt", "ja", "ko", "zhs", "zht"];
+    private const string LanguagesSettingKey = "SyncKnowledgeBase.Languages";
+
+    // ── State ────────────────────────────────────────────
+    private WizardState _state = WizardState.FileSelection;
     private string? _fileName;
     private byte[]? _fileContent;
-    private string _importMode = "new";
-    private bool _importing;
+    private string _xmlContent = "";
     private string? _error;
-    private List<NavigatorNodeBase> _existingDecks = new();
+
+    private LegacyImportCheckResult? _check;
+    private string[] _languages = ["en"];
+    private bool _downloadImages;
+    private CancellationTokenSource? _cts;
+    private int _syncIndex = -1;
+    private int _syncTotal;
+    private string? _currentSyncSetCode;
+    private SyncProgressResponse? _syncProgress;
+
+    private LegacyCardResolution? _resolution;
+    private List<UnresolvedRow> _rows = new();
+
+    /// <summary>
+    /// The save collection, built once every row is mapped — the single source of truth for the commit
+    /// and for the "Import N" count (N = total copies, including duplicates). Null until fully mapped.
+    /// </summary>
+    private IReadOnlyList<MyCard>? _importCards;
+
+    private Card? _hoverCard;
+    private readonly Dictionary<string, CancellationTokenSource> _searchCts = new();
 
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnImported { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
+    /// <summary>The selected navigator node the import merges into — id and display name.
+    /// The legacy wizard has no target picker and no create-from-file mode; the header
+    /// action is guarded so the dialog only opens with a selection.</summary>
+    [Parameter] public int? TargetNodeId { get; set; }
+    [Parameter] public string? TargetName { get; set; }
+
+    private bool AllMapped => _rows.Count > 0 && _rows.All(r => r.SelectedId.HasValue);
+
     protected override async Task OnParametersSetAsync()
     {
         if (IsOpen)
         {
-            _fileName = null;
-            _fileContent = null;
-            _importMode = "new";
-            _error = null;
-            _importing = false;
-
-            try
-            {
-                var tree = await DeckManagement!.GetAllNodesAsync();
-                _existingDecks = tree.Values.ToList();
-            }
-            catch { }
+            ResetState();
+            await LoadLanguagesAsync();
         }
     }
+
+    private void ResetState()
+    {
+        _state = WizardState.FileSelection;
+        _fileName = null;
+        _fileContent = null;
+        _xmlContent = "";
+        _error = null;
+        _check = null;
+        _cts?.Dispose();
+        _cts = null;
+        _syncIndex = -1;
+        _syncTotal = 0;
+        _currentSyncSetCode = null;
+        _syncProgress = null;
+        _resolution = null;
+        _rows = new();
+        _importCards = null;
+        _hoverCard = null;
+        foreach (var cts in _searchCts.Values) cts.Cancel();
+        _searchCts.Clear();
+    }
+
+    // ── Languages (shared with SyncCards settings) ──
+
+    private bool IsLangSelected(string lang) => _languages.Contains(lang);
+
+    private void ToggleLanguage(string lang)
+    {
+        _languages = IsLangSelected(lang)
+            ? _languages.Where(l => l != lang).ToArray()
+            : _languages.Append(lang).ToArray();
+    }
+
+    private async Task LoadLanguagesAsync()
+    {
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(LanguagesSettingKey));
+            if (!string.IsNullOrEmpty(json))
+                _languages = System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? ["en"];
+        }
+        catch { _languages = ["en"]; }
+    }
+
+    private async Task SaveLanguagesAsync()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_languages);
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(LanguagesSettingKey, json));
+        }
+        catch { /* settings are optional */ }
+    }
+
+    // ── File selection ───────────────────────────────────
+
+    /// <summary>Upload ceiling for deck files. Blazor's default is 512 KB — anything larger
+    /// used to fail silently here, and the wizard then parsed the zero-filled buffer
+    /// ("0x00, line 1, position 1").</summary>
+    private const long MaxImportFileBytes = 25 * 1024 * 1024;
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         var file = e.File;
         if (file == null) return;
 
-        _fileName = file.Name;
-        _fileContent = new byte[file.Size];
-        await file.OpenReadStream().ReadExactlyAsync(_fileContent);
+        // Read into a local buffer under the explicit ceiling; _fileContent/_fileName are
+        // published only on success, so a failed read can never leave a zero-filled buffer
+        // wearing a selected-file name.
+        try
+        {
+            var content = new byte[file.Size];
+            await file.OpenReadStream(MaxImportFileBytes).ReadExactlyAsync(content);
+
+            _fileContent = content;
+            _fileName = file.Name;
+            _error = null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            _fileContent = null;
+            _fileName = null;
+            _error = $"Could not read \"{file.Name}\": {ex.Message}";
+        }
     }
+
+    // ── Flow: check → (sync) → resolve → (map) → commit ──
 
     private async Task OnImport()
     {
         if (_fileContent == null || _fileName == null) return;
 
-        _importing = true;
         _error = null;
+        _state = WizardState.Checking;
+
+        // Paint the throbber BEFORE the heavy phase. The check/resolve chain is CPU-bound
+        // and Microsoft.Data.Sqlite's "async" calls complete synchronously, so the handler
+        // never truly suspends on its own — the render queued by the state change would
+        // reach the browser only after everything is already done (the frozen-window
+        // symptom). Task.Yield forces a real suspension; the CSS spinner then keeps
+        // spinning on the browser side while the server thread is busy.
+        StateHasChanged();
+        await Task.Yield();
 
         try
         {
-            var xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
+            _xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
+            _check = await ImportExport.CheckLegacyImportAsync(_xmlContent);
 
-            // Parse XML to get deck name
-            using var reader = System.Xml.XmlReader.Create(
-                new System.IO.StringReader(xmlContent),
-                new System.Xml.XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true });
-
-            string? deckName = _fileName.Replace(".xml", "");
-            while (reader.Read())
+            if (_check.MissingSets.Count > 0)
             {
-                if (reader.NodeType == System.Xml.XmlNodeType.Element && reader.LocalName == "name")
-                {
-                    deckName = reader.ReadString();
-                    break;
-                }
-            }
-
-            if (_importMode == "new")
-            {
-                // Create new deck and import cards via legacy path
-                var deckId = await DeckManagement!.CreateNodeAsync(null, deckName!, NodeType.Deck);
-                await ImportLegacyCardsToDeck(deckId, xmlContent);
+                _state = WizardState.SetPrompt;
             }
             else
             {
-                // Add to existing deck via legacy path
-                if (int.TryParse(_importMode, out var targetId))
-                    await ImportLegacyCardsToDeck(targetId, xmlContent);
+                await ProceedToResolutionAsync();
             }
-
-            await OnImported.InvokeAsync();
         }
         catch (Exception ex)
         {
-            _error = $"Legacy import failed: {ex.Message}";
+            _error = ex.Message;
+            _state = WizardState.FileSelection;
         }
-        finally
+    }
+
+    private async Task OnSyncAndContinue()
+    {
+        if (_languages.Length == 0)
         {
-            _importing = false;
+            _error = "Select at least one language";
+            return;
+        }
+
+        await SaveLanguagesAsync();
+        _error = null;
+        _state = WizardState.Syncing;
+        _syncIndex = -1;
+        _syncTotal = _check!.MissingSets.Count;
+        _currentSyncSetCode = null;
+        _syncProgress = null;
+
+        _cts = new CancellationTokenSource();
+        var progress = new Progress<SetSyncProgress>(p =>
+        {
+            _syncIndex = p.Index;
+            _currentSyncSetCode = p.SetCode;
+        });
+
+        var codes = _check.MissingSets.Select(m => m.Code).ToArray();
+        var syncTask = ImportExport.SyncMissingSetsAsync(codes, _languages, _downloadImages, progress, _cts.Token);
+
+        // Poll per-set progress while the sequential sync runs
+        try
+        {
+            while (!syncTask.IsCompleted)
+            {
+                await Task.Delay(500);
+                if (_currentSyncSetCode != null)
+                    _syncProgress = SyncProgressQuery.Handle(new GetSyncProgressQuery(_currentSyncSetCode));
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { /* cancelled — handled below */ }
+
+        try
+        {
+            await syncTask;
+        }
+        catch (OperationCanceledException)
+        {
+            _error = "Sync cancelled. Nothing was imported.";
+            _state = WizardState.FileSelection;
+            return;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Set sync failed: {ex.Message}";
+            _state = WizardState.FileSelection;
+            return;
+        }
+
+        try
+        {
+            await ProceedToResolutionAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _state = WizardState.FileSelection;
         }
     }
 
-    private async Task ImportLegacyCardsToDeck(int deckId, string xmlContent)
+    private void CancelSync() => _cts?.Cancel();
+
+    private async Task ProceedToResolutionAsync()
     {
-        var imported = await ImportExport.ImportLegacyToCollectionAsync(deckId, xmlContent);
-        if (imported <= 0)
-            _error = "No cards were imported.";
+        _state = WizardState.Resolving;
+        StateHasChanged();
+        await Task.Yield(); // same forced paint as OnImport — flips the caption under the spinner
+        _resolution = await ImportExport.ResolveLegacyCardsAsync(_xmlContent);
+
+        if (_resolution.Unresolved.Count == 0)
+        {
+            var cards = await ImportExport.BuildLegacyImportCardsAsync(_xmlContent, _resolution!);
+            await DoCommitAsync(cards);
+        }
+        else
+        {
+            _rows = _resolution.Unresolved
+                .Select(u => new UnresolvedRow { Name = u.Name, SetCode = u.SetCode })
+                .ToList();
+            _state = WizardState.UnresolvedTable;
+        }
     }
 
-    private async Task OnCancel()
+    // ── Unresolved table: per-row search ─────────────────
+
+    private async Task OnRowSearchInput(UnresolvedRow row, ChangeEventArgs e)
     {
-        if (_importing) return;
-        IsOpen = false;
-        await IsOpenChanged.InvokeAsync(false);
+        row.SearchText = e.Value?.ToString() ?? "";
+
+        if (row.SearchText.Length < 3)
+        {
+            row.Results = null;
+            return;
+        }
+
+        _searchCts.TryGetValue(row.Key, out var old);
+        old?.Cancel();
+
+        var cts = new CancellationTokenSource();
+        _searchCts[row.Key] = cts;
+
+        try
+        {
+            await Task.Delay(300, cts.Token); // debounce — search starts at 3+ chars
+            row.Results = await ImportExport.SearchCardMatchesAsync(row.SearchText, cts.Token);
+            StateHasChanged();
+        }
+        catch (OperationCanceledException) { /* superseded by a newer input */ }
     }
 
-    private void OnOverlayClick() => _ = OnCancel();
+    private async Task OnSelectMatch(UnresolvedRow row, Card card)
+    {
+        row.SelectedId = card.Id;
+        row.SelectedLabel = $"{(card.PrintedName ?? card.Name)} ({(string.IsNullOrEmpty(card.SetCode) ? "?" : card.SetCode)})";
+        row.Results = null;
+        _hoverCard = null;
+
+        // The last row got mapped — build the save collection now; it drives both the commit and the count.
+        if (AllMapped)
+            await BuildImportCardsAsync();
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Builds the save collection from the file + resolution + manual mappings. In-memory only;
+    /// throws nothing here — a failure just leaves the button disabled with the error shown.
+    /// </summary>
+    private async Task BuildImportCardsAsync()
+    {
+        _error = null;
+        try
+        {
+            var overrides = _rows
+                .Where(r => r.SelectedId.HasValue)
+                .ToDictionary(r => r.Key, r => r.SelectedId!.Value);
+            _importCards = await ImportExport.BuildLegacyImportCardsAsync(_xmlContent, _resolution!, overrides);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _importCards = null;
+        }
+    }
+
+    private void OnHoverResult(Card card)
+    {
+        if (ReferenceEquals(_hoverCard, card)) return;
+        _hoverCard = card;
+        StateHasChanged();
+
+        // Lazy image loading: the preview shows a placeholder until the file is on disk.
+        if (!ImageLoader.FrontExists(card))
+            _ = EnsureHoverImageAsync(card);
+    }
+
+    private async Task EnsureHoverImageAsync(Card card)
+    {
+        await ImageLoader.EnsureAsync(card);
+        // Re-render only if this card is still the hovered one.
+        if (ReferenceEquals(_hoverCard, card))
+            StateHasChanged();
+    }
+
+    private void OnHoverLeave()
+    {
+        _hoverCard = null;
+        StateHasChanged();
+    }
+
+    private void OnClearSelection(UnresolvedRow row)
+    {
+        row.SelectedId = null;
+        row.SelectedLabel = null;
+        _importCards = null; // stale until every row is mapped again
+        StateHasChanged();
+    }
+
+    // ── Commit ───────────────────────────────────────────
+
+    private async Task OnCommitFromTable()
+    {
+        if (_importCards == null) return; // button is disabled while the save collection is not built
+        await DoCommitAsync(_importCards);
+    }
+
+    private async Task DoCommitAsync(IReadOnlyList<MyCard> cards)
+    {
+        _error = null;
+        _state = WizardState.Committing;
+        StateHasChanged();
+        await Task.Yield(); // same forced paint: the merge itself is synchronous dispatcher work
+
+        try
+        {
+            // Fixed target only: the selected node is the single import destination.
+            // DeckName drives the command's create-new mode — not reachable from this wizard.
+            if (TargetNodeId is not { } targetId)
+                throw new InvalidOperationException("No location is selected.");
+            await ImportExport.CommitImportAsync(string.Empty, null, targetId, cards);
+            await OnImported.InvokeAsync();
+            // Commit succeeded — the state machine has no further step; close the dialog.
+            // (Without this, _state stays Committing and the window hangs on "Importing...".)
+            await Close();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Import failed: {ex.Message}";
+            _state = _rows.Count > 0 ? WizardState.UnresolvedTable : WizardState.FileSelection;
+        }
+    }
+
+    // ── Dialog chrome ────────────────────────────────────
+
     private async Task Close()
     {
+        _cts?.Cancel();
         IsOpen = false;
         await IsOpenChanged.InvokeAsync(false);
     }
-
 }

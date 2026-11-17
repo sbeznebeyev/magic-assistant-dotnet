@@ -298,11 +298,29 @@
     padding: 20px 16px;
 }
 
+.progress-set-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+/* Size only — the gold gradient and the per-set mask come from the global .set-symbol classes. */
+.progress-set-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
 .progress-set-name {
     font-size: 15px;
     font-weight: 600;
-    color: #eee;
-    margin-bottom: 12px;
+    /* Gold gradient text — the same recipe the set-list badge uses (CardsListControl). */
+    background: linear-gradient(135deg, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.35));
 }
 
 .phase-indicator {
@@ -310,12 +328,6 @@
     flex-direction: column;
     gap: 2px;
     margin-bottom: 10px;
-}
-
-.phase-label {
-    font-size: 13px;
-    color: #4fc3f7;
-    font-weight: 500;
 }
 
 .phase-message {

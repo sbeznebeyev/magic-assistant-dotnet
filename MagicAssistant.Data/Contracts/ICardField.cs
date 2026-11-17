@@ -8,6 +8,6 @@ public interface ICardField
 {
     string Name { get; }
     Type ValueType { get; }
-    object? Get(ICard card);
-    void Set(ICard card, object? value);
+    object? Get(ICardSimple card);
+    void Set(ICardSimple card, object? value);
 }

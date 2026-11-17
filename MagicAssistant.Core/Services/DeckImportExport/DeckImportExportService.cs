@@ -1,367 +1,374 @@
+using MagicAssistant.Core.Commands;
+using MagicAssistant.Core.Queries;
 using MagicAssistant.Data.Contracts;
-using MagicAssistant.Data.DbModel;
+using MagicAssistant.Data.IO;
+using MagicAssistant.Data.IO.json;
 using MagicAssistant.Data.IO.xml;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
+using MagicAssistant.Core.Services.CardSearch;
 
 namespace MagicAssistant.Core.Services.DeckImportExport;
 
 /// <summary>
-/// Vertical slice: deck import/export operations.
-/// Handles XML file parsing and serialization for Magic Assistant format.
+/// Vertical slice: deck import/export operations — the domain module for ALL import actions.
+/// Orchestrates interactive import flows by calling atomic CQRS units (commands/queries);
+/// contains no business logic of its own.
 /// </summary>
 public class DeckImportExportService : IDeckImportExportService
 {
     private readonly ICollectionStore _collectionStore;
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
-    private readonly IDbCardStore? _kbStore;
+    private readonly ICardSearchService _searchService;
+    private readonly GetSetSyncStatusQueryHandler _setSyncStatusQuery;
+    private readonly GetSetSyncStatusByCodesQueryHandler _setSyncStatusByCodesQuery;
+    private readonly ResolveLegacyCardsQueryHandler _resolveLegacyCardsQuery;
+    private readonly ValidateCardIdsQueryHandler _validateCardIdsQuery;
+    private readonly SyncKBCommandHandler _syncKbCommand;
+    private readonly ImportResolvedCardsCommandHandler _importResolvedCardsCommand;
 
     public DeckImportExportService(
         ICollectionStore collectionStore,
-        ICardStore<MagicCardPhysical> cardStore,
-        IDbCardStore? kbStore = null)
+        ICardSearchService searchService,
+        GetSetSyncStatusQueryHandler setSyncStatusQuery,
+        GetSetSyncStatusByCodesQueryHandler setSyncStatusByCodesQuery,
+        ResolveLegacyCardsQueryHandler resolveLegacyCardsQuery,
+        ValidateCardIdsQueryHandler validateCardIdsQuery,
+        SyncKBCommandHandler syncKbCommand,
+        ImportResolvedCardsCommandHandler importResolvedCardsCommand)
     {
         _collectionStore = collectionStore;
-        _cardStore = cardStore;
-        _kbStore = kbStore;
+        _searchService = searchService;
+        _setSyncStatusQuery = setSyncStatusQuery;
+        _setSyncStatusByCodesQuery = setSyncStatusByCodesQuery;
+        _resolveLegacyCardsQuery = resolveLegacyCardsQuery;
+        _validateCardIdsQuery = validateCardIdsQuery;
+        _syncKbCommand = syncKbCommand;
+        _importResolvedCardsCommand = importResolvedCardsCommand;
     }
 
-    /// <inheritdoc />
-    public async Task<ImportDeckResult> ImportFromFileAsync(
-        string filePath, int? parentId = null, CancellationToken ct = default)
-    {
-        var result = new ImportDeckResult();
-
-        try
-        {
-            if (!File.Exists(filePath))
-            {
-                result.ErrorMessage = $"File not found: {filePath}";
-                return result;
-            }
-
-            // Parse XML
-            var importResult = await XmlImport.ImportFromFileAsync(filePath, ct);
-
-            if (!importResult.Cards.Any())
-            {
-                result.ErrorMessage = "No cards found in the file.";
-                return result;
-            }
-
-            // Create deck node
-            var deck = await _collectionStore.CreateDeckAsync(importResult.Name, parentId, ct);
-
-            // Add imported cards to the deck
-            var location = Location.FromId(deck.Id, deck.Name, false);
-            var physicals = new List<MagicCardPhysical>();
-
-            foreach (var card in importResult.Cards)
-            {
-                MagicCardPhysical mcp;
-                if (card is MagicCardPhysical existingPhysical)
-                {
-                    existingPhysical.SetLocation(location);
-                    mcp = existingPhysical;
-                }
-                else
-                {
-                    mcp = new MagicCardPhysical(card.GetBase(), location, true);
-                }
-                physicals.Add(mcp);
-            }
-
-            await _cardStore.AddAllAsync(physicals, ct);
-
-            result.Success = true;
-            result.Deck = deck;
-            result.CardsImported = physicals.Count;
-        }
-        catch (Exception ex)
-        {
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
-    }
+    // ═══════════════════════════════════════════════════════
+    //  Export
+    // ═══════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<int> ImportToCollectionAsync(
-        int collectionId, string xmlContent, CancellationToken ct = default)
-    {
-        if (collectionId <= 0)
-            throw new ArgumentNullException(nameof(collectionId));
-        if (string.IsNullOrWhiteSpace(xmlContent))
-            throw new ArgumentException("XML content is required.", nameof(xmlContent));
-
-        var importResult = XmlImport.ImportFromXml(xmlContent);
-        var location = Location.FromId(collectionId, collectionId.ToString(), false);
-
-        var physicals = new List<MagicCardPhysical>();
-        foreach (var card in importResult.Cards)
-        {
-            if (card is MagicCardPhysical mcp)
-            {
-                mcp.SetLocation(location);
-                physicals.Add(mcp);
-            }
-            else if (card is MagicCard mc)
-            {
-                physicals.Add(new MagicCardPhysical(mc, location, true));
-            }
-        }
-
-        if (physicals.Any())
-            await _cardStore.AddAllAsync(physicals, ct);
-
-        return physicals.Count;
-    }
-
-    /// <inheritdoc />
-    public async Task<string> ExportDeckToXmlAsync(int deckId, CancellationToken ct = default)
+    public async Task<string> ExportDeckToJsonAsync(int deckId, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
 
         var cards = await _collectionStore.GetDeckCardsAsync(deckId, ct);
         var deckNode = await _collectionStore.GetByIdAsync(deckId, ct);
-        
-        return XmlExport.ExportToXml(
+
+        // Optional sideboard node — only deck nodes have a sideboard child; the array is
+        // omitted entirely when it has no cards (JsonExport skips empty lists).
+        IEnumerable<ICard>? sideboard = null;
+        if (deckNode?.NodeType == NodeType.Deck)
+        {
+            var sbId = await _collectionStore.GetSideboardIdAsync(deckId, ct);
+            if (sbId is { } sb)
+            {
+                var sbCards = (await _collectionStore.GetDeckCardsAsync(sb, ct)).ToList();
+                if (sbCards.Count > 0)
+                    sideboard = sbCards;
+            }
+        }
+
+        return JsonExport.ExportToJson(
             name: deckNode?.Name ?? "Unknown Deck",
-            key: null,
             comment: null,
             type: "deck",
-            cards);
+            cards,
+            sideboard);
     }
 
-    /// <inheritdoc />
-    public async Task<ExportDeckResult> ExportToFileAsync(
-        int deckId, string filePath, CancellationToken ct = default)
-    {
-        var result = new ExportDeckResult();
-
-        try
-        {
-            var node = await _collectionStore.GetByIdAsync(deckId, ct);
-            if (node == null)
-            {
-                result.ErrorMessage = $"Deck '{deckId}' not found.";
-                return result;
-            }
-
-            // Targeted query — get only this deck's cards
-            var deckCards = await _collectionStore.GetDeckCardsAsync(deckId, ct);
-
-            // Export to XML file
-            await XmlExport.ExportToFileAsync(
-                filePath,
-                node.Name,
-                node.Id.ToString(),
-                null, // comment
-                "deck",
-                deckCards,
-                ct);
-
-            result.Success = true;
-            result.CardsExported = deckCards.Count;
-        }
-        catch (Exception ex)
-        {
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
-    }
-
-    // ── Legacy import (Gatherer ID + full set name) ──
+    // ═══════════════════════════════════════════════════════
+    //  Import pre-checks (read-only)
+    // ═══════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<ImportDeckResult> ImportLegacyFromFileAsync(
-        string filePath, int? parentId = null, CancellationToken ct = default)
+    public async Task<LegacyImportCheckResult> CheckLegacyImportAsync(
+        string xmlContent, CancellationToken ct = default)
     {
-        var result = new ImportDeckResult();
+        var importResult = ParseOrThrow(xmlContent);
 
-        try
-        {
-            if (!File.Exists(filePath))
-            {
-                result.ErrorMessage = $"File not found: {filePath}";
-                return result;
-            }
-
-            if (_kbStore == null)
-            {
-                result.ErrorMessage = "Knowledge base store is not available. Legacy import requires KB for resolving Gatherer IDs and set names.";
-                return result;
-            }
-
-            // Parse XML
-            var importResult = await XmlImport.ImportFromFileAsync(filePath, ct);
-
-            if (!importResult.Cards.Any())
-            {
-                result.ErrorMessage = "No cards found in the file.";
-                return result;
-            }
-
-            var baseCards = importResult.Cards.Select(c => c.GetBase()).ToList();
-
-            // Step 1: Batch-resolve full set names → abbreviations
-            var distinctSetNames = baseCards
-                .Select(c => c.SetCode!)
-                .Where(s => !string.IsNullOrEmpty(s))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            Dictionary<string, string> setMap = new(StringComparer.OrdinalIgnoreCase);
-            if (distinctSetNames.Count > 0)
-                setMap = await _kbStore.ResolveSetNamesAsync(distinctSetNames, ct);
-
-            foreach (var card in baseCards)
-            {
-                if (!string.IsNullOrEmpty(card.SetCode) && setMap.TryGetValue(card.SetCode!, out var abbr))
-                    card.SetCode = abbr;
-            }
-
-            // Step 2: Batch-resolve (Name, Set) → Scryfall UUID
-            var nameSetPairs = baseCards.Select(c => (c.Name, c.SetCode)).Distinct().ToList();
-
-            Dictionary<string, MagicCard> cardMap = new(StringComparer.Ordinal);
-            if (nameSetPairs.Count > 0)
-                cardMap = await _kbStore.ResolveCardsByNameAndSetAsync(nameSetPairs, ct);
-
-            foreach (var card in baseCards)
-            {
-                var key = $"{card.Name}|{card.SetCode}";
-                if (cardMap.TryGetValue(key, out var kbCard))
-                    card.Id = kbCard.Id;
-            }
-
-            // Step 3: Create deck and add cards
-            var deck = await _collectionStore.CreateDeckAsync(importResult.Name, parentId, ct);
-
-            var location = Location.FromId(deck.Id, deck.Name, false);
-            var physicals = new List<MagicCardPhysical>();
-
-            foreach (var card in importResult.Cards)
-            {
-                MagicCardPhysical mcp;
-                if (card is MagicCardPhysical existingPhysical)
-                {
-                    existingPhysical.SetLocation(location);
-                    mcp = existingPhysical;
-                }
-                else
-                {
-                    mcp = new MagicCardPhysical(card.GetBase(), location, true);
-                }
-                physicals.Add(mcp);
-            }
-
-            await _cardStore.AddAllAsync(physicals, ct);
-
-            result.Success = true;
-            result.Deck = deck;
-            result.CardsImported = physicals.Count;
-        }
-        catch (Exception ex)
-        {
-            result.ErrorMessage = ex.Message;
-        }
-
-        return result;
-    }
-
-    /// <inheritdoc />
-    public async Task<int> ImportLegacyToCollectionAsync(
-        int collectionId, string xmlContent, CancellationToken ct = default)
-    {
-        if (collectionId <= 0)
-            throw new ArgumentNullException(nameof(collectionId));
-        if (string.IsNullOrWhiteSpace(xmlContent))
-            throw new ArgumentException("XML content is required.", nameof(xmlContent));
-
-        if (_kbStore == null)
-            throw new InvalidOperationException("Legacy import requires KB for resolving Gatherer IDs and set names.");
-
-        var importResult = XmlImport.ImportFromXml(xmlContent);
-        var baseCards = importResult.Cards.Select(c => c.GetBase()).ToList();
-
-        // Resolve full set names → abbreviations
-        var distinctSetNames = baseCards
+        // Distinct full set names from the file → sync status in one query
+        var setNames = importResult.Cards
             .Select(c => c.SetCode!)
             .Where(s => !string.IsNullOrEmpty(s))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        Dictionary<string, string> setMap = new(StringComparer.OrdinalIgnoreCase);
-        if (distinctSetNames.Count > 0)
-            setMap = await _kbStore.ResolveSetNamesAsync(distinctSetNames, ct);
+        var statuses = await _setSyncStatusQuery.Handle(new GetSetSyncStatusQuery(setNames), ct);
 
-        foreach (var card in baseCards)
+        // How many file cards reference each set name
+        var cardsPerSetName = importResult.Cards
+            .Where(c => !string.IsNullOrEmpty(c.SetCode))
+            .GroupBy(c => c.SetCode!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var result = new LegacyImportCheckResult
         {
-            if (!string.IsNullOrEmpty(card.SetCode) && setMap.TryGetValue(card.SetCode!, out var abbr))
-                card.SetCode = abbr;
+            DeckName = importResult.Name,
+            TotalCards = importResult.Cards.Count
+        };
+
+        foreach (var status in statuses)
+        {
+            if (status.SetCode == null)
+            {
+                // Not even metadata in CardSet — cannot auto-sync by name
+                result.UnknownSets.Add(status.Name);
+            }
+            else if (status.CardCount == 0)
+            {
+                result.MissingSets.Add(new MissingSetInfo(
+                    status.SetCode,
+                    status.SetName ?? status.Name,
+                    cardsPerSetName.TryGetValue(status.Name, out var n) ? n : 0));
+            }
         }
 
-        // Resolve (Name, Set) → Scryfall UUID
-        var nameSetPairs = baseCards.Select(c => (c.Name, c.SetCode)).Distinct().ToList();
+        return result;
+    }
 
-        Dictionary<string, MagicCard> cardMap = new(StringComparer.Ordinal);
-        if (nameSetPairs.Count > 0)
-            cardMap = await _kbStore.ResolveCardsByNameAndSetAsync(nameSetPairs, ct);
+    /// <inheritdoc />
+    public async Task<ModernImportCheckResult> CheckModernImportAsync(
+        string jsonContent, CancellationToken ct = default)
+    {
+        var importResult = ParseJsonOrThrow(jsonContent);
 
-        foreach (var card in baseCards)
+        // Set codes from both pools — a sideboard-only file still needs its sets.
+        var allCards = importResult.Cards.Concat(importResult.Sideboard).ToList();
+
+        var setCodes = allCards
+            .Where(c => !string.IsNullOrEmpty(c.SetCode))
+            .Select(c => c.SetCode!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var statuses = await _setSyncStatusByCodesQuery.Handle(new GetSetSyncStatusByCodesQuery(setCodes), ct);
+
+        // How many file cards (copies, main + sideboard) reference each set code.
+        var cardsPerSetCode = allCards
+            .Where(c => !string.IsNullOrEmpty(c.SetCode))
+            .GroupBy(c => c.SetCode!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        // Card IDs currently unknown in KB — they become known once their sets sync,
+        // so the wizard can show "N cards will be resolved by sync".
+        var cardIds = allCards.Select(c => c.Id).ToList();
+        var (_, unknown) = await _validateCardIdsQuery.Handle(new ValidateCardIdsQuery(cardIds), ct);
+
+        var result = new ModernImportCheckResult
         {
-            var key = $"{card.Name}|{card.SetCode}";
-            if (cardMap.TryGetValue(key, out var kbCard))
-                card.Id = kbCard.Id;
+            DeckName = importResult.Name,
+            TotalCards = allCards.Count,
+            UnknownCardCount = unknown.Count
+        };
+
+        foreach (var status in statuses)
+        {
+            if (status.CardCount == 0)
+            {
+                // Metadata may be absent from CardSet — the sync resolves the name from
+                // Scryfall by code, so such sets are still syncable.
+                result.MissingSets.Add(new MissingSetInfo(
+                    status.SetCode ?? status.Name,
+                    status.SetName ?? status.Name,
+                    cardsPerSetCode.TryGetValue(status.Name, out var n) ? n : 0));
+            }
         }
 
-        // Add to collection
-        var location = Location.FromId(collectionId, collectionId.ToString(), false);
-        var physicals = new List<MagicCardPhysical>();
+        return result;
+    }
 
+    // ═══════════════════════════════════════════════════════
+    //  Set sync (for missing sets)
+    // ═══════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public async Task SyncMissingSetsAsync(
+        IReadOnlyList<string> setCodes,
+        string[] languages,
+        bool downloadImages,
+        IProgress<SetSyncProgress>? progress = null,
+        CancellationToken ct = default)
+    {
+        if (setCodes.Count == 0) return;
+
+        for (int i = 0; i < setCodes.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var code = setCodes[i];
+            progress?.Report(new SetSyncProgress(i, setCodes.Count, code));
+
+            var syncResult = await _syncKbCommand.Handle(
+                new SyncKBCommand(code, languages, downloadImages), ct);
+
+            if (!syncResult.Success)
+            {
+                var detail = string.Join("; ", syncResult.ErrorMessages.Where(m => !string.IsNullOrEmpty(m)));
+                throw new InvalidOperationException(
+                    $"Set '{code}' failed to sync{(detail.Length > 0 ? $": {detail}" : "")}.");
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Resolution (read-only)
+    // ═══════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public Task<LegacyCardResolution> ResolveLegacyCardsAsync(
+        string xmlContent, CancellationToken ct = default)
+    {
+        var importResult = ParseOrThrow(xmlContent);
+        return _resolveLegacyCardsQuery.Handle(new ResolveLegacyCardsQuery(importResult.Cards), ct);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Search (for the unresolved-cards table)
+    // ═══════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Card>> SearchCardMatchesAsync(
+        string query, CancellationToken ct = default)
+    {
+        var result = await _searchService.GetPagedAsync(
+            new CardListFilter { NameFilter = query, Page = 1, PageSize = 10 }, ct);
+
+        return result.Cards.ToList();
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Import collection assembly (legacy)
+    // ═══════════════════════════════════════════════════════
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<MyCard>> BuildLegacyImportCardsAsync(
+        string xmlContent,
+        LegacyCardResolution resolution,
+        IReadOnlyDictionary<string, Guid>? cardOverrides = null,
+        CancellationToken ct = default)
+    {
+        var importResult = ParseOrThrow(xmlContent);
+
+        // Auto-resolved (Name|SetCode) → Scryfall UUID; same key space as the overrides
+        // (original file values — the query only stamps Id, never renames).
+        var resolvedIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var p in resolution.Resolved)
+            resolvedIds[$"{p.Name}|{p.SetCode}"] = p.Card.Id;
+
+        var cards = new List<MyCard>(importResult.Cards.Count);
         foreach (var card in importResult.Cards)
         {
-            if (card is MagicCardPhysical mcp)
-            {
-                mcp.SetLocation(location);
-                physicals.Add(mcp);
-            }
-            else if (card is MagicCard mc)
-            {
-                physicals.Add(new MagicCardPhysical(mc, location, true));
-            }
+            var physical = card is MyCard p
+                ? p
+                : new MyCard(card.GetBase(), null, true);
+
+            var key = $"{physical.Name}|{physical.SetCode}";
+            if (cardOverrides is { Count: > 0 } && cardOverrides.TryGetValue(key, out var mapped))
+                physical.Card.Id = mapped;
+            else if (resolvedIds.TryGetValue(key, out var resolved))
+                physical.Card.Id = resolved;
+            else
+                throw new InvalidOperationException(
+                    $"Card '{key}' is neither resolved nor mapped — the import cannot be committed.");
+
+            cards.Add(physical);
         }
 
-        if (physicals.Any())
-            await _cardStore.AddAllAsync(physicals, ct);
-
-        return physicals.Count;
+        return Task.FromResult<IReadOnlyList<MyCard>>(cards);
     }
-}
 
-// ═══════════════════════════════════════════════════════════
-//  Result types
-// ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    //  Commit (atomic)
+    // ═══════════════════════════════════════════════════════
 
-/// <summary>
-/// Result of an import operation.
-/// </summary>
-public class ImportDeckResult
-{
-    public bool Success { get; set; }
-    public Collection? Deck { get; set; }
-    public int CardsImported { get; set; }
-    public string? ErrorMessage { get; set; }
-}
+    /// <inheritdoc />
+    public Task<ImportCommitResult> CommitImportAsync(
+        string deckName,
+        int? parentId,
+        int? targetCollectionId,
+        IReadOnlyList<MyCard> cards,
+        IReadOnlyDictionary<string, Guid>? cardOverrides = null,
+        CancellationToken ct = default)
+    {
+        return _importResolvedCardsCommand.Handle(
+            new ImportResolvedCardsCommand(deckName, parentId, targetCollectionId, cards, cardOverrides), ct);
+    }
 
-/// <summary>
-/// Result of an export operation.
-/// </summary>
-public class ExportDeckResult
-{
-    public bool Success { get; set; }
-    public int CardsExported { get; set; }
-    public string? ErrorMessage { get; set; }
+    /// <inheritdoc />
+    public async Task<ImportCommitResult> CommitModernImportAsync(
+        string jsonContent,
+        int? parentId,
+        int? targetCollectionId,
+        string? deckName = null,
+        CancellationToken ct = default)
+    {
+        var importResult = ParseJsonOrThrow(jsonContent);
+
+        // Invariant: validate every card (main + sideboard) against KB BEFORE anything is created
+        var cardIds = importResult.Cards.Select(c => c.Id)
+            .Concat(importResult.Sideboard.Select(c => c.Id))
+            .ToList();
+        var (known, unknown) = await _validateCardIdsQuery.Handle(new ValidateCardIdsQuery(cardIds), ct);
+
+        if (unknown.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"{unknown.Count} card{(unknown.Count == 1 ? "" : "s")} not found in the knowledge base. " +
+                $"Sync the corresponding sets and retry.");
+        }
+
+        // Wrap into physicals; collection is stamped by the commit command
+        var physicals = importResult.Cards
+            .Select(c => c is MyCard p
+                ? p
+                : new MyCard(c.GetBase(), null, true))
+            .ToList();
+
+        var sideboardPhysicals = importResult.Sideboard
+            .Select(c => c is MyCard p
+                ? p
+                : new MyCard(c.GetBase(), null, true))
+            .ToList();
+
+        var finalName = string.IsNullOrWhiteSpace(deckName) ? importResult.Name : deckName.Trim();
+
+        return await _importResolvedCardsCommand.Handle(
+            new ImportResolvedCardsCommand(finalName, parentId, targetCollectionId, physicals,
+                SideboardCards: sideboardPhysicals.Count > 0 ? sideboardPhysicals : null), ct);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════
+
+    private static CardCollectionImportResult ParseOrThrow(string xmlContent)
+    {
+        if (string.IsNullOrWhiteSpace(xmlContent))
+            throw new ArgumentException("XML content is required.", nameof(xmlContent));
+
+        var importResult = XmlImport.ImportFromXml(xmlContent);
+        if (!importResult.Cards.Any())
+            throw new InvalidOperationException("No cards found in the file.");
+
+        return importResult;
+    }
+
+    private static CardCollectionImportResult ParseJsonOrThrow(string jsonContent)
+    {
+        if (string.IsNullOrWhiteSpace(jsonContent))
+            throw new ArgumentException("JSON content is required.", nameof(jsonContent));
+
+        var importResult = JsonImport.ImportFromJson(jsonContent);
+        // A sideboard-only file is legitimate (round-trip of an empty main deck), so the
+        // emptiness check covers both pools.
+        if (!importResult.Cards.Any() && !importResult.Sideboard.Any())
+            throw new InvalidOperationException("No cards found in the file.");
+
+        return importResult;
+    }
 }

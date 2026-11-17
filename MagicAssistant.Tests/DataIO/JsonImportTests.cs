@@ -1,0 +1,286 @@
+using MagicAssistant.Data.IO.json;
+using MagicAssistant.Data.Model;
+
+namespace MagicAssistant.Tests.DataIO;
+
+[TestFixture]
+public class JsonImportTests
+{
+    // Native Magic Assistant JSON format (produced by JsonExport):
+    // { "format": "magic-assistant/deck", "version": 1, "name": "...", "type": "deck",
+    //   "cards": [ { "id", "name", "set", "count", "own"?, "price"?, "comment"?, "custom"?, "special"?, "forTrade"? } ] }
+
+    static string MakeJson(string name, params (Guid id, string name, string set, int count)[] cards)
+    {
+        var cardEntries = string.Join(",\n", cards.Select(c =>
+            $"{{ \"id\": \"{c.id}\", \"name\": \"{c.name}\", \"set\": \"{c.set}\", \"count\": {c.count} }}"));
+        return $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""version"": 1,
+  ""name"": ""{name}"",
+  ""type"": ""deck"",
+  ""cards"": [
+    {cardEntries}
+  ]
+}}";
+    }
+
+    [Test]
+    public void ImportFromJson_ParsesValidDeck()
+    {
+        var cardId = Guid.NewGuid();
+        var json = MakeJson("Test Deck", (cardId, "Lightning Bolt", "M19", 4));
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Name, Is.EqualTo("Test Deck"));
+        Assert.That(result.Type, Is.EqualTo("deck"));
+        Assert.That(result.Cards, Has.Count.EqualTo(1));
+        Assert.That(result.Cards[0], Is.InstanceOf<MyCard>());
+
+        var physical = (MyCard)result.Cards[0];
+        Assert.That(physical.Card.Name, Is.EqualTo("Lightning Bolt"));
+        Assert.That(physical.Card.Id, Is.EqualTo(cardId));
+        Assert.That(physical.Card.SetCode, Is.EqualTo("m19"), "set code should be lowercased");
+        Assert.That(physical.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void ImportFromJson_ParsesOptionalFields()
+    {
+        var cardId = Guid.NewGuid();
+        var json = $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""name"": ""Test Deck"",
+  ""cards"": [
+    {{
+      ""id"": ""{cardId}"",
+      ""name"": ""Card"",
+      ""set"": ""m19"",
+      ""count"": 2,
+      ""own"": false,
+      ""price"": 5.0,
+      ""comment"": ""My card comment"",
+      ""special"": ""foil"",
+      ""forTrade"": 1
+    }}
+  ]
+}}";
+
+        var result = JsonImport.ImportFromJson(json);
+        var physical = (MyCard)result.Cards[0];
+
+        Assert.That(physical.IsOwn, Is.False);
+        Assert.That(physical.MyPrice, Is.EqualTo(5.0f).Within(0.001f));
+        Assert.That(physical.Comment, Is.EqualTo("My card comment"));
+        Assert.That(physical.GetForTradeCount(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ImportFromJson_Defaults_WhenOptionalFieldsAbsent()
+    {
+        var cardId = Guid.NewGuid();
+        var json = MakeJson("Deck", (cardId, "Card", "m19", 3));
+
+        var physical = (MyCard)JsonImport.ImportFromJson(json).Cards[0];
+
+        Assert.That(physical.IsOwn, Is.True, "own defaults to true");
+        Assert.That(physical.MyPrice, Is.EqualTo(0f), "price defaults to 0");
+        Assert.That(physical.Comment, Is.Null);
+    }
+
+    [Test]
+    public void ImportFromJson_LegacyFortradeTag_MapsToForTradeCount()
+    {
+        var cardId = Guid.NewGuid();
+        var json = $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""name"": ""Test Deck"",
+  ""cards"": [
+    {{
+      ""id"": ""{cardId}"",
+      ""name"": ""Card"",
+      ""set"": ""m19"",
+      ""count"": 3,
+      ""special"": ""foil,fortrade""
+    }}
+  ]
+}}";
+
+        var physical = (MyCard)JsonImport.ImportFromJson(json).Cards[0];
+
+        Assert.That(physical.Count, Is.EqualTo(3));
+        Assert.That(physical.GetForTradeCount(), Is.EqualTo(3),
+            "legacy 'fortrade' tag must mark the whole pile as for trade");
+    }
+
+    [Test]
+    public void ImportFromJson_IgnoresUnknownFields()
+    {
+        var cardId = Guid.NewGuid();
+        var json = $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""version"": 1,
+  ""name"": ""Deck"",
+  ""someFutureHeaderField"": true,
+  ""cards"": [
+    {{ ""id"": ""{cardId}"", ""name"": ""Card"", ""set"": ""m19"", ""count"": 1, ""futureCardField"": 42 }}
+  ]
+}}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Cards, Has.Count.EqualTo(1), "unknown fields must be ignored, not rejected");
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsForMalformedJson()
+    {
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson("{ not valid json"));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsForWrongFormatMarker()
+    {
+        var json = @"{ ""format"": ""other/app"", ""name"": ""Deck"", ""cards"": [] }";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsForUnsupportedVersion()
+    {
+        var json = @"{ ""format"": ""magic-assistant/deck"", ""version"": 99, ""name"": ""Deck"", ""cards"": [] }";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenCardsArrayMissing()
+    {
+        var json = @"{ ""format"": ""magic-assistant/deck"", ""name"": ""Deck"" }";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenIdMissing()
+    {
+        var json = @"{ ""format"": ""magic-assistant/deck"", ""cards"": [ { ""name"": ""Card"", ""set"": ""m19"", ""count"": 1 } ] }";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenIdIsNotGuid()
+    {
+        var json = @"{ ""format"": ""magic-assistant/deck"", ""cards"": [ { ""id"": ""12345"", ""name"": ""Card"", ""set"": ""m19"", ""count"": 1 } ] }";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenNameMissing()
+    {
+        var cardId = Guid.NewGuid();
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [ {{ ""id"": ""{cardId}"", ""set"": ""m19"", ""count"": 1 }} ] }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenCountMissing()
+    {
+        // count is part of the reference core — no default is applied.
+        var cardId = Guid.NewGuid();
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [ {{ ""id"": ""{cardId}"", ""name"": ""Card"", ""set"": ""m19"" }} ] }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenCountIsZero()
+    {
+        var cardId = Guid.NewGuid();
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [ {{ ""id"": ""{cardId}"", ""name"": ""Card"", ""set"": ""m19"", ""count"": 0 }} ] }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ParsesSideboardArray()
+    {
+        var mainId = Guid.NewGuid();
+        var sbId = Guid.NewGuid();
+        var json = $@"{{
+  ""format"": ""magic-assistant/deck"",
+  ""version"": 1,
+  ""name"": ""Test Deck"",
+  ""cards"": [
+    {{ ""id"": ""{mainId}"", ""name"": ""Main Card"", ""set"": ""m19"", ""count"": 4 }}
+  ],
+  ""sideboard"": [
+    {{ ""id"": ""{sbId}"", ""name"": ""SB Card"", ""set"": ""M20"", ""count"": 1, ""own"": false }}
+  ]
+}}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Cards, Has.Count.EqualTo(1));
+        Assert.That(result.Sideboard, Has.Count.EqualTo(1));
+
+        var sb = (MyCard)result.Sideboard[0];
+        Assert.That(sb.Card.Id, Is.EqualTo(sbId));
+        Assert.That(sb.Card.SetCode, Is.EqualTo("m20"), "set code should be lowercased in the sideboard too");
+        Assert.That(sb.Count, Is.EqualTo(1));
+        Assert.That(sb.IsOwn, Is.False);
+    }
+
+    [Test]
+    public void ImportFromJson_SideboardAbsent_EmptyList()
+    {
+        var json = MakeJson("Deck", (Guid.NewGuid(), "Card", "m19", 3));
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Sideboard, Is.Empty, "absent sideboard must yield an empty list, not null");
+    }
+
+    [Test]
+    public void ImportFromJson_SideboardEmptyArray_EmptyList()
+    {
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": [] }}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Sideboard, Is.Empty);
+    }
+
+    [Test]
+    public void ImportFromJson_SideboardNull_EmptyList()
+    {
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": null }}";
+
+        var result = JsonImport.ImportFromJson(json);
+
+        Assert.That(result.Sideboard, Is.Empty, "null sideboard is treated as absent");
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenSideboardIsNotArray()
+    {
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": ""oops"" }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+
+    [Test]
+    public void ImportFromJson_ThrowsWhenSideboardCardMissesCount()
+    {
+        // The reference core applies to sideboard cards with the same strictness as main cards.
+        var sbId = Guid.NewGuid();
+        var json = $@"{{ ""format"": ""magic-assistant/deck"", ""cards"": [], ""sideboard"": [ {{ ""id"": ""{sbId}"", ""name"": ""SB"", ""set"": ""m19"" }} ] }}";
+
+        Assert.Throws<FormatException>(() => JsonImport.ImportFromJson(json));
+    }
+}

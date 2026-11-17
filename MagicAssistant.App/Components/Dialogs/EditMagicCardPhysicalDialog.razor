@@ -1,10 +1,12 @@
+@using MagicAssistant.App.Components.Shared
 @using MagicAssistant.Core.Services.DeckCard
 @using MagicAssistant.Data.Model
 @inject IDeckCardService DeckCardService
+@inject ICardImageLoader ImageLoader
 
 @if (!IsOpen) return;
 
-<div class="edit-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+<div class="edit-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
     <div class="edit-dialog-box" @onclick:stopPropagation>
         @* ── Header ── *@
         <div class="edit-header">
@@ -14,27 +16,19 @@
 
         @if (_card != null)
         {
-            <div class="edit-card-preview">
-                <span class="preview-name">@_card.Name</span>
-                <span class="preview-cost">@(_card.ManaCost ?? "—")</span>
-            </div>
-
             @* ── Form fields ── *@
             <div class="edit-form">
-                @* Count ── *@
-                <div class="form-row">
-                    <label class="form-label">Count</label>
-                    <input type="number" min="1" max="10" @bind="_count" @bind:event="oninput"
-                           class="form-input form-input-sm" />
-                </div>
+                @* Count is no longer editable here — it lives in the list's −/+ controls. *@
 
-                @* Owned ── *@
+                @* Ownership ── *@
                 <div class="form-row">
                     <label class="form-label">Ownership</label>
-                    <select @bind="_isOwn" @bind:event="onchange" class="form-select">
-                        <option value="true">Owned</option>
-                        <option value="false">Borrowed</option>
-                    </select>
+                    <div class="toggle-group">
+                        <button type="button" class="toggle-btn @(_isOwn ? "active" : "")"
+                                @onclick="() => _isOwn = true">Owned</button>
+                        <button type="button" class="toggle-btn @(!_isOwn ? "active" : "")"
+                                @onclick="() => _isOwn = false">Borrowed</button>
+                    </div>
                 </div>
 
                 @* Price ── *@
@@ -51,19 +45,37 @@
                               placeholder="Notes about this card..." class="form-textarea"></textarea>
                 </div>
 
-                @* Special Tags ── *@
+                @* Grade ── single-select: one of six, or none *@
                 <div class="form-row">
-                    <label class="form-label">Special Tags</label>
-                    <input @bind="_tags" @bind:event="oninput"
-                           placeholder="foil, premium, forTrade, damaged..." class="form-input" />
-                    <div class="tag-hint">Separate with commas. Use "fortrade" to mark for trading.</div>
+                    <label class="form-label">Grade</label>
+                    <div class="toggle-group grade-group">
+                        @foreach (var g in Grades)
+                        {
+                            var selected = _grade == g.Grade;
+                            <button type="button" class="toggle-btn @(selected ? "active" : "")"
+                                    title="@g.Title" @onclick="() => ToggleGrade(g.Grade)">@g.Label</button>
+                        }
+                    </div>
                 </div>
 
-                @* For Trade Count ── *@
+                @* Trading ── toggle + count that appears when pressed *@
                 <div class="form-row">
-                    <label class="form-label">For Trade Count</label>
-                    <input type="number" min="0" max="@_count" @bind="_forTradeCount" @bind:event="oninput"
-                           placeholder="0 = none" class="form-input form-input-sm" />
+                    <label class="form-label">Trading</label>
+                    <div class="trading-row">
+                        <button type="button" class="toggle-btn @(_forTradeOn ? "active" : "")"
+                                disabled="@(_ownedCount == 0)"
+                                title="@(_ownedCount == 0 ? "No owned copies in this deck" : "Mark copies as available for trade")"
+                                @onclick="ToggleForTrade">For trade</button>
+                        @if (_forTradeOn)
+                        {
+                            <input type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="@_ownedCount" @bind="_forTradeCount" @bind:event="oninput"
+                                   class="form-input form-input-sm no-spin" aria-label="For trade count" />
+                            @if (_forTradeCount > _ownedCount)
+                            {
+                                <span class="field-error">Max @_ownedCount owned</span>
+                            }
+                        }
+                    </div>
                 </div>
             </div>
 
@@ -82,46 +94,106 @@
             </div>
         }
     </div>
+
+    @* ── Card preview — separate window docked to the right, same pattern as OldDeckImportWizard's hover preview. *@
+    @if (_card != null)
+    {
+        <div class="card-image-preview" @onclick:stopPropagation="true">
+            @if (ImageHelper.GetImageUrl(_card.Card, true) is { } imgUrl && ImageLoader.FrontExists(_card.Card))
+            {
+                <div class="card-image-wrap">
+                    <img src="@imgUrl" alt="@ActiveName" class="card-image" />
+                </div>
+            }
+            else
+            {
+                @* Lazy: the image is downloaded on open and pops in when the file lands. *@
+                <div class="card-image-empty">
+                    <span>🖼</span>
+                    <span>@(ImageLoader.Failed(_card.Card) ? "Image not downloaded" : "Downloading image...")</span>
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
-    private MagicCardPhysical? _card;
-    private int _count = 1;
+    private MyCard? _card;
     private bool _isOwn = true;
     private float? _price;
     private string _comment = "";
-    private string _tags = "";
+    private CardGrade? _grade;
     private int _forTradeCount = 0;
+    private bool _forTradeOn;
+    // Total copies of this card in the deck with IsOwn = true — bounds the for-trade count.
+    private int _ownedCount;
+    private bool _isDoubleSided;
     private bool _saving;
     private string? _error;
+
+    /// <summary>Grade toggle buttons: label on the button, full name in the tooltip.</summary>
+    private static readonly (CardGrade Grade, string Label, string Title)[] Grades =
+    {
+        (CardGrade.GemMint, "M", "GEM MINT / MINT"),
+        (CardGrade.NearMint, "NM", "NEAR MINT"),
+        (CardGrade.SlightlyPlayed, "SP", "SLIGHTLY PLAYED"),
+        (CardGrade.ModeratelyPlayed, "MP", "MODERATELY PLAYED"),
+        (CardGrade.HeavilyPlayed, "HP", "HEAVILY PLAYED"),
+        (CardGrade.Damaged, "DMG", "DAMAGED"),
+    };
 
     // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
-    [Parameter] public MagicCardPhysical? Card { get; set; }
+    [Parameter] public MyCard? Card { get; set; }
     [Parameter] public int? DeckId { get; set; }
-    [Parameter] public EventCallback<MagicCardPhysical?> OnSaved { get; set; }
+    [Parameter] public EventCallback<MyCard?> OnSaved { get; set; }
 
-    protected override void OnParametersSet()
+    protected override Task OnParametersSetAsync()
     {
         if (IsOpen && Card != _card)
-            LoadCard(Card);
+            return LoadCard(Card);
+        return Task.CompletedTask;
     }
 
-    private void LoadCard(MagicCardPhysical? card)
+    private async Task LoadCard(MyCard? card)
     {
         _card = card;
         if (card == null) return;
 
-        _count = card.Count;
         _isOwn = card.IsOwn;
-        _price = card.Price;
+        _price = card.MyPrice > 0 ? card.MyPrice : (float?)null;
         _comment = card.Comment ?? "";
-        _tags = card.SpecialTags ?? "";
+        _grade = card.Grade;
         _forTradeCount = card.GetForTradeCount();
+        _forTradeOn = _forTradeCount > 0;
+        _ownedCount = DeckId.HasValue ? await DeckCardService.GetOwnedCountAsync(DeckId.Value, card.Id) : 0;
+        _isDoubleSided = card.Card.Has2Faces;
         _error = null;
+
+        // Lazy image: the preview shows a placeholder until the front file lands on disk (wizard pattern).
+        if (!ImageLoader.FrontExists(card.Card))
+            _ = EnsureImageAsync(card.Card);
     }
+
+    private async Task EnsureImageAsync(Card card)
+    {
+        await ImageLoader.EnsureAsync(card);
+        // Re-render only if this card is still the one being edited.
+        if (ReferenceEquals(_card?.Card, card))
+            StateHasChanged();
+    }
+
+    private CardFace? ActiveFace => _isDoubleSided && _card?.Card.CardFaces is { Length: >= 2 }
+        ? _card.Card.CardFaces[0] // превью показывает лицевую сторону
+        : null;
+
+    // Scryfall fills PrintedName/PrintedText/PrintedTypeLine for many double-sided cards.
+    // Fall back to base card values if face-specific fields are empty.
+    private string ActiveName => ActiveFace is { } f
+        ? (f.PrintedName ?? f.Name ?? _card?.Card.PrintedName ?? _card?.Name ?? string.Empty)
+        : (_card?.Card.PrintedName ?? _card?.Name ?? string.Empty);
 
     private async Task OnSave()
     {
@@ -129,50 +201,47 @@
 
         _saving = true;
         _error = null;
+        var saved = false;
 
         try
         {
+            // Count is excluded on purpose — it is managed by the list's −/+ controls.
+            if (_forTradeCount > _ownedCount)
+            {
+                _error = $"For trade count ({_forTradeCount}) exceeds owned copies ({_ownedCount}).";
+                return;
+            }
+
             var updates = new Dictionary<MagicCardField, object?>();
-            updates[MagicCardField.Count] = _count;
 
             if (_isOwn != _card.IsOwn)
                 updates[MagicCardField.IsOwn] = _isOwn;
 
-            if (_price.HasValue && _price.Value != (_card.Price ?? 0))
-                updates[MagicCardField.Price] = _price.Value;
+            if (_price.HasValue && _price.Value != _card.MyPrice)
+                updates[MagicCardField.MyPrice] = _price.Value;
 
             if (_comment != (_card.Comment ?? ""))
                 updates[MagicCardField.Comment] = _comment.Trim();
 
-            if (_tags != (_card.SpecialTags ?? ""))
-                updates[MagicCardField.Special] = _tags.Trim();
+            // null clears the column, a value stores the enum as an integer
+            if (_grade != _card.Grade)
+                updates[MagicCardField.Grade] = _grade;
 
-            var success = await DeckCardService.UpdateCardAsync(DeckId.Value, _card.Id, updates);
+            if (_forTradeCount != _card.GetForTradeCount())
+                updates[MagicCardField.ForTradeCount] = _forTradeCount;
 
-            if (!success)
+            if (updates.Count > 0)
             {
-                _error = "Failed to update card.";
-                return;
-            }
-
-            // Handle for-trade count separately (creates trade split)
-            if (_forTradeCount > 0 && _forTradeCount < _count)
-            {
-                var splitResult = await DeckCardService.SplitCardAsync(DeckId.Value, _card.Id, _forTradeCount);
-                if (splitResult != null)
-                    _card = splitResult;
-            }
-            else if (_forTradeCount >= _count)
-            {
-                _card.SetSpecialTag("fortrade");
-                await DeckCardService.UpdateCardAsync(DeckId.Value, _card.Id, new Dictionary<MagicCardField, object?>
+                var success = await DeckCardService.UpdateCardAsync(DeckId.Value, _card.Id, updates);
+                if (!success)
                 {
-                    [MagicCardField.Special] = _tags.Contains("fortrade", StringComparison.OrdinalIgnoreCase)
-                        ? _tags : _tags + (string.IsNullOrEmpty(_tags) ? "fortrade" : ",fortrade")
-                });
+                    _error = "Failed to update card.";
+                    return;
+                }
             }
 
             await OnSaved.InvokeAsync(_card);
+            saved = true;
         }
         catch (Exception ex)
         {
@@ -181,6 +250,28 @@
         finally
         {
             _saving = false;
+        }
+
+        // Close after finally: Close() guards on _saving, which is still true inside the try block.
+        if (saved) await Close();
+    }
+
+    /// <summary>Mana cost for the preview; double-sided cards show "front // back" (same rule as CardListView).</summary>
+    /// <summary>Grade is single-select: clicking the active button clears it, any other selects.</summary>
+    private void ToggleGrade(CardGrade grade) => _grade = _grade == grade ? null : grade;
+
+    private void ToggleForTrade()
+    {
+        if (_forTradeOn)
+        {
+            _forTradeOn = false;
+            _forTradeCount = 0;
+        }
+        else
+        {
+            _forTradeOn = true;
+            if (_forTradeCount <= 0)
+                _forTradeCount = Math.Min(1, _ownedCount);
         }
     }
 
@@ -192,11 +283,10 @@
         await IsOpenChanged.InvokeAsync(false);
     }
 
-    private async Task OnOverlayClick() => await Close();
-
-    private void OnKeyDown(KeyboardEventArgs e)
+    // async Task, not void: rule 8 forbids fire-and-forget — the close must be awaited
+    private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
-            _ = Close();
+            await Close();
     }
 }

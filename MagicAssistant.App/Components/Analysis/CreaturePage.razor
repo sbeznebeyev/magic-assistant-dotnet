@@ -1,11 +1,11 @@
 @*
-    CreaturePage — Creature subtype analysis (pure CSS horizontal bars)
-    Mirrors Java: ui.views.analyzers.CreaturePage + CardStoreUtils.buildCreatureGroups
-    
+    CreaturePage — Creature subtype analysis (pure CSS horizontal bars), split into two charts.
+    Top = main deck only; bottom = sideboard only (hidden for nodes without a sideboard).
+
     Features:
-    - Horizontal bar chart sorted by count
-    - Interactive hover tooltips with count and percentage
-    - Total creature count display
+    - Per-chart horizontal bar chart sorted by count, scaled to that chart's max subtype
+    - Gold-framed deck name / Sideboard badge section titles (matches the Colors tab)
+    - Per-chart creature count and unique-subtype stats
 *@
 
 <div class="creature-page">
@@ -19,35 +19,82 @@
         {
             <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
         }
-        else if (_loading && _subtypes.Count == 0)
+        else if (_loading || _main == null)
         {
             <div class="loading-state">Loading creature data...</div>
         }
-        else if (_subtypes.Count > 0)
+        else if (_main!.CreatureCount > 0 || (_hasSideboard && _side!.CreatureCount > 0))
         {
-            <div class="summary-header">
-                <span class="creature-count">@_creatureCount creature@(_creatureCount != 1 ? "s" : "")</span>
-                <span class="unique-subtypes">@_subtypes.Count unique subtype@(_subtypes.Count != 1 ? "s" : "")</span>
-            </div>
-
-            <div class="h-bar-chart">
-                @foreach (var item in _subtypes)
-                {
-                    var pct = _maxSubtype > 0 ? (double)item.Value / _maxSubtype * 100 : 0;
-                    var totalPct = _creatureCount > 0 ? (double)item.Value / _creatureCount * 100 : 0;
-                    <div class="h-bar-row" style="--bar-width: @pct%;">
-                        <div class="h-bar-label">@item.Key</div>
-                        <div class="h-bar-track">
-                            <div class="h-bar-fill"></div>
+            <div class="creature-sections">
+                @* ── Top: main deck only ── *@
+                <div class="creature-section">
+                    <div class="section-title-row">
+                        <span class="deck-name-title">@(DeckName ?? "Deck")</span>
+                        <span class="section-stats">@_main.CreatureCount creature@(_main.CreatureCount != 1 ? "s" : "") · @_main.Items.Count unique subtype@(_main.Items.Count != 1 ? "s" : "")</span>
+                    </div>
+                    @if (_main.Items.Count > 0)
+                    {
+                        <div class="h-bar-chart">
+                            @foreach (var item in _main.Items)
+                            {
+                                <div class="h-bar-row">
+                                    <div class="h-bar-label @(item.IsAll ? "all" : "")">@item.Name</div>
+                                    <div class="h-bar-track">
+                                        @* "all" is the total row — empty track, no bar: bars compete only among subtypes. *@
+                                        @if (!item.IsAll)
+                                        {
+                                            <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                        }
+                                    </div>
+                                    <div class="h-bar-value">@item.Count (@item.TotalPct.ToString("F0")%)</div>
+                                </div>
+                            }
                         </div>
-                        <div class="h-bar-value">@item.Value (@totalPct.ToString("F0")%)</div>
+                    }
+                    else
+                    {
+                        <div class="section-empty">Creatures exist but no subtypes detected.</div>
+                    }
+                </div>
+
+                @* ── Bottom: sideboard only — hidden for nodes without a sideboard (Collection) ── *@
+                @if (_hasSideboard)
+                {
+                    <div class="creature-section">
+                        <div class="section-title-row">
+                            <span class="sideboard-badge">Sideboard</span>
+                            <span class="section-stats">@_side!.CreatureCount creature@(_side.CreatureCount != 1 ? "s" : "") · @_side.Items.Count unique subtype@(_side.Items.Count != 1 ? "s" : "")</span>
+                        </div>
+                        @if (_side.Items.Count > 0)
+                        {
+                            <div class="h-bar-chart">
+                                @foreach (var item in _side.Items)
+                                {
+                                    <div class="h-bar-row">
+                                        <div class="h-bar-label @(item.IsAll ? "all" : "")">@item.Name</div>
+                                        <div class="h-bar-track">
+                                            @* "all" is the total row — empty track, no bar: bars compete only among subtypes. *@
+                                            @if (!item.IsAll)
+                                            {
+                                                <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                            }
+                                        </div>
+                                        <div class="h-bar-value">@item.Count (@item.TotalPct.ToString("F0")%)</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (_side.CreatureCount > 0)
+                        {
+                            <div class="section-empty">Creatures exist but no subtypes detected.</div>
+                        }
+                        else
+                        {
+                            <div class="section-empty">No creatures in the sideboard.</div>
+                        }
                     </div>
                 }
             </div>
-        }
-        else if (_creatureCount > 0)
-        {
-            <div class="empty-state"><span>Creatures exist but no subtypes detected.</span></div>
         }
         else
         {
@@ -60,13 +107,16 @@
 </div>
 
 @code {
-    private List<KeyValuePair<string, int>> _subtypes = new();
-    private int _creatureCount;
-    private int _maxSubtype;
+    private CreatureChartData? _main;
+    private CreatureChartData? _side;
+    /// <summary>True when the node has sideboard cards (Deck nodes only — Collection nodes
+    /// have no sideboard child). False → bottom chart hidden.</summary>
+    private bool _hasSideboard;
     private bool _loading;
     private string? _error;
 
     [Parameter] public int DeckId { get; set; }
+    [Parameter] public string? DeckName { get; set; }
     [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
     [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
 
@@ -78,19 +128,24 @@
 
     private async Task LoadAnalysis()
     {
-        _loading = true; _error = null; StateHasChanged();
+        _loading = true; _error = null; _main = null; _side = null; StateHasChanged();
         try
         {
             var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
             if (cards.Count == 0)
             {
-                _subtypes = new List<KeyValuePair<string, int>>();
-                _creatureCount = 0;
+                _main = new CreatureChartData();
+                _side = new CreatureChartData();
             }
             else
             {
-                var result = AnalysisService.Analyze(cards);
-                BuildCreatureData(result);
+                // Each physical card carries its owning collection in Collection: the deck's own
+                // cards (Id == DeckId) vs. the sideboard child's (everything else).
+                var mainCards = cards.Where(c => c.Collection?.Id == DeckId).ToList();
+                var sideCards = cards.Where(c => c.Collection?.Id != DeckId).ToList();
+                _hasSideboard = sideCards.Count > 0;
+                _main = BuildChart(AnalysisService.Analyze(mainCards));
+                _side = BuildChart(AnalysisService.Analyze(sideCards));
             }
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -99,13 +154,56 @@
 
     private async Task Reload() => await LoadAnalysis();
 
-    private void BuildCreatureData(DeckAnalysisResult result)
+    private CreatureChartData BuildChart(DeckAnalysisResult result)
     {
-        _creatureCount = result.CreatureCount;
-        if (result.CreatureSubtypes.Any())
-        {
-            _subtypes = result.CreatureSubtypes.OrderByDescending(kv => kv.Value).ToList();
-            _maxSubtype = _subtypes.Max(s => s.Value);
-        }
+        var data = new CreatureChartData { CreatureCount = result.CreatureCount };
+        if (!result.CreatureSubtypes.Any()) return data;
+
+        // The bold gold "all" row is the creature total itself — CreatureCount. It used to
+        // be mined from the bare "-"/"—" tokens the parser leaked per creature (one per
+        // single-faced card, TWO per double-faced card — inflating the total); the parser
+        // is fixed, so the total comes straight from the source.
+        var subtypes = result.CreatureSubtypes
+            .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        // Bar scale: the fattest subtype row is the 100% reference. "all" is a total,
+        // not a competitor — excluded from the max and rendered as an empty track.
+        var max = subtypes.Max(s => s.Value);
+        if (result.CreatureCount > 0)
+            subtypes.Insert(0, new KeyValuePair<string, int>("all", result.CreatureCount));
+
+        data.Items = subtypes
+            .Select(kv =>
+            {
+                // Whole-percent bar width relative to this chart's max: an int renders
+                // identically in any culture (no decimal separator to break the inline style).
+                return new CreatureSubtypeItem
+                {
+                    Name = kv.Key, Count = kv.Value,
+                    IsAll = kv.Key == "all",
+                    BarWidthPct = kv.Key == "all" ? 0 : (int)Math.Round(kv.Value / (double)max * 100),
+                    TotalPct = result.CreatureCount > 0 ? kv.Value / (double)result.CreatureCount * 100 : 0
+                };
+            })
+            .ToList();
+        return data;
+    }
+
+    private class CreatureChartData
+    {
+        public List<CreatureSubtypeItem> Items { get; set; } = new();
+        public int CreatureCount { get; set; }
+    }
+
+    private class CreatureSubtypeItem
+    {
+        public string Name { get; set; } = "";
+        public int Count { get; set; }
+        /// <summary>True for the "all" total row (relabeled parser dash) — bold, bright label.</summary>
+        public bool IsAll { get; set; }
+        /// <summary>Whole-percent bar width — culture-safe int for the inline style.</summary>
+        public int BarWidthPct { get; set; }
+        /// <summary>Share of all creatures in this chart — display text only.</summary>
+        public double TotalPct { get; set; }
     }
 }

@@ -2,6 +2,7 @@
 
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model.Enums;
+using MagicAssistant.Data.Model.NavigatorNodes;
 using System.Xml;
 
 namespace MagicAssistant.Data.Model;
@@ -12,7 +13,7 @@ public static class MagicCardFieldExtensions
     /// Gets the value of this field from a MagicCard.
     /// Mirrors Java MagicCardField.get(IMagicCard).
     /// </summary>
-    public static object? Get(this MagicCardField field, IMagicCard card)
+    public static object? Get(this MagicCardField field, ICard card)
     {
         return field switch
         {
@@ -32,11 +33,6 @@ public static class MagicCardFieldExtensions
             MagicCardField.CollectorNumber => card.GetBase().CollectorNumber,
             MagicCardField.Cmc => card.CmcNumber,
             MagicCardField.ColorType => card.ColorType,
-            MagicCardField.Text => card.Text,
-            MagicCardField.Side => card.Side,
-            MagicCardField.DbPrice => card.DbPrice,
-            MagicCardField.CommunityRating => card.CommunityRating,
-            MagicCardField.EnglishName => card.EnglishName,
             MagicCardField.Edition => card.CardSet?.SetCode,
 
             // Extended fields — from properties
@@ -49,27 +45,22 @@ public static class MagicCardFieldExtensions
             MagicCardField.SetBlock => null, // Block no longer tracked (not in Scryfall set data)
             MagicCardField.SetCore => card.CardSet?.SetType,
             MagicCardField.SetRelease => card.CardSet?.ReleaseDate,
-            MagicCardField.UniqueCount => card.UniqueCount,
             MagicCardField.Size => GetSize(card),
             MagicCardField.Sideboard => card.IsSideboard,
             MagicCardField.EnglishType => card.Type,
 
             // Physical fields — delegate to physical methods
+            MagicCardField.MyPrice => GetMyPrice(card),
             MagicCardField.Count => GetPhysicalCount(card),
             MagicCardField.IsOwn => GetIsOwn(card),
-            MagicCardField.Location => card.Location,
-            MagicCardField.Price => GetPrice(card),
+            MagicCardField.Location => card.Collection,
             MagicCardField.Comment => GetComment(card),
-            MagicCardField.Special => GetSpecial(card),
             MagicCardField.DateAdded => GetDateAdded(card),
-            MagicCardField.Custom => GetCustom(card),
             MagicCardField.ForTradeCount => GetForTradeCount(card),
+            MagicCardField.Grade => GetGrade(card),
 
             // Derived/computed
-            MagicCardField.OwnCount => card.OwnCount,
-            MagicCardField.OwnTotal => card.OwnTotal,
-            MagicCardField.OwnTotalAll => card.OwnTotalAll,
-            MagicCardField.OwnUnique => card.OwnUnique,
+            MagicCardField.OwnCount => GetOwnCount(card),
             MagicCardField.CreatureCount => GetCreatureCount(card),
             MagicCardField.Count4 => Math.Min(GetPhysicalCount(card), 4),
             MagicCardField.PercentComplete => ComputePercentComplete(card),
@@ -83,7 +74,7 @@ public static class MagicCardFieldExtensions
     /// Sets the value of this field on a MagicCard.
     /// Mirrors Java MagicCardField.setM(MagicCard, Object).
     /// </summary>
-    public static void SetM(this MagicCardField field, MagicCard card, object? value)
+    public static void SetM(this MagicCardField field, Card card, object? value)
     {
         switch (field)
         {
@@ -129,20 +120,11 @@ public static class MagicCardFieldExtensions
             case MagicCardField.CollectorNumber:
                 card.CollectorNumber = value?.ToString();
                 break;
-            case MagicCardField.DbPrice:
-                card.DbPrice = CastToFloat(value);
-                break;
-            case MagicCardField.CommunityRating:
-                card.CommunityRating = CastToFloat(value);
-                break;
             case MagicCardField.Rulings:
                 card.Rulings = value?.ToString();
                 break;
 
             // Extended fields — direct property assignment
-            case MagicCardField.Side:
-                card.Side = CastToInt(value);
-                break;
             case MagicCardField.Legality:
                 if (value is Legality.LegalityMap lm)
                     card.LegalityMap = lm;
@@ -152,11 +134,8 @@ public static class MagicCardFieldExtensions
             case MagicCardField.Count:
             case MagicCardField.IsOwn:
             case MagicCardField.Location:
-            case MagicCardField.Price:
             case MagicCardField.Comment:
-            case MagicCardField.Special:
             case MagicCardField.DateAdded:
-            case MagicCardField.Custom:
             case MagicCardField.ForTradeCount:
                 // These are set on MagicCardPhysical, not MagicCard
                 break;
@@ -170,7 +149,7 @@ public static class MagicCardFieldExtensions
     /// Sets the value of this field on a MagicCardPhysical.
     /// Mirrors Java MagicCardField.setM(MagicCardPhysical, Object).
     /// </summary>
-    public static void SetM(this MagicCardField field, MagicCardPhysical physical, object? value)
+    public static void SetM(this MagicCardField field, MyCard physical, object? value)
     {
         if (!field.IsPhysical())
         {
@@ -188,19 +167,15 @@ public static class MagicCardFieldExtensions
                 physical.IsOwn = value is bool b ? b : bool.Parse(value?.ToString() ?? "false");
                 break;
             case MagicCardField.Location:
-                if (value is Location loc)
-                    physical.Location = loc;
+                if (value is Collection col)
+                    physical.Collection = col;
+                else if (value is not null && int.TryParse(value.ToString(), out var parsedId))
+                    physical.Collection = new Collection(parsedId, string.Empty, null, NodeType.Deck, 0);
                 else
-                    physical.Location = Location.FromPath(value?.ToString() ?? string.Empty);
-                break;
-            case MagicCardField.Price:
-                physical.Price = CastToFloat(value);
+                    physical.Collection = null;
                 break;
             case MagicCardField.Comment:
                 physical.Comment = value?.ToString();
-                break;
-            case MagicCardField.Special:
-                physical.SpecialTags = value?.ToString();
                 break;
             case MagicCardField.DateAdded:
                 if (value is DateTimeOffset dto)
@@ -210,11 +185,20 @@ public static class MagicCardFieldExtensions
                 else if (value is string s && DateTimeOffset.TryParse(s, out var parsed))
                     physical.DateAdded = parsed;
                 break;
-            case MagicCardField.Custom:
-                physical.Custom = value?.ToString();
-                break;
             case MagicCardField.ForTradeCount:
                 physical.SetForTradeCount(CastToInt(value));
+                break;
+            case MagicCardField.Grade:
+                physical.Grade = value switch
+                {
+                    null => null,
+                    CardGrade g => g,
+                    int i => (CardGrade)i,
+                    _ => Enum.TryParse<CardGrade>(value.ToString(), out var parsed) ? parsed : null
+                };
+                break;
+            case MagicCardField.MyPrice:
+                physical.MyPrice = CastToFloat(value);
                 break;
         }
     }
@@ -237,7 +221,7 @@ public static class MagicCardFieldExtensions
     /// </summary>
     public static bool IsPhysical(this MagicCardField field)
     {
-        return field is >= MagicCardField.Count and <= MagicCardField.ForTradeCount;
+        return field is >= MagicCardField.Count and <= MagicCardField.Grade;
     }
 
     /// <summary>
@@ -252,9 +236,6 @@ public static class MagicCardFieldExtensions
             or MagicCardField.Percent4Complete
             or MagicCardField.Error
             or MagicCardField.OwnCount
-            or MagicCardField.OwnTotal
-            or MagicCardField.OwnTotalAll
-            or MagicCardField.OwnUnique
             or MagicCardField.Sideboard;
     }
 
@@ -287,20 +268,21 @@ public static class MagicCardFieldExtensions
         {
             "edition" => MagicCardField.Set,
             "qty" => MagicCardField.Count,
+            "price" => MagicCardField.MyPrice, // legacy alias for the per-instance price (Deck.MyPrice)
             _ => null,
         };
     }
 
     // === Helper methods for physical card fields ===
-    private static int GetPhysicalCount(IMagicCard card) => card.IsPhysical ? card.Count : 1;
-    private static bool GetIsOwn(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.IsOwn : false;
-    private static float? GetPrice(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Price : null;
-    private static string? GetComment(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Comment : null;
-    private static string? GetSpecial(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.SpecialTags : null;
-    private static DateTimeOffset? GetDateAdded(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.DateAdded : null;
-    private static string? GetCustom(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.Custom : null;
-    private static int GetForTradeCount(IMagicCard card) => card is MagicCardPhysical pcp ? pcp.GetForTradeCount() : 0;
-    private static int GetCreatureCount(IMagicCard card)
+    private static float GetMyPrice(ICard card) => card is MyCard p ? p.MyPrice : 0f;
+    private static int GetOwnCount(ICard card) => card is MyCard p ? p.OwnCount : 0;
+    private static int GetPhysicalCount(ICard card) => card.IsPhysical ? card.Count : 1;
+    private static bool GetIsOwn(ICard card) => card is MyCard pcp ? pcp.IsOwn : false;
+    private static string? GetComment(ICard card) => card is MyCard pcp ? pcp.Comment : null;
+    private static DateTimeOffset? GetDateAdded(ICard card) => card is MyCard pcp ? pcp.DateAdded : null;
+    private static int GetForTradeCount(ICard card) => card is MyCard pcp ? pcp.GetForTradeCount() : 0;
+    private static object? GetGrade(ICard card) => card is MyCard p ? (object?)p.Grade : null;
+    private static int GetCreatureCount(ICard card)
     {
         if (card.Power == null || string.IsNullOrEmpty(card.Power)) return 0;
         return card.IsPhysical ? Math.Max(1, card.Count) : 1;
@@ -310,7 +292,7 @@ public static class MagicCardFieldExtensions
     /// Returns the number of parts this card has (1 for normal, 2+ for split/flip/adventure).
     /// Mirrors Java MagicCard.getSize().
     /// </summary>
-    private static int GetSize(IMagicCard card)
+    private static int GetSize(ICard card)
     {
         // Split/flip cards have multiple faces via CardFaces array.
         // Single-faced cards return 1.
@@ -325,9 +307,9 @@ public static class MagicCardFieldExtensions
     /// Mirrors Java MagicCard.getPercentComplete().
     /// Returns 0-100 float.
     /// </summary>
-    private static float ComputePercentComplete(IMagicCard card)
+    private static float ComputePercentComplete(ICard card)
     {
-        var ownCount = card.OwnCount;
+        var ownCount = GetOwnCount(card);
         if (ownCount == 0)
             return 0f;
 
@@ -340,9 +322,9 @@ public static class MagicCardFieldExtensions
     /// Each copy contributes 25%, capped at 100% (4 copies).
     /// Mirrors Java MagicCard.getPercent4Complete().
     /// </summary>
-    private static float ComputePercent4Complete(IMagicCard card)
+    private static float ComputePercent4Complete(ICard card)
     {
-        var ownCount = card.OwnCount;
+        var ownCount = GetOwnCount(card);
         return Math.Min(ownCount, 4) * 25f;
     }
 

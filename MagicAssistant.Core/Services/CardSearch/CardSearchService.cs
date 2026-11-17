@@ -21,42 +21,42 @@ public class CardSearchService : ICardSearchService
     }
 
     /// <inheritdoc />
-    public async Task<ICollection<IMagicCard>> SearchAsync(
+    public async Task<ICollection<ICard>> SearchAsync(
         string query, int limit = 100, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return Array.Empty<IMagicCard>();
+            return Array.Empty<ICard>();
 
         var cards = await _dbStore.SearchAsync(query.Trim(), limit, ct);
-        return cards.Cast<IMagicCard>().ToList();
+        return cards.Cast<ICard>().ToList();
     }
 
     /// <inheritdoc />
-    public Task<MagicCard?> GetCardByIdAsync(Guid cardId, CancellationToken ct = default)
+    public Task<Card?> GetCardByIdAsync(Guid cardId, CancellationToken ct = default)
     {
         return _dbStore.GetCardAsync(cardId, ct);
     }
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCard>> GetPrintingsAsync(string name, CancellationToken ct = default)
+    public Task<ICollection<Card>> GetPrintingsAsync(string name, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(name))
-            return Task.FromResult<ICollection<MagicCard>>(Array.Empty<MagicCard>());
+            return Task.FromResult<ICollection<Card>>(Array.Empty<Card>());
 
         return _dbStore.GetPrintingsAsync(name, ct);
     }
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCardPhysical>> GetInstancesAsync(Guid cardId, CancellationToken ct = default)
+    public Task<ICollection<MyCard>> GetInstancesAsync(Guid cardId, CancellationToken ct = default)
     {
         return _collectionStore.GetCardsAsync(cardId, ct);
     }
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCard>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
+    public Task<ICollection<Card>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(setAbbreviation))
-            return Task.FromResult<ICollection<MagicCard>>(Array.Empty<MagicCard>());
+            return Task.FromResult<ICollection<Card>>(Array.Empty<Card>());
 
         return _dbStore.GetBySetAsync(setAbbreviation, ct);
     }
@@ -68,24 +68,24 @@ public class CardSearchService : ICardSearchService
     }
 
     /// <inheritdoc />
-    public Task<ICollection<MagicCard>> GetAllAsync(int limit, CancellationToken ct = default)
+    public Task<ICollection<Card>> GetAllAsync(int limit, CancellationToken ct = default)
     {
         if (limit <= 0)
-            return Task.FromResult<ICollection<MagicCard>>(Array.Empty<MagicCard>());
+            return Task.FromResult<ICollection<Card>>(Array.Empty<Card>());
 
         return _dbStore.GetAllAsync(limit, ct);
     }
 
     /// <inheritdoc />
-    public ICollection<IMagicCard> ApplyFilter(ICollection<IMagicCard> cards, MagicCardFilter filter)
+    public ICollection<ICard> ApplyFilter(ICollection<ICard> cards, MagicCardFilter filter)
     {
         if (cards == null || !cards.Any())
-            return Array.Empty<IMagicCard>();
+            return Array.Empty<ICard>();
         if (filter == null)
             return cards;
 
         var result = filter.FilterCards(cards);
-        return result.Cast<IMagicCard>().ToList();
+        return result.Cast<ICard>().ToList();
     }
 
     /// <inheritdoc />

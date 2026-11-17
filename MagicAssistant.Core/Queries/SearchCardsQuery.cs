@@ -13,9 +13,9 @@ public class SearchCardsQueryHandler
         _dbStore = dbStore;
     }
 
-    public async Task<ICollection<IMagicCard>> Handle(SearchCardsQuery query, CancellationToken ct = default)
+    public async Task<ICollection<ICard>> Handle(SearchCardsQuery query, CancellationToken ct = default)
     {
         var cards = await _dbStore.SearchAsync(query.Query, query.Limit, ct);
-        return cards.Cast<IMagicCard>().ToList();
+        return cards.Cast<ICard>().ToList();
     }
 }

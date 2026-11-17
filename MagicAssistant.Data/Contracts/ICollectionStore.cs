@@ -1,4 +1,3 @@
-using MagicAssistant.Data.DbModel;
 using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Data.Contracts;
@@ -15,6 +14,7 @@ public interface ICollectionStore
     Task<ICollection<Collection>> GetAllCollectionsAsync(CancellationToken ct = default);
 
     Task<Collection?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<Collection?> GetByParentIdAsync(int id, CancellationToken ct = default);
 
     /// <summary>
     /// Create a deck (NodeType=2) with an automatically created sideboard child (NodeType=3).
@@ -23,6 +23,16 @@ public interface ICollectionStore
     /// as a separate tree item; it is rendered inline with its parent deck.
     /// </summary>
     Task<Collection> CreateDeckAsync(string name, int? parentId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomic import commit: creates a deck (NodeType=2) with its sideboard child and adds
+    /// the given cards — all in ONE transaction. If any insert fails, neither the node
+    /// nor the cards appear in the database.
+    /// Cards must already carry valid CardIds present in the knowledge base;
+    /// their Collection is stamped from the created node before insertion.
+    /// </summary>
+    Task<Collection> CreateDeckWithCardsAsync(string name, IEnumerable<MyCard> cards, int? parentId = null,
+        IEnumerable<MyCard>? sideboardCards = null, CancellationToken ct = default);
 
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
     Task<bool> RenameAsync(int id, string newName, CancellationToken ct = default);
@@ -48,17 +58,31 @@ public interface ICollectionStore
     /// <summary>
     /// Get all physical cards for a specific deck (non-sideboard only) with full card info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Remove card rows from a collection node in a single SQL round-trip.
+    /// Non-empty cardIds: all copies of each listed card; empty: every card row of the node
+    /// (the "clear" operation — the node itself is kept).
+    /// Locked nodes throw, as do unknown node IDs.
+    /// Returns the total number of card COPIES removed (SUM(Count)), not the row count.
+    /// </summary>
+    Task<int> RemoveCardsAsync(int collectionId, ICollection<Guid> cardIds, CancellationToken ct = default);
 
     /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>
+    /// ID of the deck's sideboard child (NodeType = 3), or null when the node has none.
+    /// </summary>
+    Task<int?> GetSideboardIdAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
     /// Get ALL physical cards across ALL decks (for reconciliation).
     /// </summary>
-    Task<ICollection<MagicCardPhysical>> GetAllPhysicalCardsAsync(CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetAllPhysicalCardsAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Create a collection node (NodeType = 1) WITHOUT sideboard.
@@ -73,21 +97,23 @@ public interface ICollectionStore
     /// </summary>
     Task<Collection> CreateFolderAsync(string name, int? parentId, CancellationToken ct = default);
 
+
     /// <summary>
-    /// Compute ownership statistics for all unique card IDs in one SQL query.
-    /// Returns CardId → { OwnCount, TotalCount, OwnUnique } for efficient reconciliation.
+    /// Sum of counts for the given card IDs within the given collections (exact collection rows only).
+    /// Returns (CollectionId, CardId) → total count; absent keys mean the card is not present in that collection (treat as 0).
+    /// Lightweight alternative to GetDeckCardsAsync when only totals are needed.
     /// </summary>
-    Task<Dictionary<Guid, OwnCountStats>> GetOwnCountStatsAsync(CancellationToken ct = default);
+    Task<Dictionary<(int CollectionId, Guid CardId), int>> GetCardCountsAsync(IEnumerable<int> collectionIds, IEnumerable<Guid> cardIds, CancellationToken ct = default);
 
     // ═══════════════════════════════════════════════════════════
     //  Card CRUD — implemented by SqliteCollectionStore via ICardStore&lt;MagicCardPhysical&gt;
     //  Exposed here so vertical services can work with ICollectionStore directly.
     //  ═══════════════════════════════════════════════════════════
 
-    Task<bool> AddAsync(MagicCardPhysical card, CancellationToken ct = default);
-    Task<bool> AddAllAsync(IEnumerable<MagicCardPhysical> cards, CancellationToken ct = default);
-    Task<bool> RemoveAsync(MagicCardPhysical card, CancellationToken ct = default);
-    Task<bool> UpdateAsync(MagicCardPhysical card, ICollection<MagicCardField> fields, CancellationToken ct = default);
-    Task<ICollection<MagicCardPhysical>> GetCardsAsync(Guid cardId, CancellationToken ct = default);
-    Task<IEnumerable<MagicCardPhysical>> GetAllDeckCardsAsync(CancellationToken ct = default);
+    Task<bool> AddAsync(MyCard card, CancellationToken ct = default);
+    Task<bool> AddAllAsync(IEnumerable<MyCard> cards, CancellationToken ct = default);
+    Task<bool> RemoveAsync(MyCard card, CancellationToken ct = default);
+    Task<bool> UpdateAsync(MyCard card, ICollection<MagicCardField> fields, CancellationToken ct = default);
+    Task<ICollection<MyCard>> GetCardsAsync(Guid cardId, CancellationToken ct = default);
+    Task<IEnumerable<MyCard>> GetAllDeckCardsAsync(CancellationToken ct = default);
 }

@@ -1,4 +1,5 @@
 @inject ICardSearchService CardSearch
+@inject ICardImageLoader ImageLoader
 
 <div class="printings-view">
     <div class="section-header">
@@ -43,9 +44,9 @@
                 var isDouble = card.Has2Faces;
                 <div class="printing-row @(card.Id == CardId ? "current" : "")">
 
-                    @* Front image (always clickable) *@
+                    @* Front image (always clickable; lazy — renders once the file is on disk) *@
                     <div class="printing-img-wrap" @onclick="@(() => SelectPrintingSide(card, false))">
-                        @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(card, true)))
+                        @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(card, true)) && ImageLoader.FrontExists(card))
                         {
                             <div class="printing-img">
                                 <img src="@ImageHelper.GetImageUrl(card, true)" alt="front" loading="lazy" />
@@ -53,7 +54,7 @@
                         }
                         else
                         {
-                            <div class="printing-img-placeholder">?</div>
+                            <div class="printing-img-placeholder">@(ImageLoader.Failed(card) ? "?" : "⏳")</div>
                         }
                     </div>
 
@@ -61,7 +62,7 @@
                     @if (isDouble)
                     {
                         <div class="printing-img-wrap" @onclick="@(() => SelectPrintingSide(card, true))">
-                            @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(card, false)))
+                            @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(card, false)) && ImageLoader.BackExists(card))
                             {
                                 <div class="printing-img printing-img-back">
                                     <img src="@ImageHelper.GetImageUrl(card, false)" alt="back" loading="lazy" />
@@ -69,7 +70,7 @@
                             }
                             else
                             {
-                                <div class="printing-img-placeholder">?</div>
+                                <div class="printing-img-placeholder">@(ImageLoader.Failed(card) ? "?" : "⏳")</div>
                             }
                         </div>
                     }
@@ -122,14 +123,14 @@
 </div>
 
 @code {
-    private List<MagicCard> _printings = new();
-    private List<MagicCard> _displayPrintings = new();
+    private List<Card> _printings = new();
+    private List<Card> _displayPrintings = new();
     private bool _loading;
     private string? _cardName;
     private string _filterText = "";
 
     [Parameter] public Guid? CardId { get; set; }
-    [Parameter] public EventCallback<MagicCard> OnPrintingSelected { get; set; }
+    [Parameter] public EventCallback<Card> OnPrintingSelected { get; set; }
     [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnPrintingSideChanged { get; set; }
 
     protected override async Task OnParametersSetAsync()
@@ -161,6 +162,7 @@
             }
 
             ApplyFilter();
+            _ = EnsureImagesAsync(); // lazy image loading — no-op if all cached
         }
         catch
         {
@@ -169,6 +171,27 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Lazy image loading for the printings list: missing front/back images are downloaded in
+    /// parallel (one per-card command each, deduplicated by the loader); the list re-renders as files land.
+    /// Operates on the full _printings list so filter changes cannot leave a card uncovered.
+    /// </summary>
+    private async Task EnsureImagesAsync()
+    {
+        var missing = _printings
+            .Where(c => !ImageLoader.FrontExists(c) || (c.Has2Faces && !ImageLoader.BackExists(c)))
+            .ToList();
+
+        if (missing.Count == 0) return;
+
+        var tasks = missing.Select(c => ImageLoader.EnsureAsync(c)).ToList(); // all start at once
+        foreach (var t in tasks)
+        {
+            await t;
+            StateHasChanged();
         }
     }
 
@@ -203,12 +226,12 @@
         }
     }
 
-    private async Task SelectPrinting(MagicCard card)
+    private async Task SelectPrinting(Card card)
     {
         await OnPrintingSelected.InvokeAsync(card);
     }
 
-    private async Task SelectPrintingSide(MagicCard card, bool showBack)
+    private async Task SelectPrintingSide(Card card, bool showBack)
     {
         // Выбираем печать + передаём сторону в CardDescriptionView
         await OnPrintingSelected.InvokeAsync(card);

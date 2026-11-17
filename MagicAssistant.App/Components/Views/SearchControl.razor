@@ -1,240 +1,61 @@
 @*
-    SearchControl — Full-text search with expression support
-    Mirrors Java: ui.views.search.SearchControl, TableSearch, SearchContext
-    
-    Features:
-    - FTS5 full-text search via ICardSearchService
-    - Expression syntax: "term1 term2" = AND, "term1 OR term2", "term1 AND term2"
-    - Regex mode: \regex:pattern
-    - Phrase search: "exact phrase"
-    - NOT exclusion: !word
-    - Live result count from KB
-    - Integration with DeckView as alternative search mode
+    SearchControl — FTS5 full-text search over the knowledge base.
+    Pure input control for the FilterViewModel channel: writes SearchQuery and calls Apply().
+    The re-query is performed by CardsListControl (single Changed channel, per architecture.md).
+    FTS5 syntax: "phrase", name:term, OR/AND/NOT.
 *@
 
 <div class="search-control">
     <div class="search-toolbar">
         <input @bind="_searchQuery" @bind:event="oninput" @onkeydown="OnKeyDown"
-               placeholder="@_placeholder"
+               placeholder="Search cards (FTS5)..."
                class="search-input" />
         
         @if (!string.IsNullOrWhiteSpace(_searchQuery))
         {
-            <button class="clear-btn" @onclick="OnClear" title="Clear search">✕</button>
+            <button class="clear-btn" @onclick="ClearSearch" title="Clear search">✕</button>
         }
 
-        <button class="search-btn" @onclick="ExecuteSearch" disabled="@_searching" title="Search">
-            @if (_searching)
-            {
-                <span class="spinner">⠋</span>
-            }
-            else
-            {
-                <span>🔍</span>
-            }
-        </button>
+        <button class="search-btn" @onclick="ApplySearch" title="Search">🔍</button>
 
-        <select @bind="_searchScope" class="scope-select" title="Search scope">
-            <option value="all">All</option>
-            <option value="name">Name</option>
-            <option value="type">Type</option>
-            <option value="text">Text</option>
-        </select>
-
-        @if (_showAdvanced)
-        {
-            <button class="advanced-toggle active" @onclick="ToggleAdvanced">⚙</button>
-        }
-        else
-        {
-            <button class="advanced-toggle" @onclick="ToggleAdvanced">⚙</button>
-        }
+        <span class="syntax-hint" tabindex="0">ⓘ<span class="hint-tooltip">FTS5: "exact phrase" · name:term · term1 OR term2</span></span>
     </div>
-
-    @if (_showAdvanced)
-    {
-        <div class="search-advanced">
-            <div class="advanced-row">
-                <label>Mode:</label>
-                <select @bind="_searchMode">
-                    <option value="fts5">FTS5 (relevance)</option>
-                    <option value="simple">Simple (contains)</option>
-                </select>
-            </div>
-
-            @if (_searchMode == "simple")
-            {
-                <div class="advanced-row">
-                    <label>Fields:</label>
-                    <label><input type="checkbox" checked="@_includeName" @onchange="ToggleName" /> Name</label>
-                    <label><input type="checkbox" checked="@_includeType" @onchange="ToggleType" /> Type</label>
-                    <label><input type="checkbox" checked="@_includeSet" @onchange="ToggleSet" /> Set</label>
-                    <label><input type="checkbox" checked="@_includeText" @onchange="ToggleText" /> Text</label>
-                </div>
-            }
-
-            <div class="advanced-hint">
-                <span>FTS5 syntax: <code>"exact phrase"</code> | <code>name:term</code> | <code>term1 OR term2</code></span>
-            </div>
-        </div>
-    }
-
-    @if (_resultCount.HasValue && !string.IsNullOrWhiteSpace(_searchQuery))
-    {
-        <div class="search-results-info">
-            <span class="result-count">@_resultCount result@(_resultCount.Value != 1 ? "s" : "")</span>
-            @if (_lastQuery != null)
-            {
-                <span class="query-preview">"@TruncateQuery(_lastQuery, 60)"</span>
-            }
-        </div>
-    }
-
-    @if (_error != null)
-    {
-        <div class="search-error">
-            <span>@_error</span>
-        </div>
-    }
 </div>
 
 @code {
-    private string _searchQuery = string.Empty;
-    private string? _lastQuery;
-    private int? _resultCount;
-    private bool _searching;
-    private bool _showAdvanced;
-    private string? _error;
-
-    // Search configuration
-    private string _searchScope = "all";
-    private string _searchMode = "fts5";
-    private bool _includeName = true;
-    private bool _includeType = true;
-    private bool _includeSet = true;
-    private bool _includeText = true;
-
-    private string _placeholder = "Search cards (FTS5)...";
-
-    [Inject]
-    private ICardSearchService? CardSearch { get; set; }
+    [Parameter]
+    public FilterViewModel FilterViewModel { get; set; } = default!;
 
     [Parameter]
     public EventCallback<string> OnSearchCompleted { get; set; }
 
-    [Parameter]
-    public EventCallback<int> OnResultCountChanged { get; set; }
+    private string _searchQuery = string.Empty;
 
-    [Parameter]
-    public bool InDeckView { get; set; } = false;
-
-    protected override void OnInitialized()
-    {
-        _placeholder = InDeckView ? "Filter deck cards..." : "Search cards (FTS5)...";
-    }
-
-    private async Task ExecuteSearch()
-    {
-        if (string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            OnClear();
-            return;
-        }
-
-        _searching = true;
-        _error = null;
-        StateHasChanged();
-
-        try
-        {
-            var query = BuildQuery();
-
-            if (CardSearch != null)
-            {
-                var results = await CardSearch.SearchAsync(query, 100);
-                _resultCount = results.Count;
-                _lastQuery = query;
-            }
-
-            await OnSearchCompleted.InvokeAsync(_searchQuery);
-            if (OnResultCountChanged.HasDelegate && _resultCount.HasValue)
-                await OnResultCountChanged.InvokeAsync(_resultCount.Value);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _searching = false;
-            StateHasChanged();
-        }
-    }
-
-    private string BuildQuery()
+    /// <summary>Push the current input into the filter channel and trigger a re-query.</summary>
+    private async Task ApplySearch()
     {
         var query = _searchQuery.Trim();
-
-        // If scope is specific, prepend column qualifier for FTS5
-        if (_searchScope != "all" && _searchMode == "fts5")
-        {
-            var column = _searchScope switch
-            {
-                "name" => "name",
-                "type" => "type",
-                "text" => "oracleText",
-                _ => null
-            };
-
-            if (column != null && !query.Contains(':'))
-                query = $"{column}:{query}";
-        }
-
-        return query;
+        if (query.Length == 0) return;
+        FilterViewModel.SearchQuery = query;
+        FilterViewModel.Apply();
+        await OnSearchCompleted.InvokeAsync(query);
     }
 
-    private void OnClear()
+    /// <summary>Remove the FTS filter from the channel and trigger a re-query.</summary>
+    private async Task ClearSearch()
     {
         _searchQuery = string.Empty;
-        _resultCount = null;
-        _lastQuery = null;
-        _error = null;
-        StateHasChanged();
+        if (FilterViewModel.SearchQuery.Length == 0) return;
+        FilterViewModel.SearchQuery = string.Empty;
+        FilterViewModel.Apply();
+        await OnSearchCompleted.InvokeAsync(string.Empty);
     }
 
-    private void ToggleAdvanced()
+    private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        _showAdvanced = !_showAdvanced;
-        StateHasChanged();
-    }
-
-    private void OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && !_searching)
-            _ = ExecuteSearch();
+        if (e.Key == "Enter")
+            await ApplySearch();
         else if (e.Key == "Escape")
-            OnClear();
-    }
-
-    private void ToggleField(string field, ChangeEventArgs e)
-    {
-        var checked_ = (bool)e.Value!;
-        switch (field)
-        {
-            case "name": _includeName = checked_; break;
-            case "type": _includeType = checked_; break;
-            case "set": _includeSet = checked_; break;
-            case "text": _includeText = checked_; break;
-        }
-    }
-
-    private void ToggleName(ChangeEventArgs e) => _includeName = (bool)e.Value!;
-    private void ToggleType(ChangeEventArgs e) => _includeType = (bool)e.Value!;
-    private void ToggleSet(ChangeEventArgs e) => _includeSet = (bool)e.Value!;
-    private void ToggleText(ChangeEventArgs e) => _includeText = (bool)e.Value!;
-
-    private static string TruncateQuery(string query, int maxLen)
-    {
-        return query.Length <= maxLen ? query : query[..(maxLen - 3)] + "...";
+            await ClearSearch();
     }
 }

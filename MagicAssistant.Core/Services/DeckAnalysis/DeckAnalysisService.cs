@@ -1,5 +1,6 @@
 using MagicAssistant.Core.Analysis;
 using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Core.Services.DeckAnalysis;
 
@@ -37,17 +38,20 @@ public class DeckAnalysisService : IDeckAnalysisService
     }
 
     /// <inheritdoc />
-    public async Task<ICollection<CollectorProgressEntry>> GetCollectorProgressAsync(CancellationToken ct = default)
+    public async Task<ICollection<CollectorProgressEntry>> GetCollectorProgressAsync(
+        IReadOnlyCollection<CardSetType>? setTypes = null, CancellationToken ct = default)
     {
         // Single SQL query — replaces: GetEditionsAsync + N×GetBySetAsync + recursive tree walk
-        var rawRows = await _dbStore.GetCollectorProgressRawAsync(ct);
+        var rawRows = await _dbStore.GetCollectorProgressRawAsync(setTypes, ct);
 
         return rawRows.Select(r => new CollectorProgressEntry(
             SetAbbreviation: r.SetAbbreviation,
             SetName: r.SetName ?? r.SetAbbreviation,
             OwnedCards: (int)r.OwnedCards,
             TotalCards: (int)r.TotalCards,
-            ProgressPercent: r.TotalCards > 0 ? (double)r.CollectedCards / r.TotalCards * 100 : 0)).ToList();
+            ProgressPercent: r.TotalCards > 0 ? (double)r.OwnedCards / r.TotalCards * 100 : 0,
+            ReleaseDate: r.ReleaseDate,
+            ParentSetCode: r.ParentSetCode)).ToList();
     }
 
     /// <inheritdoc />
@@ -57,7 +61,7 @@ public class DeckAnalysisService : IDeckAnalysisService
         if (string.IsNullOrEmpty(setAbbreviation))
             throw new ArgumentNullException(nameof(setAbbreviation));
 
-        var rawRows = await _dbStore.GetCollectorProgressRawAsync(ct);
+        var rawRows = await _dbStore.GetCollectorProgressRawAsync(null, ct);
         var row = rawRows.FirstOrDefault(r => r.SetAbbreviation == setAbbreviation);
 
         return row != null ? new CollectorProgressEntry(
@@ -65,6 +69,16 @@ public class DeckAnalysisService : IDeckAnalysisService
             SetName: row.SetName ?? setAbbreviation,
             OwnedCards: (int)row.OwnedCards,
             TotalCards: (int)row.TotalCards,
-            ProgressPercent: row.TotalCards > 0 ? (double)row.CollectedCards / row.TotalCards * 100 : 0) : null;
+            ProgressPercent: row.TotalCards > 0 ? (double)row.OwnedCards / row.TotalCards * 100 : 0,
+            ReleaseDate: row.ReleaseDate,
+            ParentSetCode: row.ParentSetCode) : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(setCode))
+            throw new ArgumentNullException(nameof(setCode));
+        return await _dbStore.GetSetProgressDetailsAsync(setCode, ct);
     }
 }

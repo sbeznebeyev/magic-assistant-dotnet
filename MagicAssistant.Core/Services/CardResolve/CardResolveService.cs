@@ -1,5 +1,6 @@
 using MagicAssistant.Data.Contracts;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 
 namespace MagicAssistant.Core.Services.CardResolve;
 
@@ -26,26 +27,26 @@ public class CardResolveService : ICardResolveService
     /// Resolve card references to KB cards. Expands CardGroup hierarchies first.
     /// Uses batch SQL query (WHERE Id IN @ids) for efficiency — one round-trip instead of N.
     /// </summary>
-    public async Task<ICollection<IMagicCard>> ResolveCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default)
+    public async Task<ICollection<ICard>> ResolveCardsAsync(ICollection<ICard> cards, CancellationToken ct = default)
     {
         if (cards == null || !cards.Any())
-            return Array.Empty<IMagicCard>();
+            return Array.Empty<ICard>();
 
         var expanded = ExpandGroups(cards);
 
         // Collect all unique card IDs for batch lookup
         var ids = expanded
-            .Select(c => c is MagicCard mc ? mc.Id : c.Id)
+            .Select(c => c is Card mc ? mc.Id : c.Id)
             .Distinct()
             .ToList();
 
         if (ids.Count == 0)
-            return Array.Empty<IMagicCard>();
+            return Array.Empty<ICard>();
 
         // Single batch query instead of N individual queries
         var kbMap = await _kb.GetCardsByIdsAsync(ids, ct);
 
-        var output = new List<IMagicCard>(expanded.Count);
+        var output = new List<ICard>(expanded.Count);
         foreach (var card in expanded)
         {
             var resolved = ResolveSingle(card, kbMap);
@@ -56,14 +57,14 @@ public class CardResolveService : ICardResolveService
         return output;
     }
 
-    private static IMagicCard? ResolveSingle(IMagicCard card, Dictionary<Guid, MagicCard> kbMap)
+    private static ICard? ResolveSingle(ICard card, Dictionary<Guid, Card> kbMap)
     {
-        if (card is MagicCard mc)
+        if (card is Card mc)
         {
             return kbMap.TryGetValue(mc.Id, out var kb) ? kb : mc; // fall back to stub
         }
 
-        if (card is MagicCardPhysical mcp)
+        if (card is MyCard mcp)
         {
             if (kbMap.TryGetValue(mcp.Id, out var kb2))
                 mcp.SetBaseCard(kb2);
@@ -79,13 +80,13 @@ public class CardResolveService : ICardResolveService
     /// Borrowed cards → resolve from collection store, filling remaining count.
     /// Single query for all physical cards + O(1) dictionary lookup.
     /// </summary>
-    public async Task<ICollection<MagicCardPhysical>> MaterializeCardsAsync(ICollection<IMagicCard> cards, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> MaterializeCardsAsync(ICollection<ICard> cards, CancellationToken ct = default)
     {
         var expanded = ExpandGroups(cards);
-        var result = new List<MagicCardPhysical>();
+        var result = new List<MyCard>();
 
         // Single query: get ALL physical cards once, group by CardId for O(1) lookup
-        var allCards = (await _coll.GetAllDeckCardsAsync(ct)).Cast<MagicCardPhysical>().ToList();
+        var allCards = (await _coll.GetAllDeckCardsAsync(ct)).Cast<MyCard>().ToList();
         var byCardId = allCards
             .Where(c => c.IsOwn)
             .GroupBy(c => c.Id)
@@ -93,13 +94,13 @@ public class CardResolveService : ICardResolveService
 
         foreach (var card in expanded)
         {
-            if (card is not MagicCardPhysical physical)
+            if (card is not MyCard physical)
                 continue;
 
             if (physical.IsOwn)
             {
-                // Owned → copy with null location
-                result.Add(new MagicCardPhysical(physical.Card, Location.NoWhere, true)
+                // Owned → copy with null collection
+                result.Add(new MyCard(physical.Card, null, true)
                 {
                     Count = physical.Count,
                 });
@@ -116,7 +117,7 @@ public class CardResolveService : ICardResolveService
                         if (remaining <= 0) break;
 
                         var grabCount = Math.Min(candidate.Count, remaining);
-                        result.Add(new MagicCardPhysical(candidate.Card, candidate.Location, true)
+                        result.Add(new MyCard(candidate.Card, candidate.Collection, true)
                         {
                             Count = grabCount,
                         });
@@ -124,10 +125,10 @@ public class CardResolveService : ICardResolveService
                     }
                 }
 
-                // Unresolved → placeholder (borrowed, no location)
+                // Unresolved → placeholder (borrowed, no collection)
                 if (remaining > 0)
                 {
-                    result.Add(new MagicCardPhysical(physical.Card, Location.NoWhere, false)
+                    result.Add(new MyCard(physical.Card, null, false)
                     {
                         Count = remaining,
                     });
@@ -142,14 +143,14 @@ public class CardResolveService : ICardResolveService
     /// Expand CardGroup hierarchies — flatten all nested groups into a flat list.
     /// Synchronous — no I/O involved.
     /// </summary>
-    public ICollection<IMagicCard> ExpandGroups(ICollection<IMagicCard> cards)
+    public ICollection<ICard> ExpandGroups(ICollection<ICard> cards)
     {
-        var result = new List<IMagicCard>(cards.Count);
+        var result = new List<ICard>(cards.Count);
         ExpandRecursive(cards, result);
         return result;
     }
 
-    private static void ExpandRecursive(IEnumerable<IMagicCard> cards, List<IMagicCard> result)
+    private static void ExpandRecursive(IEnumerable<ICard> cards, List<ICard> result)
     {
         foreach (var card in cards)
         {
@@ -164,20 +165,20 @@ public class CardResolveService : ICardResolveService
     /// Returns null if cards have different or no locations.
     /// Synchronous — no I/O involved.
     /// </summary>
-    public Location? GetLocation(ICollection<IMagicCard> cards)
+    public Collection? GetCollection(ICollection<ICard> cards)
     {
         if (cards == null || !cards.Any())
             return null;
 
-        Location? common = null;
+        Collection? common = null;
         foreach (var card in cards)
         {
-            if (card is MagicCardPhysical mcp && !string.IsNullOrEmpty(mcp.Location.Id))
+            if (card is MyCard mcp && mcp.Collection is { Id: > 0 } c)
             {
                 if (common == null)
-                    common = mcp.Location;
-                else if (!common.Equals(mcp.Location))
-                    return null; // different locations
+                    common = c;
+                else if (common.Id != c.Id)
+                    return null; // different collections
             }
             else
             {
@@ -193,22 +194,22 @@ public class CardResolveService : ICardResolveService
     /// Mirrors the old DataManager.MaterializeCardsAsync(deckId, cardIds).
     /// Uses batch resolve for efficiency.
     /// </summary>
-    public async Task<ICollection<MagicCardPhysical>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default)
+    public async Task<ICollection<MyCard>> MaterializeFromIdsAsync(int deckId, ICollection<Guid> cardIds, CancellationToken ct = default)
     {
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
         if (cardIds == null || !cardIds.Any())
-            return Array.Empty<MagicCardPhysical>();
+            return Array.Empty<MyCard>();
 
         // Batch resolve all card IDs in one query
         var kbMap = await _kb.GetCardsByIdsAsync(cardIds.ToList(), ct);
-        var location = Location.FromId(deckId, deckId.ToString(), false);
-        var physicals = new List<MagicCardPhysical>(kbMap.Count);
+        var collection = new Collection(deckId, string.Empty, null, NodeType.Deck, 0);
+        var physicals = new List<MyCard>(kbMap.Count);
 
         foreach (var cardId in cardIds)
         {
             if (kbMap.TryGetValue(cardId, out var card))
-                physicals.Add(new MagicCardPhysical(card, location, true));
+                physicals.Add(new MyCard(card, collection, true));
         }
 
         return physicals;

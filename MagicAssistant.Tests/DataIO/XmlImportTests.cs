@@ -3,7 +3,7 @@ namespace MagicAssistant.Tests.DataIO;
 [TestFixture]
 public class XmlImportTests
 {
-    // Magic Assistant XML format (produced by XmlExport):
+    // Legacy Magic Assistant XML format (old files: Gatherer IDs + full set names):
     // <cards><name>...</name><key>...</key><comment>...</comment><type>...</type>
     //   <list>
     //     <mcp><card><id>..</id><name>..</name><edition>..</edition></card>
@@ -36,9 +36,9 @@ public class XmlImportTests
 
         Assert.That(result.Name, Is.EqualTo("Test Deck"));
         Assert.That(result.Cards, Has.Count.EqualTo(1));
-        Assert.That(result.Cards[0], Is.InstanceOf<MagicCardPhysical>());
+        Assert.That(result.Cards[0], Is.InstanceOf<MyCard>());
 
-        var physical = (MagicCardPhysical)result.Cards[0];
+        var physical = (MyCard)result.Cards[0];
         Assert.That(physical.Card.Name, Is.EqualTo("Lightning Bolt"));
         Assert.That(physical.Card.Id, Is.EqualTo(cardId));
         Assert.That(physical.Card.SetCode, Is.EqualTo("m19"));
@@ -75,10 +75,10 @@ public class XmlImportTests
         var result = XmlImport.ImportFromXml(xml);
 
         Assert.That(result.Cards, Has.Count.EqualTo(2));
-        Assert.That(((MagicCardPhysical)result.Cards[0]).Card.Name, Is.EqualTo("Card 1"));
-        Assert.That(((MagicCardPhysical)result.Cards[1]).Card.Name, Is.EqualTo("Card 2"));
-        Assert.That(((MagicCardPhysical)result.Cards[0]).Count, Is.EqualTo(1));
-        Assert.That(((MagicCardPhysical)result.Cards[1]).Count, Is.EqualTo(2));
+        Assert.That(((MyCard)result.Cards[0]).Card.Name, Is.EqualTo("Card 1"));
+        Assert.That(((MyCard)result.Cards[1]).Card.Name, Is.EqualTo("Card 2"));
+        Assert.That(((MyCard)result.Cards[0]).Count, Is.EqualTo(1));
+        Assert.That(((MyCard)result.Cards[1]).Count, Is.EqualTo(2));
     }
 
     [Test]
@@ -120,9 +120,9 @@ public class XmlImportTests
         var result = XmlImport.ImportFromXml(xml);
 
         Assert.That(result.Cards, Has.Count.EqualTo(1));
-        var physical = (MagicCardPhysical)result.Cards[0];
+        var physical = (MyCard)result.Cards[0];
 
-        Assert.That(physical.Price, Is.EqualTo(5.0f).Within(0.001f),
+        Assert.That(physical.MyPrice, Is.EqualTo(5.0f).Within(0.001f),
             "Price should be parsed from direct <price> element inside <mcp>");
         Assert.That(physical.Comment, Is.EqualTo("My card comment"),
             "Comment should be parsed from direct <comment> element inside <mcp>");
@@ -150,7 +150,7 @@ public class XmlImportTests
 
         Assert.That(result.Name, Is.EqualTo("Deck with & special chars"),
             "XML entity &amp; should be decoded to &");
-        Assert.That(((MagicCardPhysical)result.Cards[0]).Card.Name, Is.EqualTo("Card with \"quotes\""),
+        Assert.That(((MyCard)result.Cards[0]).Card.Name, Is.EqualTo("Card with \"quotes\""),
             "XML entity &quot; should be decoded to \"");
     }
 
@@ -193,8 +193,8 @@ public class XmlImportTests
         // The first list (Card A) is silently lost.
         try
         {
-            Assert.That(result.Cards[0], Is.InstanceOf<MagicCardPhysical>());
-            var firstCardName = ((MagicCardPhysical)result.Cards[0]).Card.Name;
+            Assert.That(result.Cards[0], Is.InstanceOf<MyCard>());
+            var firstCardName = ((MyCard)result.Cards[0]).Card.Name;
 
             if (firstCardName == "Card A")
             {
@@ -222,11 +222,11 @@ public class XmlImportTests
     }
 
     [Test]
-    public void ImportFromFileAsync_ThrowsForNonExistentFile()
+    public async Task ImportFromFileAsync_ThrowsForNonExistentFile()
     {
         // On Linux, non-existent path throws DirectoryNotFoundException.
         // The original test expected FileNotFoundException, but that's incorrect for this platform.
-        var ex = Assert.ThrowsAsync<DirectoryNotFoundException>(
+        var ex = await Assert.ThrowsAsync<DirectoryNotFoundException>(
             () => XmlImport.ImportFromFileAsync("/nonexistent/path/file.xml"));
         Assert.That(ex, Is.Not.Null);
     }
@@ -258,7 +258,7 @@ public class XmlImportTests
 
             Assert.That(result.Name, Is.EqualTo("File Deck"));
             Assert.That(result.Cards, Has.Count.EqualTo(1));
-            Assert.That(((MagicCardPhysical)result.Cards[0]).Card.Name, Is.EqualTo("Card from file"));
+            Assert.That(((MyCard)result.Cards[0]).Card.Name, Is.EqualTo("Card from file"));
         }
         finally
         {

@@ -8,6 +8,7 @@
 @using System.Text
 @inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
 @inject GetUserSettingQueryHandler? GetSettingQueryHandler
+@inject ICardImageLoader ImageLoader
 
 <div class="gallery-container">
     @if (Cards.Count == 0)
@@ -29,6 +30,10 @@
                 <div class="@GetCardClass(card, showBack)"
                      @onclick="@(() => SelectCard(card, cardKey))">
                     <div class="gallery-image-wrap">
+                        @if (Counts != null && Counts.TryGetValue(card.Id, out var count) && count > 1)
+                        {
+                            <span class="count-badge">×@count</span>
+                        }
                         @* ── Tabs area (always present for alignment) ── *@
                         <div class="gallery-tabs-area">
                             @if (isDoubleSided)
@@ -45,15 +50,19 @@
                         </div>
                         @{
                             var imgUrl = ImageHelper.GetImageUrl(card, !showBack);
+                            // Lazy loading: the <img> renders only once the file is on disk;
+                            // otherwise the placeholder shows ⏳ while downloading, 🃏 when failed.
+                            var imageExists = !string.IsNullOrEmpty(imgUrl)
+                                && (!showBack ? ImageLoader.FrontExists(card) : ImageLoader.BackExists(card));
                         }
-                        @if (!string.IsNullOrEmpty(imgUrl))
+                        @if (imageExists)
                         {
                             <img src="@imgUrl" alt="@card.Name" class="gallery-image" loading="lazy" />
                         }
                         else
                         {
                             <div class="gallery-placeholder">
-                                <span class="placeholder-icon">🃏</span>
+                                <span class="placeholder-icon">@(ImageLoader.Failed(card) ? "🃏" : "⏳")</span>
                                 <span class="placeholder-cmc">@card.CmcText</span>
                             </div>
                         }
@@ -98,7 +107,7 @@
 
 @code {
     /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
-    [Parameter] public IReadOnlyList<MagicCard> Cards { get; set; } = Array.Empty<MagicCard>();
+    [Parameter] public IReadOnlyList<Card> Cards { get; set; } = Array.Empty<Card>();
 
     /// <summary>1-based index of the current page.</summary>
     [Parameter] public int CurrentPage { get; set; } = 1;
@@ -112,7 +121,7 @@
     [Parameter] public Guid? SelectedCardId { get; set; }
 
     /// <summary>Card tile (or its side tab) clicked.</summary>
-    [Parameter] public EventCallback<MagicCard> OnCardClicked { get; set; }
+    [Parameter] public EventCallback<Card> OnCardClicked { get; set; }
 
     /// <summary>Card selected together with the currently shown side (front/back).</summary>
     [Parameter] public EventCallback<(Guid cardId, bool showBack)> OnCardSideChanged { get; set; }
@@ -125,6 +134,9 @@
 
     /// <summary>New page size requested by the slider (clamped to 1..150).</summary>
     [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    /// <summary>Copy counts per card Id (location mode). Null = KB mode — no badges.</summary>
+    [Parameter] public Dictionary<Guid, int>? Counts { get; set; }
 
     /// Состояние front/back для каждой карты: true = back, false/missing = front
     private Dictionary<string, bool> _sideState = new();
@@ -143,14 +155,42 @@
         await LoadCardSizeAsync();
     }
 
-    private async Task SelectCard(MagicCard card, string cardKey)
+    protected override void OnParametersSet()
+    {
+        // New page / new cards — kick off lazy image loading in the background.
+        _ = EnsureImagesAsync();
+    }
+
+    /// <summary>
+    /// Lazy image loading for the whole visible page: missing card images are downloaded in
+    /// parallel (one per-card command each, deduplicated by the loader) and the grid re-renders
+    /// progressively as files land. The placeholder state is derived from the loader on render,
+    /// so no per-card bookkeeping is needed here.
+    /// </summary>
+    private async Task EnsureImagesAsync()
+    {
+        var missing = Cards
+            .Where(c => !ImageLoader.FrontExists(c) || (c.Has2Faces && !ImageLoader.BackExists(c)))
+            .ToList();
+
+        if (missing.Count == 0) return;
+
+        var tasks = missing.Select(c => ImageLoader.EnsureAsync(c)).ToList(); // all start at once
+        foreach (var t in tasks)
+        {
+            await t;
+            StateHasChanged(); // progressive reveal as images land
+        }
+    }
+
+    private async Task SelectCard(Card card, string cardKey)
     {
         var showBack = _sideState.GetValueOrDefault<string, bool>(cardKey);
         await OnCardClicked.InvokeAsync(card);
         await OnCardSideChanged.InvokeAsync((card.Id, showBack));
     }
 
-    private async Task ToggleSide(MagicCard card, bool showBack)
+    private async Task ToggleSide(Card card, bool showBack)
     {
         var cardKey = card.Id.ToString();
         if (_sideState.TryGetValue(cardKey, out var current) && current == showBack)
@@ -187,7 +227,7 @@
     }
 
     /// <summary>Composite CSS class for the card tile: selection + side (double-sided only).</summary>
-    private string GetCardClass(MagicCard card, bool showBack)
+    private string GetCardClass(Card card, bool showBack)
     {
         var cls = new StringBuilder("gallery-card");
         if (SelectedCardId == card.Id) cls.Append(" selected");

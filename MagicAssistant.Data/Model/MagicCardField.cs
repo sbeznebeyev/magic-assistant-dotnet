@@ -20,11 +20,6 @@ public enum MagicCardField
     CollectorNumber,
     Cmc,
     ColorType,
-    Text,
-    Side,
-    DbPrice,
-    CommunityRating,
-    EnglishName,
     Edition,
 
     // === Extended base fields (stored as properties) ===
@@ -33,7 +28,6 @@ public enum MagicCardField
     SetCore,
     SetRelease,
     Sideboard,
-    UniqueCount,
     Size,
     Legality,
     Colors,
@@ -44,18 +38,17 @@ public enum MagicCardField
     Count,
     IsOwn,
     Location,
-    Price,
     Comment,
-    Special,
     DateAdded,
-    Custom,
+    MyPrice,
     ForTradeCount,
+
+    // Appended after ForTradeCount so existing numeric values stay stable;
+    // the IsPhysical() range must be extended accordingly.
+    Grade,
 
     // === Derived/computed fields ===
     OwnCount,
-    OwnTotal,
-    OwnTotalAll,
-    OwnUnique,
     CreatureCount,
     Count4,
     PercentComplete,

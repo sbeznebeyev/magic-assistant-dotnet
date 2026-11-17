@@ -2,7 +2,7 @@ using MagicAssistant.Data.Model;
 
 namespace MagicAssistant.Data.Contracts;
 
-public interface ICardStore<T> where T : IMagicCard
+public interface ICardStore<T> where T : ICard
 {
     Task InitializeAsync(CancellationToken ct = default);
     Task<bool> AddAsync(T card, CancellationToken ct = default);
@@ -25,9 +25,4 @@ public interface ICardStore<T> where T : IMagicCard
         return all.Take(limit).ToList();
     }
 
-    /// <summary>
-    /// Bulk update OwnCount/OwnTotal/OwnUnique properties on base cards in KB.
-    /// Default: no-op (override in concrete stores that need it).
-    /// </summary>
-    Task BulkUpdateOwnCountAsync(ICollection<OwnCountStats> stats, CancellationToken ct = default) => Task.CompletedTask;
 }

@@ -1,6 +1,8 @@
 using System.Xml;
 using MagicAssistant.Data.Contracts;
+using MagicAssistant.Data.IO;
 using MagicAssistant.Data.Model;
+using MagicAssistant.Data.Model.NavigatorNodes;
 namespace MagicAssistant.Data.IO.xml;
 
 /// <summary>
@@ -73,9 +75,9 @@ public static class XmlImport
         }
     }
 
-    static List<IMagicCard> ReadCardList(XmlReader reader)
+    static List<ICard> ReadCardList(XmlReader reader)
     {
-        var cards = new List<IMagicCard>();
+        var cards = new List<ICard>();
 
         while (reader.Read())
         {
@@ -97,7 +99,7 @@ public static class XmlImport
         return cards;
     }
 
-    static MagicCardPhysical ReadMagicCardPhysical(XmlReader reader)
+    static MyCard ReadMagicCardPhysical(XmlReader reader)
     {
         // Collect all field values, then construct the object
         var fields = new Dictionary<string, string?>();
@@ -127,36 +129,52 @@ public static class XmlImport
         }
 
     Build:
-        var baseCard = new MagicCard
+        var baseCard = new Card
         {
-            Id = Guid.Parse(fields.GetValueOrDefault("id") ?? throw new ArgumentNullException("id")),
+            Id = ParseCardId(fields.GetValueOrDefault("id")),
             Name = fields.GetValueOrDefault("name") ?? string.Empty,
             SetCode = fields.GetValueOrDefault("edition")?.ToLowerInvariant(),
         };
 
-        var physical = new MagicCardPhysical(baseCard) { IsOwn = true };
+        var physical = new MyCard(baseCard) { IsOwn = true };
 
         if (int.TryParse(fields.GetValueOrDefault("count"), out var count))
             physical.Count = count;
         if (float.TryParse(fields.GetValueOrDefault("price"), System.Globalization.CultureInfo.InvariantCulture, out var price))
-            physical.Price = price;
+            physical.MyPrice = price;
         physical.Comment = OptStr(fields, "comment");
-        physical.Custom = OptStr(fields, "custom");
         if (bool.TryParse(fields.GetValueOrDefault("ownership"), out var isOwn))
             physical.IsOwn = isOwn;
-        physical.SpecialTags = OptStr(fields, "special");
+        // Legacy bridge: a "fortrade" tag in "special" marks the whole pile as for trade
+        var specialTags = OptStr(fields, "special");
+        if (!string.IsNullOrEmpty(specialTags) &&
+            specialTags.Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries).Contains("fortrade"))
+            physical.SetForTradeCount(physical.Count);
         if (DateTimeOffset.TryParse(fields.GetValueOrDefault("date"), System.Globalization.CultureInfo.InvariantCulture, out var date))
             physical.DateAdded = date;
         var ftVal = fields.GetValueOrDefault("forTrade") ?? fields.GetValueOrDefault("fortradecount");
         if (int.TryParse(ftVal, out var ft) && ft > 0)
             physical.SetForTradeCount(ft);
         var loc = fields.GetValueOrDefault("location");
-        if (!string.IsNullOrEmpty(loc))
-            physical.Location = Location.ValueOf(loc);
+        if (int.TryParse(loc, out var locId) && locId > 0)
+            physical.Collection = new Collection(locId, string.Empty, null, NodeType.Deck, 0);
 
         return physical;
     }
         
+    /// <summary>
+    /// Parses the card id from XML.
+    /// Modern files contain Scryfall UUIDs; legacy files contain integer Gatherer IDs
+    /// which are not valid GUIDs — they get Guid.Empty as a placeholder and are replaced
+    /// with real Scryfall UUIDs by knowledge-base resolution before import.
+    /// </summary>
+    static Guid ParseCardId(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new ArgumentNullException("id", "Card <id> element is required.");
+        return Guid.TryParse(raw, out var guid) ? guid : Guid.Empty;
+    }
+
     /// <summary>
     /// Reads text content of a simple element. Caller positioned on start element.
     /// After call, reader is on the end element.
@@ -179,14 +197,5 @@ public static class XmlImport
     {
         var val = fields.GetValueOrDefault(key);
         return string.IsNullOrWhiteSpace(val) ? null : val;
-    }
-
-    public class CardCollectionImportResult
-    {
-        public string Name { get; set; } = string.Empty;
-        public string? Key { get; set; }
-        public string? Comment { get; set; }
-        public string? Type { get; set; }
-        public List<IMagicCard> Cards { get; set; } = new();
     }
 }

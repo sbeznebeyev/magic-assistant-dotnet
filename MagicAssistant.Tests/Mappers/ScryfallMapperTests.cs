@@ -96,31 +96,6 @@ public class ScryfallMapperTests
         Assert.That(card.ImageUris?.Normal, Is.EqualTo("https://example.com/card.png"));
     }
 
-    [Test]
-    public void ToMagicCard_SetsSide()
-    {
-        var dto = new ScryfallCardDto
-        {
-            Id = Guid.NewGuid(),
-            Name = "Test",
-            Side = 1,
-        };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.Side, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void ToMagicCard_NullSide_DefaultsToZero()
-    {
-        var dto = new ScryfallCardDto { Id = Guid.NewGuid(), Name = "Test" };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.Side, Is.EqualTo(0));
-    }
-
     // ─── ToEdition ─────────────────────────────────────────
 
     [Test]
@@ -147,7 +122,7 @@ public class ScryfallMapperTests
 
         Assert.That(edition.SetCode, Is.EqualTo("m19"));
         Assert.That(edition.Name, Is.EqualTo("Magic 2019"));
-        Assert.That(edition.SetType, Is.EqualTo("core"));
+        Assert.That(edition.SetType, Is.EqualTo(CardSetType.core));
         Assert.That(edition.CardCount, Is.EqualTo(269));
         Assert.That(edition.Id, Is.EqualTo(cardId));
     }
@@ -182,58 +157,6 @@ public class ScryfallMapperTests
         Assert.That(edition.ReleaseDate, Is.EqualTo(new DateTime(2018, 7, 13)),
             "BUG in ScryfallMapper.ToEdition: ReleasedAt parsed but not assigned to Edition.ReleaseDate. " +
             "The local variable 'date' is discarded after parsing.");
-    }
-
-    // ─── ParseCollectorNumberId ────────────────────────────
-
-    [Test]
-    public void ToMagicCard_ParsesCollectorNumberNumeric()
-    {
-        var dto = new ScryfallCardDto { Id = Guid.NewGuid(), Name = "Test", CollectorNumber = "42" };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.CollectorNumberId, Is.EqualTo(42));
-    }
-
-    [Test]
-    public void ToMagicCard_ParsesCollectorNumberWithSide()
-    {
-        var dto = new ScryfallCardDto { Id = Guid.NewGuid(), Name = "Test", CollectorNumber = "42a" };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.CollectorNumberId, Is.EqualTo(42));
-    }
-
-    [Test]
-    public void ToMagicCard_ParsesCollectorNumberSlash()
-    {
-        var dto = new ScryfallCardDto { Id = Guid.NewGuid(), Name = "Test", CollectorNumber = "1/234" };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.CollectorNumberId, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void ToMagicCard_ParsesCollectorNumberLetterPrefix()
-    {
-        var dto = new ScryfallCardDto { Id = Guid.NewGuid(), Name = "Test", CollectorNumber = "A5" };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.CollectorNumberId, Is.EqualTo(5));
-    }
-
-    [Test]
-    public void ToMagicCard_NullCollectorNumber_ReturnsZero()
-    {
-        var dto = new ScryfallCardDto { Id = Guid.NewGuid(), Name = "Test" };
-
-        var card = ScryfallMapper.ToMagicCard(dto);
-
-        Assert.That(card.CollectorNumberId, Is.EqualTo(0));
     }
 
     // ─── All Formats ──────────────────────────────────────

@@ -25,6 +25,7 @@
     border-right: 1px solid #3c3c3c;
     background: rgba(20, 20, 20, 0.6);
     overflow: hidden;
+    position: relative;  /* anchor for the collapsed-strip badge label */
 }
 
 .sets-header {
@@ -39,6 +40,87 @@
     font-size: 12px;
     font-weight: 600;
     color: #ccc;
+}
+
+/* Collapse toggle — right side of sets-header (mirrors MainLayout .panel-toggle) */
+.sets-toggle {
+    margin-left: auto;  /* push to the header's right edge */
+    width: 16px;
+    height: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #3c3c3c;
+    border: 1px solid #555;
+    /* same one-sided rounding as .panel-toggle.left: rounded toward the panel content, flat at the outer edge */
+    border-radius: 3px 0 0 3px;
+    color: #ccc;
+    font-size: 13px;  /* same glyph size as .panel-toggle — keeps the < > optical center on par with it */
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* The < > glyph sits slightly below the em-box center at this size — nudge up to optical center */
+.sets-toggle .sets-toggle-glyph {
+    transform: translateY(-1px);
+}
+
+.sets-toggle:hover {
+    background-color: #0078d4;
+    border-color: #0078d4;
+    color: #fff;
+}
+
+/* Collapsed strip (28px): only the toggle button and the badge label stay visible */
+.sets-sidebar.collapsed {
+    min-width: 28px;
+    max-width: 28px;
+}
+
+/* Vertical badge label in the collapsed strip — same gold-technology as the sideboard tag:
+   gradient text via background-clip, soft glow, pill border, small caps with letter-spacing.
+   writing-mode sizes the box to the text, so `top` pins the visual top edge deterministically. */
+.sets-label {
+    display: none;  /* shown only when the sidebar is collapsed */
+    position: absolute;
+    top: 12px;      /* the strip has no button anymore — the badge anchors near the top edge */
+    left: 50%;
+    white-space: nowrap;
+    padding: 6px 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1;
+    background: linear-gradient(135deg, #ffe9a3 0%, #ffd700 45%, #e6a817 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.35));
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    border-radius: 999px;
+    cursor: pointer;  /* clicking the badge expands the sidebar */
+}
+
+/* 90° counterclockwise — reads bottom-to-top (vertical-rl + 180° flip) */
+.sets-sidebar.collapsed .sets-label {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: translateX(-50%) rotate(180deg);
+}
+
+.sets-sidebar.collapsed .sets-header {
+    padding: 6px 5px;  /* 28px − 10px = 18px ≥ button 16px + border */
+    border-bottom: none;
+}
+
+.sets-sidebar.collapsed .sets-title,
+.sets-sidebar.collapsed .sets-search-bar,
+.sets-sidebar.collapsed .sets-list-wrapper {
+    display: none;
 }
 
 .sets-search-bar {
@@ -144,7 +226,7 @@
     cursor: pointer;
     font-size: 14px;
     color: #bbb;
-    border-left: 2px solid transparent;
+    border-left: 3px solid transparent;
 }
 
 .set-item:hover {
@@ -152,10 +234,16 @@
     color: #eee;
 }
 
+/* Single selection — gold accent matching the ContextStrip theme */
 .set-item.selected {
-    background: rgba(0, 120, 212, 0.15);
-    border-left-color: #0078d4;
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.30) 0%, rgba(255, 215, 0, 0.08) 100%);
+    border-left-color: #ffd700;
     color: #fff;
+    font-weight: 600;
+}
+
+.set-item.selected .set-name {
+    color: #ffd700;
 }
 
 .set-item.empty {
@@ -258,7 +346,7 @@
     color: #ccc;
 }
 
-/* ── Toolbar Row (3 sections: name filter | sort | filters) ── */
+/* ── Toolbar Row (name filter | view mode | filters) ── */
 .toolbar-row {
     display: flex;
     align-items: center;
@@ -267,42 +355,7 @@
     flex-shrink: 0;
 }
 
-/* ── Sort Area ──────────────────────────────────────── */
-.sort-area {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.sort-label {
-    font-size: 11px;
-    color: #666;
-    margin-right: 4px;
-}
-
-.sort-btn {
-    background: #2d2d2d;
-    border: 1px solid #444;
-    color: #999;
-    padding: 2px 8px;
-    border-radius: 3px;
-    font-size: 11px;
-    cursor: pointer;
-}
-
-.sort-btn:hover {
-    background: #3c3c3c;
-    color: #ccc;
-}
-
-.sort-btn.active {
-    background: rgba(0, 120, 212, 0.2);
-    border-color: #0078d4;
-    color: #0078d4;
-}
-
-/* ── View Mode Area (list / gallery toggle) — same style as sort buttons ── */
+/* ── View Mode Area (list / gallery toggle) ── */
 .view-mode-area {
     display: flex;
     align-items: center;
@@ -373,8 +426,12 @@
     transition: all 0.15s ease;
 }
 
-.clear-filters-btn:hover {
+.clear-filters-btn:hover:not(:disabled) {
     background: rgba(120, 30, 30, 0.15);
+}
+
+.clear-filters-btn:disabled {
+    cursor: default;
 }
 
 .clear-filters-btn.active {

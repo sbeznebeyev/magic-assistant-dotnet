@@ -1,3 +1,4 @@
+using MagicAssistant.Data.Model;
 using Dapper;
 using MagicAssistant.Data.Model.NavigatorNodes;
 using Microsoft.Data.Sqlite;
@@ -150,7 +151,7 @@ public class SqliteCollectionStoreTests
             "SELECT Id, Name, ParentId, NodeType, Locked FROM Collection WHERE ParentId = @DeckId AND NodeType = 3",
             new { DeckId = deck.Id })).ToList();
         Assert.That(sbRows, Has.Count.EqualTo(1), "Sideboard child should exist");
-        Assert.That(sbRows[0].Name, Is.EqualTo("New Name (Sideboard)"));
+        Assert.That(sbRows[0].Name, Is.EqualTo("New Name (sb)"));
     }
 
     [Test]
@@ -184,8 +185,8 @@ public class SqliteCollectionStoreTests
     public async Task AddAsync_AddsCardToDeck()
     {
         var deck = await _store.CreateDeckAsync("Test Deck");
-        var card = new MagicCard { Id = _scryfall_id_1, Name = "Lightning Bolt" };
-        var physical = new MagicCardPhysical(card, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
+        var card = new Card { Id = _scryfall_id_1, Name = "Lightning Bolt" };
+        var physical = new MyCard(card, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
 
         await _store.AddAsync(physical);
 
@@ -199,8 +200,8 @@ public class SqliteCollectionStoreTests
         var deck = await _store.CreateDeckAsync("Test Deck");
         var cards = new[]
         {
-            new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 },
-            new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 },
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
+            new MyCard(new Card { Id = _id_2, Name = "Card 2" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
         };
 
         await _store.AddAllAsync(cards);
@@ -213,8 +214,8 @@ public class SqliteCollectionStoreTests
     public async Task AddAllAsync_MergesDuplicateCards()
     {
         var deck = await _store.CreateDeckAsync("Test Deck");
-        var card1 = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Same Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
-        var card2 = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Same Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 };
+        var card1 = new MyCard(new Card { Id = _id_1, Name = "Same Card" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
+        var card2 = new MyCard(new Card { Id = _id_1, Name = "Same Card" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 };
 
         await _store.AddAllAsync(new[] { card1 });
         await _store.AddAllAsync(new[] { card2 });
@@ -228,7 +229,7 @@ public class SqliteCollectionStoreTests
     public async Task RemoveAsync_RemovesCard()
     {
         var deck = await _store.CreateDeckAsync("Test Deck");
-        var card = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
+        var card = new MyCard(new Card { Id = _id_1, Name = "Card" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
 
         await _store.AddAsync(card);
         await _store.RemoveAsync(card);
@@ -238,10 +239,76 @@ public class SqliteCollectionStoreTests
     }
 
     [Test]
+    public async Task RemoveCardsAsync_EmptyList_ClearsAllCards_ReturnsTotalCopies()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        await _store.AddAllAsync(new[]
+        {
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MyCard(new Card { Id = _id_2, Name = "Card 2" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 3 },
+        });
+
+        var removed = await _store.RemoveCardsAsync(deck.Id, Array.Empty<Guid>());
+
+        Assert.That(removed, Is.EqualTo(5), "SUM(Count) — общее число копий, а не количество строк");
+        Assert.That(await _store.GetDeckCardsAsync(deck.Id), Is.Empty);
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_WithCardIds_RemovesAllCopiesOfListedOnly()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        await _store.AddAllAsync(new[]
+        {
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MyCard(new Card { Id = _id_2, Name = "Card 2" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 3 },
+        });
+
+        var removed = await _store.RemoveCardsAsync(deck.Id, new[] { _id_1 });
+
+        Assert.That(removed, Is.EqualTo(2));
+        var rest = await _store.GetDeckCardsAsync(deck.Id);
+        Assert.That(rest, Has.Count.EqualTo(1));
+        Assert.That(rest.First().Card.Id, Is.EqualTo(_id_2), "Неперечисленная карта не тронута");
+        Assert.That(rest.First().Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_UnknownCardId_ReturnsZero()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        await _store.AddAsync(new MyCard(new Card { Id = _id_1, Name = "Card" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 });
+
+        var removed = await _store.RemoveCardsAsync(deck.Id, new[] { Guid.NewGuid() });
+
+        Assert.That(removed, Is.EqualTo(0));
+        Assert.That(await _store.GetDeckCardsAsync(deck.Id), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_LockedNode_Throws_CardsKept()
+    {
+        var deck = await _store.CreateDeckAsync("Locked Deck");
+        await _store.AddAsync(new MyCard(new Card { Id = _id_1, Name = "Card" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 });
+        await _store.LockAsync(deck.Id);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(deck.Id, Array.Empty<Guid>()));
+        Assert.That(ex!.Message, Does.Contain("locked"));
+        Assert.That(await _store.GetDeckCardsAsync(deck.Id), Has.Count.EqualTo(1), "Карты не удалены");
+    }
+
+    [Test]
+    public async Task RemoveCardsAsync_NodeNotFound_Throws()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await _store.RemoveCardsAsync(9999, Array.Empty<Guid>()));
+        Assert.That(ex!.Message, Does.Contain("not found"));
+    }
+
+    [Test]
     public async Task UpdateAsync_UpdatesCardCount()
     {
         var deck = await _store.CreateDeckAsync("Test Deck");
-        var card = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
+        var card = new MyCard(new Card { Id = _id_1, Name = "Card" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
 
         await _store.AddAsync(card);
         card.Count = 4;
@@ -251,29 +318,6 @@ public class SqliteCollectionStoreTests
         Assert.That(result.Count, Is.EqualTo(4));
     }
 
-    [Test]
-    public async Task GetOwnCountStatsAsync_ReturnsCorrectStats_ForOwnedCards()
-    {
-        var deck = await _store.CreateDeckAsync("Test Deck");
-        var card1 = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 2 };
-        var card2 = new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
-
-        await _store.AddAllAsync(new[] { card1, card2 });
-
-        var stats = await _store.GetOwnCountStatsAsync();
-
-        Assert.That(stats, Has.Count.EqualTo(2));
-
-        // card1: IsOwn=true, Count=2 → OwnCount=2, TotalCount=2, OwnUnique=1 (1 distinct deck)
-        Assert.That(stats[_id_1].OwnCount, Is.EqualTo(2), "Owned copies of id-1 should be 2");
-        Assert.That(stats[_id_1].TotalCount, Is.EqualTo(2), "Total copies of id-1 should be 2");
-        Assert.That(stats[_id_1].OwnUnique, Is.EqualTo(1), "id-1 is owned in 1 distinct deck");
-
-        // card2: IsOwn=true, Count=1 → OwnCount=1, TotalCount=1, OwnUnique=1 (1 distinct deck)
-        Assert.That(stats[_id_2].OwnCount, Is.EqualTo(1), "Owned copies of id-2 should be 1");
-        Assert.That(stats[_id_2].TotalCount, Is.EqualTo(1), "Total copies of id-2 should be 1");
-        Assert.That(stats[_id_2].OwnUnique, Is.EqualTo(1), "id-2 is owned in 1 distinct deck");
-    }
 
     [Test]
     public async Task GetDeckWithSideboardAsync_IncludesSideboardCards()
@@ -289,8 +333,8 @@ public class SqliteCollectionStoreTests
             Assert.That(sbRows, Has.Count.EqualTo(1));
 
             var sbId = sbRows[0].Id;
-            var mainCard = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Main" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
-            var sbCard = new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Sideboard" }, Location.FromId(sbId, "Sideboard", true), true) { Count = 1 };
+            var mainCard = new MyCard(new Card { Id = _id_1, Name = "Main" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
+            var sbCard = new MyCard(new Card { Id = _id_2, Name = "Sideboard" }, new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), true) { Count = 1 };
 
             await _store.AddAsync(mainCard);
             await _store.AddAsync(sbCard);
@@ -299,6 +343,28 @@ public class SqliteCollectionStoreTests
         var cards = await _store.GetDeckWithSideboardAsync(deck.Id);
 
         Assert.That(cards, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task GetDeckWithSideboardAsync_PropagatesCmcNumberFromCardsTable()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            // Seed stubs have CmcNumber NULL — set a known value so the Deck→Cards join can carry it.
+            await conn.ExecuteAsync(
+                "UPDATE Cards SET CmcNumber = @Cmc, ManaCost = @Cost WHERE Id = @Id",
+                new { Cmc = 3, Cost = "{2}{R}", Id = _id_1 });
+
+            var card = new MyCard(new Card { Id = _id_1, Name = "Main" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 4 };
+            await _store.AddAsync(card);
+        }
+
+        var cards = await _store.GetDeckWithSideboardAsync(deck.Id);
+
+        Assert.That(cards, Has.Count.EqualTo(1));
+        Assert.That(cards.First().Card.CmcNumber, Is.EqualTo(3), "CmcNumber must survive the Deck→Cards join (mana curve depends on it)");
     }
 
     [Test]
@@ -319,8 +385,8 @@ public class SqliteCollectionStoreTests
 
         // CardId "id-1" is seeded in Cards table; GetDeckCardsAsync does LEFT JOIN
         // and returns card info from the Cards table, NOT from the MagicCard object.
-        var mainCard = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Main" }, Location.FromId(deck.Id, deck.Name, false), true) { Count = 1 };
-        var sbCard = new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Sideboard" }, Location.FromId(sbId, "Sideboard", true), true) { Count = 1 };
+        var mainCard = new MyCard(new Card { Id = _id_1, Name = "Main" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 };
+        var sbCard = new MyCard(new Card { Id = _id_2, Name = "Sideboard" }, new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), true) { Count = 1 };
 
         await _store.AddAsync(mainCard);
         await _store.AddAsync(sbCard);
@@ -333,13 +399,90 @@ public class SqliteCollectionStoreTests
     }
 
     [Test]
+    public async Task GetCardCountsAsync_SumsCountsForRequestedCardsOnly()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+
+        // card1 ×3 (merged across two rows), card2 ×2 — request only card1 + an absent card
+        await _store.AddAllAsync(new[]
+        {
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MyCard(new Card { Id = _id_2, Name = "Card 2" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+        });
+
+        var result = await _store.GetCardCountsAsync(new[] { deck.Id }, new[] { _id_1, _scryfall_id_1 });
+
+        Assert.That(result, Has.Count.EqualTo(1), "Only requested cards present in the collection should be returned");
+        Assert.That(result[(deck.Id, _id_1)], Is.EqualTo(3), "Counts of merged duplicate rows must be summed");
+    }
+
+    [Test]
+    public async Task GetCardCountsAsync_ReturnsEmpty_ForEmptyIdList()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+
+        Assert.That(await _store.GetCardCountsAsync(new[] { deck.Id }, Array.Empty<Guid>()), Is.Empty);
+        Assert.That(await _store.GetCardCountsAsync(Array.Empty<int>(), new[] { _id_1 }), Is.Empty);
+    }
+
+    [Test]
+    public async Task GetCardCountsAsync_ReturnsPerCollectionTotals_ForMultipleCollections()
+    {
+        var deck1 = await _store.CreateDeckAsync("Deck 1");
+        var deck2 = await _store.CreateDeckAsync("Deck 2");
+
+        // Same card in both decks with different counts + a card only in deck1
+        await _store.AddAllAsync(new[]
+        {
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck1.Id, deck1.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck2.Id, deck2.Name, null, NodeType.Deck, 0), true) { Count = 5 },
+            new MyCard(new Card { Id = _id_2, Name = "Card 2" }, new Collection(deck1.Id, deck1.Name, null, NodeType.Deck, 0), true) { Count = 1 },
+        });
+
+        var result = await _store.GetCardCountsAsync(new[] { deck1.Id, deck2.Id }, new[] { _id_1, _id_2 });
+
+        Assert.That(result[(deck1.Id, _id_1)], Is.EqualTo(2));
+        Assert.That(result[(deck2.Id, _id_1)], Is.EqualTo(5), "Per-collection totals must not be merged across collections");
+        Assert.That(result[(deck1.Id, _id_2)], Is.EqualTo(1));
+        Assert.That(result.ContainsKey((deck2.Id, _id_2)), Is.False, "Card absent from deck2 must have no key");
+    }
+
+    [Test]
+    public async Task GetCardCountsAsync_ExcludesSideboardRows()
+    {
+        var deck = await _store.CreateDeckAsync("Test Deck");
+        // Find sideboard node (query directly — GetChildrenAsync filters out sideboards)
+        int sbId;
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            var sbRows = (await conn.QueryAsync<int>(
+                "SELECT Id FROM Collection WHERE ParentId = @DeckId AND NodeType = 3",
+                new { DeckId = deck.Id })).ToList();
+            Assert.That(sbRows, Has.Count.EqualTo(1));
+            sbId = sbRows[0];
+        }
+
+        var mainCard = new MyCard(new Card { Id = _id_1, Name = "Main" }, new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 };
+        var sbCard = new MyCard(new Card { Id = _id_1, Name = "Main" }, new Collection(sbId, "Sideboard", null, NodeType.Sideboard, 0), true) { Count = 5 };
+
+        await _store.AddAsync(mainCard);
+        await _store.AddAsync(sbCard);
+
+        var result = await _store.GetCardCountsAsync(new[] { deck.Id }, new[] { _id_1 });
+
+        Assert.That(result[(deck.Id, _id_1)], Is.EqualTo(2), "Sideboard rows must be excluded — same as GetDeckCardsAsync");
+    }
+
+    [Test]
     public async Task GetAllAsync_ReturnsAllPhysicalCards()
     {
         var deck1 = await _store.CreateDeckAsync("Deck 1");
         var deck2 = await _store.CreateDeckAsync("Deck 2");
         
-        var card1 = new MagicCardPhysical(new MagicCard { Id = _id_1, Name = "Card 1" }, Location.FromId(deck1.Id), true) { Count = 1 };
-        var card2 = new MagicCardPhysical(new MagicCard { Id = _id_2, Name = "Card 2" }, Location.FromId(deck2.Id), true) { Count = 1 };
+        var card1 = new MyCard(new Card { Id = _id_1, Name = "Card 1" }, new Collection(deck1.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 };
+        var card2 = new MyCard(new Card { Id = _id_2, Name = "Card 2" }, new Collection(deck2.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 };
 
         await _store.AddAsync(card1);
         await _store.AddAsync(card2);
@@ -355,8 +498,8 @@ public class SqliteCollectionStoreTests
         var deck1 = await _store.CreateDeckAsync("Deck 1");
         var deck2 = await _store.CreateDeckAsync("Deck 2");
         
-        var card1 = new MagicCardPhysical(new MagicCard { Id = _same_id, Name = "Same" }, Location.FromId(deck1.Id), true) { Count = 1 };
-        var card2 = new MagicCardPhysical(new MagicCard { Id = _same_id, Name = "Same" }, Location.FromId(deck2.Id), true) { Count = 1 };
+        var card1 = new MyCard(new Card { Id = _same_id, Name = "Same" }, new Collection(deck1.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 };
+        var card2 = new MyCard(new Card { Id = _same_id, Name = "Same" }, new Collection(deck2.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 };
 
         await _store.AddAsync(card1);
         await _store.AddAsync(card2);
@@ -374,7 +517,7 @@ public class SqliteCollectionStoreTests
         var deck2 = await _store.CreateDeckAsync("Deck 2", parent.Id);
 
         // Add cards to deck1
-        var card = new MagicCardPhysical(new MagicCard { Id = _id_1 }, Location.FromId(deck1.Id), true) { Count = 1 };
+        var card = new MyCard(new Card { Id = _id_1 }, new Collection(deck1.Id, string.Empty, null, NodeType.Deck, 0), true) { Count = 1 };
         await _store.AddAsync(card);
 
         var children = (await _store.GetChildrenAsync(parent.Id)).ToList();

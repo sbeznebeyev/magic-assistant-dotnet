@@ -1,69 +1,442 @@
 @*
-    CollectorView — Трекер коллекции по сетам
-    Аналог Java: ui.views.collector.CollectorView, ProgressColumn, Progress4Column
-    
-    Показывает прогресс сбора каждого сета: собрано X из Y карт
-    с визуальным прогресс-баром
+    CollectorView — set collection tracker (Showcase mode)
+
+    Two-panel layout: left — a single toolbar row (set search, set type filter,
+    sort dropdown), then two set nodes (in-collection / not-started);
+    right — fixed 360px reserved panel. The selected sort mode and the set
+    type filter are persisted in user settings and restored on page entry. The search narrows both lists in memory
+    (2+ chars, name or set code) — same pattern as the CardsListControl
+    sidebar, but the data source is the DB result (_progress).
+    Each node has a collapsible header; its list flows set elements
+    left-to-right, top-to-bottom. A set element = 32×32 set symbol
+    (.set-symbol-<setCode>) with an optional progress bar below
+    (in-collection node only).
 *@
 
-<div class="section-header">Collector's Progress</div>
-
-<div style="padding: 4px;">
-    @if (_progress != null && _progress.Any())
-    {
-        <table class="card-table">
-            <thead>
-                <tr>
-                    <th>Set</th>
-                    <th>Collected</th>
-                    <th>Total</th>
-                    <th>Progress</th>
-                    <th>4x</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in _progress)
+<div class="collector-view">
+    <div class="collector-main">
+        @* ── Royal toolbar: search · set-type filter · sort — gold hairline over a dark gradient ground ── *@
+        <div class="toolbar">
+            <div class="set-search-bar">
+                <span class="set-search-glyph" aria-hidden="true">⌕</span>
+                <input value="@_setsSearchQuery"
+                       @oninput="OnSetSearchInput"
+                       placeholder="Filter sets..."
+                       class="set-search-input" />
+                @if (IsSetSearchActive)
                 {
-                    <tr>
-                        <td>@item.SetName</td>
-                        <td>@item.OwnedCards</td>
-                        <td>@item.TotalCards</td>
-                        <td>
-                            <div style="background:#333; height:12px; border-radius:2px; overflow:hidden;">
-                                <div style="background:#0078d4; height:100%; width:@(item.ProgressPercent)%"></div>
-                            </div>
-                            @item.ProgressPercent.ToString("F0")%
-                        </td>
-                        <td>—</td>
-                    </tr>
+                    <button class="set-clear-btn" @onclick="ClearSetSearch" title="Clear filter">✕</button>
                 }
-            </tbody>
-        </table>
-    }
-    else
-    {
-        <div style="color:#666; text-align:center; padding:20px 0;">
-            No collector data loaded.<br/>
-            Sync sets from Scryfall to track progress.
+            </div>
+
+            @* Set type filter — toggle dialog; pressed types narrow the DB query (WHERE SetType IN (...)) *@
+            <button class="set-type-filter-btn @(_typeFilter is { Count: > 0 } ? "active" : "")"
+                    @onclick="OpenTypeFilterDialog"
+                    title="Filter sets by type">Type Filter</button>
+
+            <span class="sort-label">Sort</span>
+            <span class="sort-field">
+                <select class="sort-select" value="@_sortMode.ToString()" @onchange="OnSortModeChanged">
+                    <option value="@nameof(SortMode.NewestFirst)">newest to oldest</option>
+                    <option value="@nameof(SortMode.ProgressionDesc)">progression desc</option>
+                </select>
+                <span class="sort-chevron" aria-hidden="true">▾</span>
+            </span>
         </div>
-    }
+
+        @* ── Top node: sets with at least one owned card ── *@
+        <div class="set-node @(_collectedCollapsed ? "collapsed" : "")">
+            <div class="node-header" @onclick="ToggleCollectedNode">
+                <span class="node-toggle-glyph">@(_collectedCollapsed ? "▸" : "▾")</span>
+                <span class="node-title">In collection (@_collected.Count)</span>
+            </div>
+            @if (!_collectedCollapsed)
+            {
+                <div class="node-body">
+                    @if (IsSetSearchActive && _collected.Count == 0)
+                    {
+                        <div class="set-list-empty">No sets found</div>
+                    }
+                    <div class="set-list">
+                        @foreach (var item in _collected)
+                        {
+                            <div class="set-item @(_selectedSetCode == item.SetAbbreviation ? "selected" : "")" @onclick="() => SelectSet(item.SetAbbreviation)">
+                                <span class="set-symbol set-symbol-@item.SetAbbreviation" title="@SetTooltip(item)"></span>
+                                <div class="item-progress">
+                                    <div class="progress-fill" style="width: @BarWidthPct(item.ProgressPercent)%"></div>
+                                    <span class="progress-label">@item.ProgressPercent.ToString("F1") %</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Bottom node: sets with no cards at all (symbol + full name, no progress) ── *@
+        <div class="set-node @(_remainingCollapsed ? "collapsed" : "")">
+            <div class="node-header" @onclick="ToggleRemainingNode">
+                <span class="node-toggle-glyph">@(_remainingCollapsed ? "▸" : "▾")</span>
+                <span class="node-title">Not started (@_remaining.Count)</span>
+            </div>
+            @if (!_remainingCollapsed)
+            {
+                <div class="node-body">
+                    @if (IsSetSearchActive && _remaining.Count == 0)
+                    {
+                        <div class="set-list-empty">No sets found</div>
+                    }
+                    <div class="set-list">
+                        @foreach (var item in _remaining)
+                        {
+                            <div class="set-item @(_selectedSetCode == item.SetAbbreviation ? "selected" : "")" @onclick="() => SelectSet(item.SetAbbreviation)">
+                                <span class="set-symbol set-symbol-@item.SetAbbreviation" title="@SetTooltip(item)"></span>
+                                <span class="set-name">@item.SetName</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ── Right panel: details of the selected set ── *@
+    <div class="collector-side">
+        @if (_selectedSetCode is null)
+        {
+            <div class="detail-placeholder">Select a set</div>
+        }
+        else if (_details is null)
+        {
+            <div class="detail-placeholder">Loading...</div>
+        }
+        else
+        {
+            var d = _details;
+            <div class="set-detail">
+                <div class="set-symbol detail-set-icon set-symbol-@d.SetCode"></div>
+                <div class="detail-name">@d.SetName</div>
+                <div class="detail-meta">@DetailMeta(d)</div>
+
+                @* Rarity bars: 30px set icon tinted per rarity (mask from global .set-symbol-<code>);
+                   icon at the left edge, to its right — owned/total above the bar *@
+                <div class="detail-section">
+                    @foreach (var g in d.RarityGroups)
+                    {
+                        <div class="detail-bar-row">
+                            <span class="rarity-icon rarity-icon-@g.Key set-symbol-@d.SetCode"></span>
+                            <div class="detail-bar-main">
+                                <span class="detail-bar-counts">@g.Owned/@g.Total</span>
+                                <div class="detail-bar-track">
+                                    @if (g.Owned > 0)
+                                    {
+                                        <div class="detail-bar-fill" style="width: @BarWidthPct(g.Percent)%"></div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Color bars: 24px mana symbol (global .card-symbol sprite; colorless → C) *@
+                <div class="detail-section">
+                    @foreach (var g in d.ColorGroups)
+                    {
+                        <div class="detail-bar-row">
+                            <span class="card-symbol detail-color-icon card-symbol-@g.Key"></span>
+                            <div class="detail-bar-main">
+                                <span class="detail-bar-counts">@g.Owned/@g.Total</span>
+                                <div class="detail-bar-track">
+                                    @if (g.Owned > 0)
+                                    {
+                                        <div class="detail-bar-fill" style="width: @BarWidthPct(g.Percent)%"></div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @* Set type filter dialog — staged toggles commit on Apply, persist as one comma-separated row *@
+    <SetTypeFilterDialog IsOpen="@_showTypeFilterDialog"
+                         IsOpenChanged="@(v => _showTypeFilterDialog = v)"
+                         SelectedTypes="_typeFilter"
+                         OnApplied="OnTypeFilterApplied" />
 </div>
 
 @using MagicAssistant.Core.Services.DeckAnalysis
 @inject IDeckAnalysisService DeckAnalysisService
+@inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
+@inject GetUserSettingQueryHandler? GetSettingQueryHandler
 
 @code {
+    /// <summary>NewestFirst — root sets by release date desc (ties by set name); a child is anchored to its
+    /// parent's position. ProgressionDesc — root sets by progress desc, ties by release date desc; a child
+    /// is anchored to its parent's position.</summary>
+    private enum SortMode { NewestFirst, ProgressionDesc }
+
+    /// <summary>User-settings key for the persisted sort mode.</summary>
+    private const string SortModeSettingKey = "CollectorView.SortMode";
+
     private ICollection<CollectorProgressEntry>? _progress = null;
+    private List<CollectorProgressEntry> _collected = new();
+    private List<CollectorProgressEntry> _remaining = new();
+    private SortMode _sortMode = SortMode.NewestFirst;  // default — first dropdown value
+
+    private bool _collectedCollapsed;
+    private bool _remainingCollapsed;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSortModeAsync();   // restore persisted sort before the first render
+        await LoadTypeFilterAsync(); // restore persisted type filter before the first query
         try
         {
-            _progress = await DeckAnalysisService.GetCollectorProgressAsync();
+            _progress = await DeckAnalysisService.GetCollectorProgressAsync(_typeFilter);
+            ApplySort();
         }
         catch
         {
             _progress = null;
         }
     }
+
+    /// <summary>Restores the persisted sort mode; falls back to NewestFirst on missing/invalid value.</summary>
+    private async Task LoadSortModeAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+        try
+        {
+            var stored = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(SortModeSettingKey));
+            if (!string.IsNullOrEmpty(stored) && Enum.TryParse<SortMode>(stored, out var mode))
+                _sortMode = mode;
+        }
+        catch
+        {
+            // default _sortMode = NewestFirst
+        }
+    }
+
+    private async Task OnSortModeChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<SortMode>(e.Value?.ToString(), out var mode)) return;
+        _sortMode = mode;
+        ApplySort();
+        await SaveSortModeAsync();
+    }
+
+    private async Task SaveSortModeAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(SortModeSettingKey, _sortMode.ToString()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    // ── Set type filter (toggle dialog; persisted as one comma-separated row) ───────────────
+
+    /// <summary>User-settings key for the persisted set type filter (comma-separated CardSetType names).</summary>
+    private const string TypeFilterSettingKey = "CollectorView.SetTypeFilter";
+
+    /// <summary>Committed type filter; null/empty — no filter (all types shown).</summary>
+    private List<CardSetType>? _typeFilter;
+
+    private bool _showTypeFilterDialog;
+
+    private void OpenTypeFilterDialog() => _showTypeFilterDialog = true;
+
+    /// <summary>Restores the persisted type filter ("core,expansion") before the first query;
+    /// invalid/unknown names are dropped, an empty result leaves the filter off.</summary>
+    private async Task LoadTypeFilterAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+        try
+        {
+            var stored = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(TypeFilterSettingKey));
+            if (string.IsNullOrWhiteSpace(stored)) return;
+
+            var types = new List<CardSetType>();
+            foreach (var part in stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (Enum.TryParse<CardSetType>(part, ignoreCase: true, out var t) && t != CardSetType.unknown)
+                    types.Add(t);
+
+            if (types.Count > 0) _typeFilter = types;
+        }
+        catch
+        {
+            // no filter — settings are not critical
+        }
+    }
+
+    /// <summary>Apply: commit the staged selection, persist it as one comma-separated row, re-query.</summary>
+    private async Task OnTypeFilterApplied(IReadOnlyCollection<CardSetType> types)
+    {
+        _typeFilter = types.Count > 0 ? types.ToList() : null;
+        await SaveTypeFilterAsync();
+
+        try
+        {
+            _progress = await DeckAnalysisService.GetCollectorProgressAsync(_typeFilter);
+            ApplySort();
+        }
+        catch
+        {
+            _progress = null;
+        }
+    }
+
+    private async Task SaveTypeFilterAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            var value = _typeFilter is { Count: > 0 } ? string.Join(",", _typeFilter.Select(t => t.ToString())) : "";
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(TypeFilterSettingKey, value));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    /// <summary>Splits the loaded progress into the two node lists and applies the active sort to each.</summary>
+    private void ApplySort()
+    {
+        if (_progress == null) return;
+
+        // Search narrows the DB result in memory before the split/sort —
+        // both lists filter from the same base, so a set moves between nodes
+        // only when its ownership changes, never because of the query text.
+        IEnumerable<CollectorProgressEntry> baseSets = _progress;
+        if (IsSetSearchActive)
+        {
+            var q = _setsSearchQuery.ToLowerInvariant();
+            baseSets = _progress.Where(s => s.SetName.ToLowerInvariant().Contains(q) ||
+                                            s.SetAbbreviation.ToLowerInvariant().Contains(q));
+        }
+
+        _collected = SortSets(baseSets.Where(p => p.OwnedCards >= 1).ToList(), _sortMode);
+        _remaining = SortSets(baseSets.Where(p => p.OwnedCards == 0).ToList(), _sortMode);
+    }
+
+    // ── Set search (in-memory narrowing of the DB result) ────────────────
+
+    private string _setsSearchQuery = "";
+
+    /// <summary>True while the lists are actually narrowed by the search input (2+ chars).</summary>
+    private bool IsSetSearchActive => !string.IsNullOrWhiteSpace(_setsSearchQuery) && _setsSearchQuery.Length >= 2;
+
+    private void OnSetSearchInput(ChangeEventArgs e)
+    {
+        _setsSearchQuery = e.Value?.ToString() ?? string.Empty;
+        ApplySort();
+    }
+
+    private void ClearSetSearch()
+    {
+        _setsSearchQuery = string.Empty;
+        ApplySort();
+    }
+
+    // ── Selection (one set at a time, shared across both lists) ──────────
+
+    /// <summary>Selected set code; null — nothing selected. Keyed by set code so the selection
+    /// survives re-sorting and search narrowing.</summary>
+    private string? _selectedSetCode;
+
+    /// <summary>Details of the selected set (side panel); null while loading or when nothing is selected.</summary>
+    private SetProgressDetails? _details;
+
+    private async Task SelectSet(string setCode)
+    {
+        var next = _selectedSetCode == setCode ? null : setCode;
+        _selectedSetCode = next;
+        if (next is null)
+        {
+            _details = null;
+            return;
+        }
+
+        _details = null;  // "Loading..." until the fetch lands
+        try
+        {
+            var details = await DeckAnalysisService.GetSetProgressDetailsAsync(next);
+            // Race guard: a faster click may have moved the selection already.
+            if (_selectedSetCode == next)
+                _details = details;
+        }
+        catch (Exception ex)
+        {
+            // keep the loading placeholder; reselecting retries — but don't swallow silently:
+            Console.WriteLine($"[CollectorView] SelectSet({setCode}) failed: {ex}");
+        }
+    }
+
+    /// <summary>Meta line under the set name: "Release Date: 2026-09-17, Type : token" — parts omitted when absent.</summary>
+    private static string DetailMeta(SetProgressDetails d)
+    {
+        var parts = new List<string>();
+        if (d.ReleaseDate is { } rel) parts.Add($"Release Date: {rel:yyyy-MM-dd}");
+        if (d.SetType != CardSetType.unknown) parts.Add($"Type : {d.SetType}");
+        return string.Join(", ", parts);
+    }
+
+    private static List<CollectorProgressEntry> SortSets(List<CollectorProgressEntry> sets, SortMode mode)
+    {
+        // Both modes anchor children to their parent — the family's position in the list is determined
+        // solely by its root (a child never outranks or undercuts its parent via its own date/progress).
+        // Only the root ranking differs:
+        //   NewestFirst     — release date desc, ties by set name;
+        //   ProgressionDesc — progress desc, ties by release date desc.
+        // Nested families flatten whole under the root; a child whose parent is absent from this list
+        // becomes a root of its own group. Siblings keep their original relative order.
+        var byCode = sets.ToDictionary(s => s.SetAbbreviation);
+        var childrenOf = new Dictionary<string, List<CollectorProgressEntry>>();
+        foreach (var s in sets.Where(s => !string.IsNullOrEmpty(s.ParentSetCode) && byCode.ContainsKey(s.ParentSetCode!)))
+        {
+            if (!childrenOf.TryGetValue(s.ParentSetCode!, out var kids))
+                childrenOf[s.ParentSetCode!] = kids = new List<CollectorProgressEntry>();
+            kids.Add(s);
+        }
+
+        var roots = sets.Where(s => string.IsNullOrEmpty(s.ParentSetCode) || !byCode.ContainsKey(s.ParentSetCode!)).ToList();
+        IOrderedEnumerable<CollectorProgressEntry> orderedRoots = mode == SortMode.NewestFirst
+            ? roots.OrderByDescending(s => s.ReleaseDate ?? DateTime.MinValue).ThenBy(s => s.SetName)
+            : roots.OrderByDescending(s => s.ProgressPercent).ThenByDescending(s => s.ReleaseDate ?? DateTime.MinValue);
+
+        var result = new List<CollectorProgressEntry>();
+        var visited = new HashSet<string>();
+        foreach (var root in orderedRoots)
+            AddFamily(root);
+        return result;
+
+        void AddFamily(CollectorProgressEntry set)
+        {
+            if (!visited.Add(set.SetAbbreviation)) return;  // cycle guard for broken data
+            result.Add(set);
+            if (childrenOf.TryGetValue(set.SetAbbreviation, out var kids))
+                foreach (var kid in kids)
+                    AddFamily(kid);
+        }
+    }
+
+
+    /// <summary>Whole-percent bar width — culture-safe int for the inline style (pattern: CreaturePage.BarWidthPct).
+    /// A double would render with a culture decimal separator ("12,5") and break the CSS width.</summary>
+    private static int BarWidthPct(double percent) => (int)Math.Round(percent);
+
+    /// <summary>Icon tooltip: "Full set name (yyyy-MM-dd)"; date omitted when the set has none.</summary>
+    private static string SetTooltip(CollectorProgressEntry s)
+        => s.ReleaseDate is { } d ? $"{s.SetName} ({d:yyyy-MM-dd})" : s.SetName;
+
+    private void ToggleCollectedNode() => _collectedCollapsed = !_collectedCollapsed;
+    private void ToggleRemainingNode() => _remainingCollapsed = !_remainingCollapsed;
 }

@@ -13,7 +13,7 @@ namespace MagicAssistant.Data.Db;
 public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 {
     private readonly string _dbPath;
-    private readonly ConcurrentDictionary<Guid, MagicCard> _cache = new();
+    private readonly ConcurrentDictionary<Guid, Card> _cache = new();
 
     private static readonly string ConnectionStringTemplate = "Data Source={0};Default Timeout=30";
 
@@ -28,7 +28,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// </summary>
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-    public async Task<bool> AddAsync(MagicCard card, CancellationToken ct = default)
+    public async Task<bool> AddAsync(Card card, CancellationToken ct = default)
     {
         if (card.Id == Guid.Empty || card.Id == default)
             throw new ArgumentException("Card ID can't be a default guid");
@@ -37,8 +37,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         await conn.OpenAsync(ct);
 
         var sql = @"
-            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, DbPrice, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @DbPrice, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+            INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, LegalityFormats, Colors, ColorIdentity, GameChanger, Legal, Usd, UsdFoil, ColorBits, IdentityBits)
+            VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @LegalityFormats, @Colors, @ColorIdentity, @GameChanger, @Legal, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
         var result = await conn.ExecuteAsync(sql, new
         {
@@ -59,28 +59,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             card.Artist,
             card.Language,
             card.CollectorNumber,
-            card.Text,
             card.PrintedName,
             card.PrintedText,
             card.PrintedTypeLine,
             card.CmcNumber,
             card.CmcText,
             card.ColorType,
-            card.Side,
-            card.CollectorNumberId,
-            card.DbPrice,
-            card.CommunityRating,
             LegalityFormats = card.LegalityMap.IsEmpty ? null : string.Join(',', card.LegalityMap.LegalFormats.Select(f => f.ToString())),
             Colors = card.Colors is { Length: > 0 } ? string.Join(',', card.Colors) : (string?)null,
             ColorIdentity = card.ColorIdentity is { Length: > 0 } ? string.Join(',', card.ColorIdentity) : (string?)null,
-            ColorIndicator = card.ColorIndicator is { Length: > 0 } ? string.Join(',', card.ColorIndicator) : (string?)null,
             GameChanger = card.GameChanger,
-            Keywords = card.Keywords is { Length: > 0 } ? string.Join(';', card.Keywords) : (string?)null,
-            ProducedMana = card.ProducedMana is { Length: > 0 } ? string.Join(',', card.ProducedMana) : (string?)null,
             Legal = card.Legal,
-            NotLegal = card.NotLegal,
-            Restricted = card.Restricted,
-            Banned = card.Banned,
             Usd = card.Usd,
             UsdFoil = card.UsdFoil,
             ColorBits = card.ColorBits,
@@ -97,7 +86,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return result > 0;
     }
 
-    public async Task<bool> AddAllAsync(IEnumerable<MagicCard> cards, CancellationToken ct = default)
+    public async Task<bool> AddAllAsync(IEnumerable<Card> cards, CancellationToken ct = default)
     {
 
         var list = cards.ToList();
@@ -110,8 +99,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         try
         {
             var sql = @"
-                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, Text, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, Side, CollectorNumberId, DbPrice, CommunityRating, LegalityFormats, Colors, ColorIdentity, ColorIndicator, GameChanger, Keywords, ProducedMana, Legal, NotLegal, Restricted, Banned, Usd, UsdFoil, ColorBits, IdentityBits)
-                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @Text, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @Side, @CollectorNumberId, @DbPrice, @CommunityRating, @LegalityFormats, @Colors, @ColorIdentity, @ColorIndicator, @GameChanger, @Keywords, @ProducedMana, @Legal, @NotLegal, @Restricted, @Banned, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
+                INSERT OR REPLACE INTO Cards (Id, OracleId, Name, ManaCost, Layout, Type, Power, PowerNumber, Toughness, ToughnessNumber, SetCode, Rarity, OracleText, Rulings, Artist, Language, CollectorNumber, PrintedName, PrintedText, PrintedTypeLine, CmcNumber, CmcText, ColorType, LegalityFormats, Colors, ColorIdentity, GameChanger, Legal, Usd, UsdFoil, ColorBits, IdentityBits)
+                VALUES (@Id, @OracleId, @Name, @ManaCost, @Layout, @Type, @Power, @PowerNumber, @Toughness, @ToughnessNumber, @SetCode, @Rarity, @OracleText, @Rulings, @Artist, @Language, @CollectorNumber, @PrintedName, @PrintedText, @PrintedTypeLine, @CmcNumber, @CmcText, @ColorType, @LegalityFormats, @Colors, @ColorIdentity, @GameChanger, @Legal, @Usd, @UsdFoil, @ColorBits, @IdentityBits)";
 
             await conn.ExecuteAsync(sql, list.Select(c => new
             {
@@ -132,28 +121,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 c.Artist,
                 c.Language,
                 c.CollectorNumber,
-                c.Text,
                 c.PrintedName,
                 c.PrintedText,
                 c.PrintedTypeLine,
                 c.CmcNumber,
                 c.CmcText,
                 c.ColorType,
-                c.Side,
-                c.CollectorNumberId,
-                c.DbPrice,
-                c.CommunityRating,
                 LegalityFormats = c.LegalityMap.IsEmpty ? null : string.Join(',', c.LegalityMap.LegalFormats.Select(f => f.ToString())),
                 Colors = c.Colors is { Length: > 0 } ? string.Join(',', c.Colors) : (string?)null,
                 ColorIdentity = c.ColorIdentity is { Length: > 0 } ? string.Join(',', c.ColorIdentity) : (string?)null,
-                ColorIndicator = c.ColorIndicator is { Length: > 0 } ? string.Join(',', c.ColorIndicator) : (string?)null,
                 GameChanger = c.GameChanger,
-                Keywords = c.Keywords is { Length: > 0 } ? string.Join(';', c.Keywords) : (string?)null,
-                ProducedMana = c.ProducedMana is { Length: > 0 } ? string.Join(',', c.ProducedMana) : (string?)null,
                 Legal = c.Legal,
-                NotLegal = c.NotLegal,
-                Restricted = c.Restricted,
-                Banned = c.Banned,
                 Usd = c.Usd,
                 UsdFoil = c.UsdFoil,
                 ColorBits = c.ColorBits,
@@ -185,21 +163,21 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return true;
     }
 
-    public async Task<bool> RemoveAsync(MagicCard card, CancellationToken ct = default)
+    public async Task<bool> RemoveAsync(Card card, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         throw new NotSupportedException("Cannot remove cards from knowledge base directly.");
     }
 
-    public async Task<bool> RemoveAllAsync(IEnumerable<MagicCard> cards, CancellationToken ct = default)
+    public async Task<bool> RemoveAllAsync(IEnumerable<Card> cards, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         throw new NotSupportedException("Cannot remove cards from knowledge base directly.");
     }
 
-    public async Task<bool> UpdateAsync(MagicCard card, ICollection<MagicCardField> fields, CancellationToken ct = default)
+    public async Task<bool> UpdateAsync(Card card, ICollection<MagicCardField> fields, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -260,18 +238,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                     setClauses.Add("Language = @Language");
                     parameters.Add("@Language", card.Language);
                     break;
-                case MagicCardField.Text:
-                    setClauses.Add("Text = @Text");
-                    parameters.Add("@Text", card.Text);
-                    break;
-                case MagicCardField.DbPrice:
-                    setClauses.Add("DbPrice = @DbPrice");
-                    parameters.Add("@DbPrice", card.DbPrice);
-                    break;
-                case MagicCardField.CommunityRating:
-                    setClauses.Add("CommunityRating = @CommunityRating");
-                    parameters.Add("@CommunityRating", card.CommunityRating);
-                    break;
                 case MagicCardField.Set:
                     setClauses.Add("SetCode = @SetCode");
                     parameters.Add("@SetCode", card.SetCode);
@@ -290,7 +256,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return result > 0;
     }
 
-    public async Task<MagicCard?> GetCardAsync(Guid cardId, CancellationToken ct = default)
+    public async Task<Card?> GetCardAsync(Guid cardId, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(cardId, out var cached))
             return cached;
@@ -303,8 +269,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
         if (row == null) return null;
 
-        var ownCounts = await LoadOwnCountForCardAsync(conn, cardId, ct);
-        var card = MapToMagicCard(row, ownCounts);
+        var card = MapToMagicCard(row);
 
         // Load card faces
         var faces = await LoadCardFacesAsync(conn, cardId, ct);
@@ -325,10 +290,10 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return card;
     }
 
-    public async Task<ICollection<MagicCard>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetCardsAsync(Guid cardId, CancellationToken ct = default)
     {
         var card = await GetCardAsync(cardId, ct);
-        return card != null ? new[] { card } : Array.Empty<MagicCard>();
+        return card != null ? new[] { card } : Array.Empty<Card>();
     }
 
     public async Task<int> TotalUniqueCardsAsync(CancellationToken ct = default)
@@ -338,13 +303,12 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return await conn.QuerySingleAsync<int>("SELECT COUNT(*) FROM Cards");
     }
 
-    public async Task<IEnumerable<MagicCard>> GetAllDeckCardsAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<Card>> GetAllDeckCardsAsync(CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<MagicCardRow>("SELECT * FROM Cards");
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -378,13 +342,12 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// Gets up to <paramref name="limit"/> cards from the knowledge base.
     /// Uses SQL LIMIT for efficiency — does not load all cards into memory.
     /// </summary>
-    public async Task<ICollection<MagicCard>> GetAllAsync(int limit, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetAllAsync(int limit, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<MagicCardRow>("SELECT * FROM Cards LIMIT @Limit", new { Limit = limit });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -414,7 +377,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
-    public async Task<ICollection<MagicCard>> SearchAsync(string query, int limit = 100, CancellationToken ct = default)
+    public async Task<ICollection<Card>> SearchAsync(string query, int limit = 100, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
@@ -433,8 +396,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             LIMIT @Limit";
 
         var rows = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = query, Limit = limit });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -464,15 +426,30 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
-    public async Task<ICollection<MagicCard>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
+    public async Task<bool> HasCardsForSetAsync(string setCode, CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+        return await conn.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS(SELECT 1 FROM Cards WHERE SetCode = @SetCode)",
+            new { SetCode = setCode });
+    }
+
+    public async Task<bool> HasAnySetAsync(CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+        return await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM CardSet)");
+    }
+
+    public async Task<ICollection<Card>> GetBySetAsync(string setAbbreviation, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<MagicCardRow>(
             "SELECT * FROM Cards WHERE SetCode = @SetCode ORDER BY CollectorNumber",
             new { SetCode = setAbbreviation });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -502,15 +479,14 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
-    public async Task<ICollection<MagicCard>> GetPrintingsAsync(string name, CancellationToken ct = default)
+    public async Task<ICollection<Card>> GetPrintingsAsync(string name, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<MagicCardRow>(
             "SELECT * FROM Cards WHERE Name = @Name ORDER BY SetCode",
             new { Name = name });
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -549,9 +525,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
-        // SQLite LIKE does NOT use custom collations. Override the like() scalar function for full Unicode case-insensitive support.
-        // SQLite maps: X LIKE Y  ->  like(Y, X)
-        conn.CreateFunction("like", (string pattern, string value) =>
+        // SQLite LIKE does NOT use custom collations. Register a ma_like() scalar function for full Unicode
+        // case-insensitive support and call it explicitly (ma_like(pattern, value)) — overriding the built-in
+        // "like" name is unsafe: the UDF sticks to the pooled native connection and breaks every later
+        // `X LIKE Y` prepare with 'wrong number of arguments to function LIKE()'.
+        conn.CreateFunction("ma_like", (string pattern, string value) =>
         {
             if (pattern is null || value is null) return false;
             var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("%", ".*").Replace("_", ".") + "$";
@@ -562,8 +540,12 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         var whereParts = new List<string>();
         var parameters = new DynamicParameters();
 
-        // Set code filters: multiple values combined as OR (set1 OR set2 OR ...)
-        if (filter.SetCodes != null && filter.SetCodes.Count > 0)
+        // Set code filters: multiple values combined as OR (set1 OR set2 OR ...).
+        // A non-null EMPTY list means "no candidate sets" (e.g. the clicked-set selection
+        // intersected with a narrowed scope and overlapped nothing) → zero cards, not "all sets".
+        if (filter.SetCodes is { Count: 0 })
+            whereParts.Add("1 = 0");
+        else if (filter.SetCodes != null && filter.SetCodes.Count > 0)
         {
             var setConditions = new List<string>();
             for (int i = 0; i < filter.SetCodes.Count; i++)
@@ -599,7 +581,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             for (int i = 0; i < filter.TypeFilters.Count; i++)
             {
                 var param = $"TypeFilter{i}";
-                typeConditions.Add($"Type LIKE @{param}");
+                typeConditions.Add($"ma_like(@{param}, Type)");
                 parameters.Add(param, "%" + filter.TypeFilters[i] + "%");
             }
             whereParts.Add("(" + string.Join(" OR ", typeConditions) + ")");
@@ -607,7 +589,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         // Artist filter: LIKE '%value%' (case-insensitive in SQLite)
         if (!string.IsNullOrWhiteSpace(filter.Artist))
         {
-            whereParts.Add("Artist LIKE @ArtistFilter");
+            whereParts.Add("ma_like(@ArtistFilter, Artist)");
             parameters.Add("ArtistFilter", "%" + filter.Artist + "%");
         }
         // ColorType filter: exact match (case-insensitive). Legacy — superseded by ColorFilter.
@@ -630,8 +612,8 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         {
             var likeVal = "%" + filter.NameFilter + "%";
             whereParts.Add(@"(
-                PrintedName LIKE @NameFilter OR Name LIKE @NameFilter OR
-                Id IN (SELECT CardId FROM CardFaces WHERE (PrintedName LIKE @NameFilter OR Name LIKE @NameFilter))
+                ma_like(@NameFilter, PrintedName) OR ma_like(@NameFilter, Name) OR
+                Id IN (SELECT CardId FROM CardFaces WHERE (ma_like(@NameFilter, PrintedName) OR ma_like(@NameFilter, Name)))
             )");
             parameters.Add("NameFilter", likeVal);
         }
@@ -663,7 +645,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         // Pads with commas to avoid partial matches (e.g. "standard" != "future_standard").
         if (!string.IsNullOrWhiteSpace(filter.LegalityFilter))
         {
-            whereParts.Add("(',' || Legal || ',' LIKE @LegalityFilter)");
+            whereParts.Add("ma_like(@LegalityFilter, (',' || Legal || ','))");
             parameters.Add("LegalityFilter", "%," + filter.LegalityFilter + ",%");
         }
 
@@ -671,6 +653,53 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         if (filter.GameChangerFilter)
         {
             whereParts.Add("GameChanger = 1");
+        }
+
+        // Location filter: restrict to cards present in a specific collection node
+        // (deck/sideboard/collection/folder). Composite PK (CollectionId, CardId)
+        // guarantees one row per card — no duplicates in pagination.
+        var fromClause = "FROM Cards";
+        if (filter.LocationFilter.HasValue)
+        {
+            fromClause = @"FROM Cards
+                INNER JOIN Deck d ON d.CardId = Cards.Id AND d.CollectionId = @LocationId";
+            parameters.Add("LocationId", filter.LocationFilter.Value);
+
+            // Collection filters — location mode only (alias d exists here).
+            if (!string.IsNullOrEmpty(filter.Ownership) && filter.Ownership != "all")
+            {
+                whereParts.Add(filter.Ownership == "owned" ? "d.IsOwn = 1" : "d.IsOwn = 0");
+            }
+            if (filter.MinCount.HasValue)
+            {
+                whereParts.Add("d.Count >= @MinCount");
+                parameters.Add("MinCount", filter.MinCount.Value);
+            }
+            if (filter.MaxCount.HasValue)
+            {
+                whereParts.Add("d.Count <= @MaxCount");
+                parameters.Add("MaxCount", filter.MaxCount.Value);
+            }
+            // Price range on Cards.Usd (TEXT from Scryfall — cast to REAL; guard NULL/empty).
+            if (filter.MinPrice.HasValue)
+            {
+                whereParts.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) >= @MinPrice)");
+                parameters.Add("MinPrice", filter.MinPrice.Value);
+            }
+            if (filter.MaxPrice.HasValue)
+            {
+                whereParts.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) <= @MaxPrice)");
+                parameters.Add("MaxPrice", filter.MaxPrice.Value);
+            }
+            if (filter.HasForTrade)
+            {
+                whereParts.Add("d.ForTradeCount IS NOT NULL AND d.ForTradeCount > 0");
+            }
+            if (filter.HasComment)
+            {
+                whereParts.Add("d.Comment IS NOT NULL AND d.Comment != ''");
+            }
+            // filter.IsFoil — placeholder: no foil flag column yet, intentionally not used in SQL.
         }
 
         var whereClause = whereParts.Count > 0 ? "WHERE " + string.Join(" AND ", whereParts) : "";
@@ -682,13 +711,13 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             ? filter.SortField : CardListFilter.SortFields.Name;
 
         // Count query
-        var countSql = $"SELECT COUNT(*) FROM Cards {whereClause}";
+        var countSql = $"SELECT COUNT(*) {fromClause} {whereClause}";
         var totalCount = await conn.QuerySingleAsync<int>(countSql, parameters);
 
         // Data query with sorting and pagination
         var sortDirection = filter.SortAsc ? "ASC" : "DESC";
         var dataSql = $@"
-            SELECT * FROM Cards
+            SELECT Cards.* {fromClause}
             {whereClause}
             ORDER BY [{sortField}] {sortDirection}
             LIMIT @Limit OFFSET @Offset";
@@ -697,8 +726,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         parameters.Add("Offset", filter.Offset);
 
         var rows = await conn.QueryAsync<MagicCardRow>(dataSql, parameters);
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
-        var cards = rows.Select(r => MapToMagicCard(r, ownCountsMap.GetValueOrDefault(r.Id))).ToList();
+        var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces
         var cardIds = cards.Select(c => c.Id).ToList();
@@ -752,7 +780,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 cardSet.Uri,
                 cardSet.ScryfallUri,
                 cardSet.SearchUri,
-                cardSet.SetType,
+                SetType = cardSet.SetType.ToString(),
                 cardSet.CardCount,
                 cardSet.ParentSetCode,
                 cardSet.Digital,
@@ -782,7 +810,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             uri: row.Uri,
             scryfallUri: row.ScryfallUri,
             searchUri: row.SearchUri,
-            setType: row.SetType ?? "?",
+            setType: CardSetTypes.FromDb(row.SetType),
             cardCount: row.CardCount,
             parentSetCode: row.ParentSetCode,
             digital: row.Digital,
@@ -807,7 +835,49 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 uri: r.Uri,
                 scryfallUri: r.ScryfallUri,
                 searchUri: r.SearchUri,
-                setType: r.SetType ?? "?",
+                setType: CardSetTypes.FromDb(r.SetType),
+                cardCount: r.CardCount,
+                parentSetCode: r.ParentSetCode,
+                digital: r.Digital,
+                nonfoilOnly: r.NonfoilOnly,
+                foilOnly: r.FoilOnly,
+                iconSvgUri: r.IconSvgUri,
+                releaseDate: r.ReleaseDate);
+            return cardSet;
+        }).ToList();
+    }
+
+    public async Task<ICollection<CardSet>> GetCardSetsByCodesAsync(ICollection<string> setCodes, CancellationToken ct = default)
+    {
+        if (setCodes.Count == 0) return new List<CardSet>();
+
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // SQLite parameter limit is 999 — beyond that fall back to the full list + in-memory filter.
+        if (setCodes.Count > 900)
+        {
+            var wanted = new HashSet<string>(setCodes, StringComparer.OrdinalIgnoreCase);
+            return (await GetCardSetsAsync(ct)).Where(s => wanted.Contains(s.SetCode)).ToList();
+        }
+
+        var codes = setCodes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var sql = $"SELECT * FROM CardSet WHERE {string.Join(" OR ", codes.Select((_, i) => $"SetCode = @c{i}"))} ORDER BY ReleaseDate";
+        var parameters = new DynamicParameters();
+        for (var i = 0; i < codes.Count; i++)
+            parameters.Add($"@c{i}", codes[i]);
+
+        var rows = await conn.QueryAsync<CardSetRow>(sql, parameters);
+        return rows.Select(r =>
+        {
+            var cardSet = new CardSet(
+                r.Id,
+                r.SetCode,
+                r.Name,
+                uri: r.Uri,
+                scryfallUri: r.ScryfallUri,
+                searchUri: r.SearchUri,
+                setType: CardSetTypes.FromDb(r.SetType),
                 cardCount: r.CardCount,
                 parentSetCode: r.ParentSetCode,
                 digital: r.Digital,
@@ -836,7 +906,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 s.Uri,
                 s.ScryfallUri,
                 s.SearchUri,
-                s.SetType,
+                SetType = s.SetType.ToString(),
                 s.CardCount,
                 s.ParentSetCode,
                 s.Digital,
@@ -883,7 +953,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 s.Uri,
                 s.ScryfallUri,
                 s.SearchUri,
-                s.SetType,
+                SetType = s.SetType.ToString(),
                 s.CardCount,
                 s.ParentSetCode,
                 s.Digital,
@@ -929,7 +999,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 s.Uri,
                 s.ScryfallUri,
                 s.SearchUri,
-                s.SetType,
+                SetType = s.SetType.ToString(),
                 s.CardCount,
                 s.ParentSetCode,
                 s.Digital,
@@ -966,7 +1036,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     ///   - DELETE removed rows (FaceIndex in DB but not in incoming data)
     /// If the card has no faces, only DELETE is executed — cleaning up stale data.
     /// </summary>
-    private static async Task SaveCardFacesAsync(SqliteConnection conn, MagicCard card)
+    private static async Task SaveCardFacesAsync(SqliteConnection conn, Card card)
     {
         var cardId = card.Id;
 
@@ -1195,7 +1265,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     ///   - DELETE removed rows (PartIndex in DB but not in incoming data)
     /// If the card has no related parts, only DELETE is executed — cleaning up stale data.
     /// </summary>
-    private static async Task SaveAllPartsAsync(SqliteConnection conn, MagicCard card)
+    private static async Task SaveAllPartsAsync(SqliteConnection conn, Card card)
     {
         var cardId = card.Id;
 
@@ -1272,7 +1342,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// Saves ImageUris for a card to CardsImageUris table.
     /// Uses INSERT OR REPLACE for upsert semantics.
     /// </summary>
-    private static async Task SaveCardsImageUrisAsync(SqliteConnection conn, MagicCard card)
+    private static async Task SaveCardsImageUrisAsync(SqliteConnection conn, Card card)
     {
         if (card.ImageUris == null)
         {
@@ -1483,9 +1553,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return face;
     }
 
-    private static MagicCard MapToMagicCard(MagicCardRow row, OwnCountStats? ownCounts = null)
+    private static Card MapToMagicCard(MagicCardRow row)
     {
-        var card = new MagicCard
+        var card = new Card
         {
             Id = row.Id,
             OracleId = row.OracleId,
@@ -1504,16 +1574,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             Artist = row.Artist,
             Language = row.Language,
             CollectorNumber = row.CollectorNumber,
-            Text = row.Text,
             PrintedName = row.PrintedName,
             PrintedText = row.PrintedText,
             PrintedTypeLine = row.PrintedTypeLine,
             CmcNumber = row.CmcNumber,
             CmcText = row.CmcText,
-            Side = row.Side,
-            CollectorNumberId = row.CollectorNumberId,
-            DbPrice = row.DbPrice,
-            CommunityRating = row.CommunityRating,
         };
 
         // Restore LegalityMap from comma-separated formats
@@ -1536,26 +1601,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         if (!string.IsNullOrEmpty(row.ColorIdentity))
             card.ColorIdentity = row.ColorIdentity.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        // Restore ColorIndicator from comma-separated string
-        if (!string.IsNullOrEmpty(row.ColorIndicator))
-            card.ColorIndicator = row.ColorIndicator.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
         // Restore GameChanger
         card.GameChanger = row.GameChanger;
 
-        // Restore Keywords from semicolon-separated string
-        if (!string.IsNullOrEmpty(row.Keywords))
-            card.Keywords = row.Keywords.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        // Restore ProducedMana from comma-separated string
-        if (!string.IsNullOrEmpty(row.ProducedMana))
-            card.ProducedMana = row.ProducedMana.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        // Restore legality strings
+        // Restore legality string
         card.Legal = row.Legal;
-        card.NotLegal = row.NotLegal;
-        card.Restricted = row.Restricted;
-        card.Banned = row.Banned;
 
         // Restore price info
         card.Usd = row.Usd;
@@ -1565,30 +1615,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         card.ColorBits = row.ColorBits;
         card.IdentityBits = row.IdentityBits;
 
-        // Attach ownership stats from OwnCounts table (if available)
-        if (ownCounts is { } stats)
-        {
-            AttachOwnCountStats(card, stats);
-        }
-
         return card;
-    }
-
-    /// <summary>
-    /// Attaches ownership statistics to a card's properties so that
-    /// GetOwnCount(), GetOwnTotal(), GetOwnTotalAll(), GetOwnUnique() return real values.
-    /// </summary>
-    private static void AttachOwnCountStats(MagicCard card, OwnCountStats stats)
-    {
-        if (stats.OwnCount > 0)
-            card.OwnCount = stats.OwnCount;
-        if (stats.TotalCount > 0)
-            card.OwnTotal = stats.TotalCount;
-        // OwnTotalAll == TotalCount for deck-only storage (no separate library tracking)
-        if (stats.TotalCount > 0)
-            card.OwnTotalAll = stats.TotalCount;
-        if (stats.OwnUnique > 0)
-            card.OwnUnique = stats.OwnUnique;
     }
 
     /// <summary>
@@ -1601,51 +1628,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     {
         // Invalidate L1 cache so next reads hit the DB and pick up any external changes.
         _cache.Clear();
-    }
-
-    /// <summary>
-    /// Bulk update OwnCount/OwnTotal/OwnUnique properties on base cards in KB.
-    /// Uses a temp table approach: inserts stats, then updates Cards via JOIN.
-    /// This is the fastest way to bulk-update properties in SQLite.
-    /// </summary>
-    public async Task BulkUpdateOwnCountAsync(ICollection<OwnCountStats> stats, CancellationToken ct = default)
-    {
-        if (stats == null || !stats.Any())
-            return;
-
-        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
-        await conn.OpenAsync(ct);
-
-        // Create a temporary table for the stats
-        await conn.ExecuteAsync(@"
-            CREATE TEMP TABLE IF NOT EXISTS OwnCountTemp (
-                CardId uniqueidentifier PRIMARY KEY,
-                OwnCount INTEGER,
-                TotalCount INTEGER,
-                OwnUnique INTEGER
-            )");
-        await conn.ExecuteAsync("DELETE FROM OwnCountTemp");
-
-        // Bulk insert stats into temp table
-        var list = stats.ToList();
-        await conn.ExecuteAsync(@"
-            INSERT OR REPLACE INTO OwnCountTemp (CardId, OwnCount, TotalCount, OwnUnique)
-            VALUES (@CardId, @OwnCount, @TotalCount, @OwnUnique)",
-            list.Select(s => new { s.CardId, s.OwnCount, s.TotalCount, s.OwnUnique }));
-
-        // Persist to OwnCounts table (created by InitializeDb.EnsureCreatedAsync).
-        await conn.ExecuteAsync(@"
-            INSERT OR REPLACE INTO OwnCounts (CardId, OwnCount, TotalCount, OwnUnique)
-            SELECT t.CardId, t.OwnCount, t.TotalCount, t.OwnUnique
-            FROM OwnCountTemp t
-            WHERE EXISTS (SELECT 1 FROM Cards c WHERE c.Id = t.CardId)");
-
-        // Clean up temp table
-        await conn.ExecuteAsync("DROP TABLE IF EXISTS OwnCountTemp");
-
-        // Invalidate cache for affected cards
-        foreach (var s in list)
-            _cache.TryRemove(s.CardId, out _);
     }
 
     /// <summary>
@@ -1668,9 +1650,9 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// Returns a dictionary keyed by CardId for O(1) lookup.
     /// First checks the cache for each ID, then queries DB only for missing ones.
     /// </summary>
-    public async Task<Dictionary<Guid, MagicCard>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default)
+    public async Task<Dictionary<Guid, Card>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default)
     {
-        var result = new Dictionary<Guid, MagicCard>();
+        var result = new Dictionary<Guid, Card>();
 
         if (ids == null || !ids.Any())
             return result;
@@ -1700,7 +1682,6 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             var sql = $"SELECT * FROM Cards WHERE Id IN ({placeholders})";
 
             var rows = (await conn.QueryAsync<MagicCardRow>(sql, parameters)).ToList();
-            var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
 
             // Load card faces for all missing cards
             var facesMap = await LoadCardFacesForIdsAsync(conn, missingIds, ct);
@@ -1713,7 +1694,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
             foreach (var row in rows)
             {
-                var card = MapToMagicCard(row, ownCountsMap.GetValueOrDefault(row.Id));
+                var card = MapToMagicCard(row);
 
                 if (facesMap.TryGetValue(card.Id, out var faces))
                     card.CardFaces = faces;
@@ -1740,90 +1721,140 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     /// 
     /// Replaces: GetCardSetsAsync + N×GetBySetAsync + recursive tree walk with M×GetDeckCardsAsync.
     /// </summary>
-    public async Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(CancellationToken ct = default)
+    public async Task<ICollection<CollectorProgressRaw>> GetCollectorProgressRawAsync(
+        IReadOnlyCollection<CardSetType>? setTypes = null, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
-        // Single query: CTE for unique KB cards per set + collected/owned cards per set.
-        // LEFT JOIN Editions to include sets with 0 cards in KB.
+        // Single query: set size from CardSet.CardCount (Scryfall checklist) +
+        // collected/owned distinct printings per set in one Deck x Cards pass.
+        // Dedup key is CollectorNumber within a set: different printings of the
+        // same OracleId+Language are separate cards, a different Language for the
+        // same printing is a duplicate (shared CollectorNumber).
         var sql = @"
-            WITH UniqueKbCards AS (
-                SELECT SetCode, COUNT(DISTINCT Name) AS TotalCards
-                FROM Cards
-                GROUP BY SetCode
-            ),
-            CollectedCards AS (
-                SELECT c.SetCode, COUNT(DISTINCT c.Name) AS CollectedCards
-                FROM Deck dc
-                INNER JOIN Cards c ON dc.CardId = c.Id
-                GROUP BY c.SetCode
-            ),
-            OwnedCards AS (
-                SELECT c.SetCode, COUNT(DISTINCT c.Name) AS OwnedCards
-                FROM Deck dc
-                INNER JOIN Cards c ON dc.CardId = c.Id
-                WHERE dc.IsOwn = 1
-                GROUP BY c.SetCode
-            )
             SELECT s.SetCode,
                    s.Name AS SetName,
-                   COALESCE(u.TotalCards, 0) AS TotalCards,
-                   COALESCE(col.CollectedCards, 0) AS CollectedCards,
-                   COALESCE(o.OwnedCards, 0) AS OwnedCards
+                   s.CardCount AS TotalCards,
+                   COALESCE(c.CollectedCards, 0) AS CollectedCards,
+                   COALESCE(c.OwnedCards, 0) AS OwnedCards,
+                   s.ReleaseDate,
+                   s.ParentSetCode
             FROM CardSet s
-            LEFT JOIN UniqueKbCards u ON u.SetCode = s.SetCode
-            LEFT JOIN CollectedCards col ON col.SetCode = s.SetCode
-            LEFT JOIN OwnedCards o ON o.SetCode = s.SetCode
-            ORDER BY s.Name";
+            LEFT JOIN (
+                SELECT c.SetCode,
+                       COUNT(DISTINCT c.CollectorNumber) AS CollectedCards,
+                       COUNT(DISTINCT CASE WHEN dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedCards
+                FROM Deck dc
+                INNER JOIN Cards c ON dc.CardId = c.Id
+                GROUP BY c.SetCode
+            ) c ON c.SetCode = s.SetCode";
+
+        object? parameters = null;
+        if (setTypes is { Count: > 0 })
+        {
+            // Multiple pressed types → WHERE SetType IN ('core', 'expansion', ...) —
+            // Dapper expands the list into a parameterized IN clause.
+            sql += " WHERE s.SetType IN @SetTypes";
+            parameters = new { SetTypes = setTypes.Select(t => t.ToString()).ToList() };
+        }
+
+        sql += " ORDER BY s.Name";
 
         // Use dynamic to avoid Dapper type caching issues with empty result sets
-        var dynamicRows = await conn.QueryAsync(sql);
+        var dynamicRows = await conn.QueryAsync(sql, parameters ?? new { });
         var rows = dynamicRows.Select(r => new CollectorProgressRaw(
             (string)r.SetCode,
             (string?)r.SetName,
             Convert.ToInt64(r.TotalCards),
             Convert.ToInt64(r.CollectedCards),
-            Convert.ToInt64(r.OwnedCards))).ToList();
+            Convert.ToInt64(r.OwnedCards),
+            ReleaseDate: ParseReleaseDate(r.ReleaseDate),
+            ParentSetCode: r.ParentSetCode is string ps ? ps : null)).ToList();
         return rows;
+    }
+
+    /// <summary>ReleaseDate is stored as TEXT ("yyyy-MM-dd HH:mm:ss") — the dynamic row returns a string,
+    /// so parse it in memory; date sorting happens in C#, never in SQL.</summary>
+    private static DateTime? ParseReleaseDate(object? value) => value switch
+    {
+        DateTime dt => dt,
+        string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, out var parsed) => parsed,
+        _ => null
+    };
+
+    public async Task<SetProgressDetails?> GetSetProgressDetailsAsync(string setCode, CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // Single query: set identity + owned/total per rarity and per mana color.
+        // Rarity is stored lowercase (Scryfall wire values). Colors are a comma list of
+        // single letters ("B,U,W"), so LIKE '%W%' is an exact token match; colorless = NULL/''.
+        var sql = @"
+            SELECT s.Name AS SetName,
+                   s.ReleaseDate,
+                   s.SetType,
+                   COUNT(DISTINCT c.CollectorNumber) AS TotalAll,
+                   COUNT(DISTINCT CASE WHEN dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedAll,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'common' THEN c.CollectorNumber END) AS TotalCommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'common' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedCommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'uncommon' THEN c.CollectorNumber END) AS TotalUncommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'uncommon' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedUncommon,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'rare' THEN c.CollectorNumber END) AS TotalRare,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'rare' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedRare,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'mythic' THEN c.CollectorNumber END) AS TotalMythic,
+                   COUNT(DISTINCT CASE WHEN c.Rarity = 'mythic' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedMythic,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%W%' THEN c.CollectorNumber END) AS TotalW,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%W%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedW,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%U%' THEN c.CollectorNumber END) AS TotalU,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%U%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedU,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%B%' THEN c.CollectorNumber END) AS TotalB,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%B%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedB,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%R%' THEN c.CollectorNumber END) AS TotalR,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%R%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedR,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%G%' THEN c.CollectorNumber END) AS TotalG,
+                   COUNT(DISTINCT CASE WHEN c.Colors LIKE '%G%' AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedG,
+                   COUNT(DISTINCT CASE WHEN c.Colors IS NULL OR c.Colors = '' THEN c.CollectorNumber END) AS TotalColorless,
+                   COUNT(DISTINCT CASE WHEN (c.Colors IS NULL OR c.Colors = '') AND dc.IsOwn = 1 THEN c.CollectorNumber END) AS OwnedColorless
+            FROM CardSet s
+            LEFT JOIN Cards c ON c.SetCode = s.SetCode
+            LEFT JOIN Deck dc ON dc.CardId = c.Id
+            WHERE s.SetCode = @setCode
+            GROUP BY s.Name, s.ReleaseDate, s.SetType";
+
+        var row = (await conn.QueryAsync<dynamic>(sql, new { setCode })).FirstOrDefault();
+        if (row is null) return null;
+
+        static long I64(object? v) => Convert.ToInt64(v);
+
+        return new SetProgressDetails(
+            SetCode: setCode,
+            SetName: row.SetName as string,
+            ReleaseDate: ParseReleaseDate(row.ReleaseDate),
+            SetType: CardSetTypes.FromDb(row.SetType as string),
+            RarityGroups: new[]
+            {
+                new SetGroupProgress("common", I64(row.OwnedCommon), I64(row.TotalCommon)),
+                new SetGroupProgress("uncommon", I64(row.OwnedUncommon), I64(row.TotalUncommon)),
+                new SetGroupProgress("rare", I64(row.OwnedRare), I64(row.TotalRare)),
+                new SetGroupProgress("mythic", I64(row.OwnedMythic), I64(row.TotalMythic)),
+            },
+            ColorGroups: new[]
+            {
+                new SetGroupProgress("W", I64(row.OwnedW), I64(row.TotalW)),
+                new SetGroupProgress("U", I64(row.OwnedU), I64(row.TotalU)),
+                new SetGroupProgress("B", I64(row.OwnedB), I64(row.TotalB)),
+                new SetGroupProgress("R", I64(row.OwnedR), I64(row.TotalR)),
+                new SetGroupProgress("G", I64(row.OwnedG), I64(row.TotalG)),
+                new SetGroupProgress("C", I64(row.OwnedColorless), I64(row.TotalColorless)),
+            });
     }
 
     public ValueTask DisposeAsync()
     {
         _cache.Clear();
         return ValueTask.CompletedTask;
-    }
-
-    /// <summary>
-    /// Loads ownership stats for a single card from the OwnCounts table.
-    /// </summary>
-    private static async Task<OwnCountStats?> LoadOwnCountForCardAsync(SqliteConnection conn, Guid cardId, CancellationToken ct = default)
-    {
-        var row = await conn.QuerySingleOrDefaultAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount, OwnUnique FROM OwnCounts WHERE CardId = @Id",
-            new { Id = cardId });
-
-        return row != null ? new OwnCountStats(row.CardId, row.OwnCount, row.TotalCount, row.OwnUnique) : null;
-    }
-
-    /// <summary>
-    /// Loads all ownership stats from the OwnCounts table into a dictionary keyed by CardId.
-    /// </summary>
-    private static async Task<Dictionary<Guid, OwnCountStats>> LoadAllOwnCountsAsync(
-        SqliteConnection conn, CancellationToken ct = default)
-    {
-        var rows = await conn.QueryAsync<OwnCountRow>(
-            "SELECT CardId, OwnCount, TotalCount, OwnUnique FROM OwnCounts");
-
-        return rows.ToDictionary(r => r.CardId, r => new OwnCountStats(r.CardId, r.OwnCount, r.TotalCount, r.OwnUnique));
-    }
-
-    private class OwnCountRow
-    {
-        public Guid CardId { get; set; }
-        public int OwnCount { get; set; }
-        public int TotalCount { get; set; }
-        public int OwnUnique { get; set; }
     }
 
     // ── Batch resolution for old-format import (Gatherer ID + full set name) ──
@@ -1853,50 +1884,183 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<Dictionary<string, MagicCard>> ResolveCardsByNameAndSetAsync(
+    /// <summary>Max items per UNION ALL chunk. SQLite caps a compound SELECT at
+    /// SQLITE_MAX_COMPOUND_SELECT = 500 terms; 100 leaves generous headroom and keeps
+    /// the parameter count low (≤200 per query).</summary>
+    private const int UnionQueryChunkSize = 100;
+
+    public async Task<Dictionary<string, Card>> ResolveCardsByNameAndSetAsync(
         ICollection<(string Name, string? Set)> pairs, CancellationToken ct = default)
     {
-        if (pairs.Count == 0) return new Dictionary<string, MagicCard>();
+        if (pairs.Count == 0) return new Dictionary<string, Card>();
 
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
-        // Build OR-conditions for (Name, Set) pairs.
-        // Each pair gets a parameterized condition: (Name = @N0 AND Set = @S0) OR (Name = @N1 AND Set = @S1)
-        // This is a single query that returns all matching cards at once.
+        // A card matches a pair when ANY of its name fields equals the input name:
+        // Cards.Name / Cards.PrintedName / CardFaces.Name / CardFaces.PrintedName —
+        // the same chain the UI uses for display (ActiveName in CardDescriptionView).
+        // Localized KB rows keep English in Name and the localized name in PrintedName,
+        // so legacy files with non-English names resolve too.
+        // Chunked: one UNION ALL branch per pair, and SQLite caps a compound SELECT at
+        // SQLITE_MAX_COMPOUND_SELECT (500) terms — a 10k-card legacy deck died there with
+        // "too many terms in compound SELECT". Batches run in pair order, so "first match
+        // wins per pair" keeps exactly the old single-query semantics.
         var pairsList = pairs.ToList();
-        var conditions = new List<string>();
-        var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+        var result = new Dictionary<string, Card>();
 
-        for (int i = 0; i < pairsList.Count; i++)
+        for (var offset = 0; offset < pairsList.Count; offset += UnionQueryChunkSize)
         {
-            var (name, set) = pairsList[i];
-            var nKey = $"N{i}";
-            var sKey = $"S{i}";
-            paramObj[nKey] = name;
-            paramObj[sKey] = (object?)set ?? DBNull.Value;
+            var count = Math.Min(UnionQueryChunkSize, pairsList.Count - offset);
+            var conditions = new List<string>(count);
+            var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
 
-            if (set == null)
-                // Match cards where Set is NULL
-                conditions.Add("(Name = @" + nKey + " AND SetCode IS NULL)");
-            else
-                conditions.Add("(Name = @" + nKey + " AND SetCode = @" + sKey + ")");
-        }
+            for (int i = 0; i < count; i++)
+            {
+                var (name, set) = pairsList[offset + i];
+                var nKey = $"N{i}";
+                var sKey = $"S{i}";
+                paramObj[nKey] = name;
+                paramObj[sKey] = (object?)set ?? DBNull.Value;
 
-        var sql = $"SELECT * FROM Cards WHERE {string.Join(" OR ", conditions)}";
-        var rows = await conn.QueryAsync<MagicCardRow>(sql, paramObj);
-        var ownCountsMap = await LoadAllOwnCountsAsync(conn, ct);
+                var nameMatch = "(Name = @" + nKey + " OR PrintedName = @" + nKey +
+                                " OR Id IN (SELECT CardId FROM CardFaces WHERE Name = @" + nKey +
+                                " OR PrintedName = @" + nKey + "))";
+                if (set == null)
+                    // Match cards where Set is NULL
+                    conditions.Add(nameMatch + " AND SetCode IS NULL");
+                else
+                    conditions.Add(nameMatch + " AND SetCode = @" + sKey);
+            }
 
-        // Build composite key → card mapping
-        var result = new Dictionary<string, MagicCard>();
-        foreach (var row in rows)
-        {
-            var key = $"{row.Name}|{row.SetCode}";
-            if (!result.ContainsKey(key))
-                result[key] = MapToMagicCard(row, ownCountsMap.GetValueOrDefault(row.Id));
+            // Discriminator = GLOBAL pair index (literal int), so rows from any batch key
+            // back into pairsList — the stored Name may differ from the input.
+            var sql = string.Join(" UNION ALL ",
+                conditions.Select((c, i) => $"SELECT *, {offset + i} AS __m FROM Cards WHERE {c}"));
+            var rows = await conn.QueryAsync<ResolveMatchRow>(sql, paramObj);
+
+            foreach (var row in rows)
+            {
+                var pair = pairsList[row.__m];
+                var key = $"{pair.Name}|{pair.Set ?? ""}";
+                if (!result.ContainsKey(key))
+                    result[key] = MapToMagicCard(row);
+            }
+
+            ct.ThrowIfCancellationRequested();
         }
 
         return result;
+    }
+
+    private class ResolveMatchRow : MagicCardRow
+    {
+        public int __m { get; set; }
+    }
+
+    public async Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusAsync(ICollection<string> setNames, CancellationToken ct = default)
+    {
+        var names = setNames
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (names.Count == 0) return Array.Empty<SetSyncStatus>();
+
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // Derived table of requested names (UNION ALL — the VALUES table constructor
+        // with a column alias is not supported by the bundled SQLite) LEFT JOINed to
+        // CardSet (case-insensitive) + card count per set — one query per chunk, no N+1.
+        // Chunked: SQLite caps a compound SELECT at SQLITE_MAX_COMPOUND_SELECT (500) terms.
+        var rows = new List<SetSyncStatusRow>();
+        for (var offset = 0; offset < names.Count; offset += UnionQueryChunkSize)
+        {
+            var count = Math.Min(UnionQueryChunkSize, names.Count - offset);
+            var selects = Enumerable.Range(0, count).Select(i => $"SELECT @N{i} AS Name");
+            var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+            for (int i = 0; i < count; i++)
+                paramObj[$"N{i}"] = names[offset + i];
+
+            var sql = $@"
+                SELECT n.Name AS Name,
+                       cs.SetCode AS SetCode,
+                       cs.Name AS SetName,
+                       (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
+                FROM ({string.Join(" UNION ALL ", selects)}) AS n
+                LEFT JOIN CardSet cs ON cs.Name COLLATE NOCASE = n.Name
+                GROUP BY n.Name, cs.SetCode, cs.Name";
+
+            rows.AddRange(await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj));
+            ct.ThrowIfCancellationRequested();
+        }
+
+        return rows
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new SetSyncStatus(first.Name, first.SetCode, first.SetName, g.Sum(r => r.CardCount));
+            })
+            .ToList();
+    }
+
+    private class SetSyncStatusRow
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? SetCode { get; set; }
+        public string? SetName { get; set; }
+        public int CardCount { get; set; }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SetSyncStatus>> GetSetSyncStatusByCodeAsync(ICollection<string> setCodes, CancellationToken ct = default)
+    {
+        var codes = setCodes
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (codes.Count == 0) return Array.Empty<SetSyncStatus>();
+
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+
+        // Same shape as GetSetSyncStatusAsync, joined on SetCode instead of Name.
+        // The requested code is echoed back in the Name column so the result keeps the
+        // one-row-per-requested-entry contract; SetName stays null for codes absent
+        // from CardSet (the sync resolves the name from Scryfall itself).
+        // Chunked for the same SQLITE_MAX_COMPOUND_SELECT (500) reason.
+        var rows = new List<SetSyncStatusRow>();
+        for (var offset = 0; offset < codes.Count; offset += UnionQueryChunkSize)
+        {
+            var count = Math.Min(UnionQueryChunkSize, codes.Count - offset);
+            var selects = Enumerable.Range(0, count).Select(i => $"SELECT @N{i} AS Name");
+            var paramObj = new System.Dynamic.ExpandoObject() as IDictionary<string, object?>;
+            for (int i = 0; i < count; i++)
+                paramObj[$"N{i}"] = codes[offset + i];
+
+            var sql = $@"
+                SELECT n.Name AS Name,
+                       cs.SetCode AS SetCode,
+                       cs.Name AS SetName,
+                       (SELECT COUNT(*) FROM Cards c WHERE c.SetCode = cs.SetCode) AS CardCount
+                FROM ({string.Join(" UNION ALL ", selects)}) AS n
+                LEFT JOIN CardSet cs ON cs.SetCode COLLATE NOCASE = n.Name
+                GROUP BY n.Name, cs.SetCode, cs.Name";
+
+            rows.AddRange(await conn.QueryAsync<SetSyncStatusRow>(sql, paramObj));
+            ct.ThrowIfCancellationRequested();
+        }
+
+        return rows
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new SetSyncStatus(first.Name, first.SetCode, first.SetName, g.Sum(r => r.CardCount));
+            })
+            .ToList();
     }
 
     /// <summary>
@@ -1942,28 +2106,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         public string? Artist { get; set; }
         public string? Language { get; set; }
         public string? CollectorNumber { get; set; }
-        public string? Text { get; set; }
         public string? PrintedName { get; set; }
         public string? PrintedText { get; set; }
         public string? PrintedTypeLine { get; set; }
         public int? CmcNumber { get; set; }
         public string? CmcText { get; set; }
         public string? ColorType { get; set; }
-        public int Side { get; set; }
-        public int CollectorNumberId { get; set; }
-        public float DbPrice { get; set; }
-        public float CommunityRating { get; set; }
         public string? LegalityFormats { get; set; }
         public string? Colors { get; set; }
         public string? ColorIdentity { get; set; }
-        public string? ColorIndicator { get; set; }
         public bool? GameChanger { get; set; }
-        public string? Keywords { get; set; }
-        public string? ProducedMana { get; set; }
         public string? Legal { get; set; }
-        public string? NotLegal { get; set; }
-        public string? Restricted { get; set; }
-        public string? Banned { get; set; }
         public string? Usd { get; set; }
         public string? UsdFoil { get; set; }
         public int? ColorBits { get; set; }

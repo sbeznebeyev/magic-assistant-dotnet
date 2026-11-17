@@ -6,26 +6,64 @@
 }
 .loading-indicator { font-size: 12px; color: #888; font-weight: normal; }
 
-.type-cards-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px;
+/* Two side-by-side columns like the Colors tab: left = main deck, right = sideboard.
+   .single — nodes without a sideboard (Collection): one column, same 630px cap as in pair mode. */
+.type-sections {
+    display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;
 }
-.type-card {
-    background: #1e1e2e; border: 1px solid #313244; border-radius: 8px; padding: 12px;
-    position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+.type-section { min-width: 0; }
+.type-section:nth-child(1) { max-width: 630px; flex: 1 1 auto; }
+.type-section:nth-child(2) { max-width: 435px; flex: 1 1 auto; }
+.section-title-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 10px; min-height: 24px;
 }
-.type-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-.type-card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: var(--card-accent); border-radius: 8px 8px 0 0;
+/* Deck name in bold gold letters — same treatment as the Colors/Creatures tabs. */
+.deck-name-title {
+    font-size: 18px; font-weight: 700; line-height: 1.3; word-break: break-word;
+    color: #e8c76a;
 }
-.type-icon { font-size: 24px; margin-bottom: 6px; }
-.type-name { font-size: 13px; font-weight: 600; color: #cdd6f4; margin-bottom: 2px; }
-.type-count { font-size: 11px; color: #a6adc8; margin-bottom: 8px; }
-.type-bar-track { height: 6px; background: #313244; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
-.type-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.type-percent { font-size: 10px; color: #6c7086; text-align: right; }
+/* Sideboard badge — gold-accented pill, same as the other tabs. */
+.sideboard-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+    color: #e8c76a; background: #1e1e2e; border: 1px solid rgba(232, 199, 106, 0.5);
+}
 
-.summary-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+/* Pie + legend side by side; wraps on narrow panels. */
+.pie-layout {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-bottom: 16px;
+}
+/* Pie container: centered title on top, chart below. The sideboard title is empty
+   (the element stays so both charts remain vertically aligned). */
+.pie-container { display: flex; flex-direction: column; }
+/* Halves the .pie-layout gap (24px) between the main and no-lands pies only;
+   the distance from the no-lands pie to the legend stays 24px. */
+.pie-nolands { margin-left: -12px; }
+.pie-title {
+    text-align: center; font-size: 12px; color: #a6adc8; min-height: 16px; margin-bottom: 4px;
+}
+.pie-chart svg {
+    width: 180px; height: 180px; display: block;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+/* Width fits content — no stretched row tails after the percentages. */
+.pie-legend { display: flex; flex-direction: column; gap: 6px; width: max-content; }
+.legend-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+/* Legend container: swatch + name. Fixed width so the values container starts
+   at the same x on every row. */
+.legend-item { display: flex; align-items: center; gap: 8px; min-width: 112px; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.legend-name { color: #cdd6f4; font-weight: 600; white-space: nowrap; }
+/* Values container, sitting to the right of the legend: count + percentage,
+   left-aligned inside. Fixed count column keeps percentages vertically aligned. */
+.legend-values { display: flex; align-items: center; gap: 8px; }
+.legend-count { color: #a6adc8; width: 68px; text-align: left; white-space: nowrap; }
+.legend-pct { color: #6c7086; text-align: left; }
+
+/* Full-width row below the pies + legend: flex-basis 100% forces it onto its
+   own line in the wrapped .pie-layout, spanning the container's full width. */
+.summary-stats { display: flex; gap: 12px; flex-wrap: wrap; flex: 1 1 100%; }
 .stat-card {
     flex: 1; min-width: 100px; background: #1e1e2e; border: 1px solid #313244;
     border-radius: 8px; padding: 12px; text-align: center;

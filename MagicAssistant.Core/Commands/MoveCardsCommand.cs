@@ -8,17 +8,17 @@ namespace MagicAssistant.Core.Commands;
 /// Mirrors Java: DataManager.moveCards() + MoveToActiveDeckHandler
 /// </summary>
 public record MoveCardsCommand(
-    ICollection<IMagicCard> Cards,
+    ICollection<ICard> Cards,
     int SourceDeckId,
     int TargetDeckId);
 
 public class MoveCardsCommandHandler
 {
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
     private readonly ICollectionStore _collectionStore;
 
     public MoveCardsCommandHandler(
-        ICardStore<MagicCardPhysical> cardStore,
+        ICardStore<MyCard> cardStore,
         ICollectionStore collectionStore)
     {
         _cardStore = cardStore;
@@ -40,9 +40,6 @@ public class MoveCardsCommandHandler
         if (targetDeck == null)
             throw new InvalidOperationException($"Target deck '{command.TargetDeckId}' not found");
 
-        var sourceLocation = Location.FromId(sourceDeck.Id, sourceDeck.Name, false);
-        var targetLocation = Location.FromId(targetDeck.Id, targetDeck.Name, false);
-
         // Targeted query — get only source deck's cards (WHERE CollectionId = @SourceDeckId)
         var sourceCards = await _collectionStore.GetDeckCardsAsync(sourceDeck.Id, ct);
         var sourceCardMap = sourceCards.ToDictionary(c => c.Id);
@@ -58,19 +55,17 @@ public class MoveCardsCommandHandler
             if (moveCount <= 0) continue;
 
             // Remove from source
-            await _cardStore.RemoveAsync(new MagicCardPhysical(instance.Card, sourceLocation, instance.IsOwn)
+            await _cardStore.RemoveAsync(new MyCard(instance.Card, sourceDeck, instance.IsOwn)
             {
                 Count = moveCount,
             }, ct);
 
             // Add to target with updated location
-            var targetInstance = new MagicCardPhysical(instance.Card, targetLocation, instance.IsOwn)
+            var targetInstance = new MyCard(instance.Card, targetDeck, instance.IsOwn)
             {
                 Count = moveCount,
-                Price = instance.Price,
+                MyPrice = instance.MyPrice,
                 Comment = instance.Comment,
-                SpecialTags = instance.SpecialTags,
-                Custom = instance.Custom,
                 DateAdded = DateTimeOffset.Now,
             };
 

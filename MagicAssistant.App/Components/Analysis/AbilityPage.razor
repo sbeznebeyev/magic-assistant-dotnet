@@ -1,12 +1,12 @@
 @*
-    AbilityPage — Keyword ability analysis (pure CSS horizontal bars)
+    AbilityPage — Keyword ability analysis (pure CSS horizontal bars), split into two charts.
+    Top = main deck only; bottom = sideboard only (hidden for nodes without a sideboard).
     Mirrors Java: ui.views.analyzers.AbilityPage + CardStoreUtils.buildAbilityStats
-    
+
     Features:
-    - Horizontal bar chart showing keyword abilities by frequency
-    - Interactive hover tooltips with count and percentage
-    - Total ability count display
-    - Smooth CSS animations
+    - Per-chart horizontal bar chart sorted by count, scaled to that chart's max keyword
+    - Gold-framed deck name / Sideboard badge section titles (matches the Colors tab)
+    - Per-chart keyword-ability and card-count stats
 *@
 
 <div class="ability-page">
@@ -20,25 +20,67 @@
         {
             <div class="error-state"><span>⚠ @_error</span><button class="retry-btn" @onclick="Reload">Retry</button></div>
         }
-        else if (_loading && _abilities.Count == 0)
+        else if (_loading || _main == null)
         {
             <div class="loading-state">Loading abilities...</div>
         }
-        else if (_abilities.Count > 0)
+        else if (_main!.Items.Count > 0 || (_hasSideboard && _side!.Items.Count > 0))
         {
-            <div class="ability-count">@_abilities.Count keyword ability@(_abilities.Count != 1 ? "ies" : "y") detected</div>
-
-            <div class="h-bar-chart">
-                @foreach (var item in _abilities)
-                {
-                    var pct = _maxAbility > 0 ? (double)item.Value / _maxAbility * 100 : 0;
-                    var totalPct = _totalCards > 0 ? (double)item.Value / _totalCards * 100 : 0;
-                    <div class="h-bar-row" style="--bar-width: @pct%;">
-                        <div class="h-bar-label">@item.Key</div>
-                        <div class="h-bar-track">
-                            <div class="h-bar-fill"></div>
+            <div class="ability-sections">
+                @* ── Top: main deck only ── *@
+                <div class="ability-section">
+                    <div class="section-title-row">
+                        <span class="deck-name-title">@(DeckName ?? "Deck")</span>
+                        <span class="section-stats">@_main.Items.Count keyword ability@(_main.Items.Count != 1 ? "ies" : "y") · @_main.TotalCards card@(_main.TotalCards != 1 ? "s" : "")</span>
+                    </div>
+                    @if (_main.Items.Count > 0)
+                    {
+                        <div class="h-bar-chart">
+                            @foreach (var item in _main.Items)
+                            {
+                                <div class="h-bar-row">
+                                    <div class="h-bar-label">@item.Name</div>
+                                    <div class="h-bar-track">
+                                        <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                    </div>
+                                    <div class="h-bar-value">@item.Count (@item.TotalPct.ToString("F0")%)</div>
+                                </div>
+                            }
                         </div>
-                        <div class="h-bar-value">@item.Value (@totalPct.ToString("F0")%)</div>
+                    }
+                    else
+                    {
+                        <div class="section-empty">No keyword abilities in the main deck.</div>
+                    }
+                </div>
+
+                @* ── Bottom: sideboard only — hidden for nodes without a sideboard (Collection) ── *@
+                @if (_hasSideboard)
+                {
+                    <div class="ability-section">
+                        <div class="section-title-row">
+                            <span class="sideboard-badge">Sideboard</span>
+                            <span class="section-stats">@_side!.Items.Count keyword ability@(_side.Items.Count != 1 ? "ies" : "y") · @_side.TotalCards card@(_side.TotalCards != 1 ? "s" : "")</span>
+                        </div>
+                        @if (_side.Items.Count > 0)
+                        {
+                            <div class="h-bar-chart">
+                                @foreach (var item in _side.Items)
+                                {
+                                    <div class="h-bar-row">
+                                        <div class="h-bar-label">@item.Name</div>
+                                        <div class="h-bar-track">
+                                            <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                        </div>
+                                        <div class="h-bar-value">@item.Count (@item.TotalPct.ToString("F0")%)</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="section-empty">No keyword abilities in the sideboard.</div>
+                        }
                     </div>
                 }
             </div>
@@ -54,13 +96,16 @@
 </div>
 
 @code {
-    private List<KeyValuePair<string, int>> _abilities = new();
-    private int _maxAbility;
-    private int _totalCards;
+    private AbilityChartData? _main;
+    private AbilityChartData? _side;
+    /// <summary>True when the node has sideboard cards (Deck nodes only — Collection nodes
+    /// have no sideboard child). False → bottom chart hidden.</summary>
+    private bool _hasSideboard;
     private bool _loading;
     private string? _error;
 
     [Parameter] public int DeckId { get; set; }
+    [Parameter] public string? DeckName { get; set; }
     [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
     [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
 
@@ -72,19 +117,24 @@
 
     private async Task LoadAnalysis()
     {
-        _loading = true; _error = null; StateHasChanged();
+        _loading = true; _error = null; _main = null; _side = null; StateHasChanged();
         try
         {
             var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
             if (cards.Count == 0)
             {
-                _abilities = new List<KeyValuePair<string, int>>();
-                _totalCards = 0;
+                _main = new AbilityChartData();
+                _side = new AbilityChartData();
             }
             else
             {
-                var result = AnalysisService.Analyze(cards);
-                BuildAbilityData(result);
+                // Each physical card carries its owning collection in Collection: the deck's own
+                // cards (Id == DeckId) vs. the sideboard child's (everything else).
+                var mainCards = cards.Where(c => c.Collection?.Id == DeckId).ToList();
+                var sideCards = cards.Where(c => c.Collection?.Id != DeckId).ToList();
+                _hasSideboard = sideCards.Count > 0;
+                _main = BuildChart(AnalysisService.Analyze(mainCards));
+                _side = BuildChart(AnalysisService.Analyze(sideCards));
             }
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -93,13 +143,43 @@
 
     private async Task Reload() => await LoadAnalysis();
 
-    private void BuildAbilityData(DeckAnalysisResult result)
+    private AbilityChartData BuildChart(DeckAnalysisResult result)
     {
-        _totalCards = result.TotalCards;
-        if (result.AbilityStats.Any())
-        {
-            _abilities = result.AbilityStats.OrderByDescending(kv => kv.Value).ToList();
-            _maxAbility = _abilities.Max(a => a.Value);
-        }
+        var data = new AbilityChartData { TotalCards = result.TotalCards };
+        if (result.AbilityStats.Count == 0) return data;
+
+        // Alphabetical A→Z (case-insensitive) — same ordering as the creature subtype chart.
+        var keywords = result.AbilityStats.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).ToList();
+        var max = keywords.Max(kv => kv.Value);
+        data.Items = keywords
+            .Select(kv =>
+            {
+                // Whole-percent bar width relative to this chart's max: an int renders
+                // identically in any culture (no decimal separator to break the inline style).
+                return new AbilityItem
+                {
+                    Name = kv.Key, Count = kv.Value,
+                    BarWidthPct = (int)Math.Round(kv.Value / (double)max * 100),
+                    TotalPct = result.TotalCards > 0 ? kv.Value / (double)result.TotalCards * 100 : 0
+                };
+            })
+            .ToList();
+        return data;
+    }
+
+    private class AbilityChartData
+    {
+        public List<AbilityItem> Items { get; set; } = new();
+        public int TotalCards { get; set; }
+    }
+
+    private class AbilityItem
+    {
+        public string Name { get; set; } = "";
+        public int Count { get; set; }
+        /// <summary>Whole-percent bar width — culture-safe int for the inline style.</summary>
+        public int BarWidthPct { get; set; }
+        /// <summary>Share of all cards in this chart — display text only.</summary>
+        public double TotalPct { get; set; }
     }
 }

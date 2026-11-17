@@ -30,26 +30,60 @@
         }
         else if (_curve != null && _totalNonLand > 0)
         {
-            @* ── Bar Chart (Pure CSS) ── *@
+            @* ── Bar Chart (Pure CSS) — two series: Main + Sideboard and Main only ── *@
             <div class="chart-container">
+                @* Legend only when two series exist. Collection nodes have no sideboard —
+                   the single bar series speaks for itself, no legend. *@
+                @if (_hasSideboard)
+                {
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-swatch legend-combined"></span>Main + Sideboard</span>
+                        <span class="legend-item"><span class="legend-swatch legend-main"></span>Main only</span>
+                    </div>
+                }
                 <div class="chart-area">
                     @for (int i = 0; i < 8; i++)
                     {
-                        var count = i < _curve.Length ? _curve[i] : 0;
-                        var pct = _maxBar > 0 ? (double)count / _maxBar * 100 : 0;
-                        var hue = 210 + (i * 15);
-                        <div class="bar-column" style="--bar-height: @pct%; --bar-hue: @hue;">
-                            @if (count > 0)
+                        var combined = i < _curve.Length ? _curve[i] : 0;
+                        var main = i < (_mainCurve?.Length ?? 0) ? _mainCurve![i] : 0;
+                        // Pixel heights computed in C# — no percentage/CSS-var chains, so every
+                        // non-zero column is guaranteed a visible bar regardless of flex layout.
+                        var combinedH = _maxBar > 0 ? (int)Math.Round(combined / (double)_maxBar * MaxBarPx) : 0;
+                        var mainH = _maxBar > 0 ? (int)Math.Round(main / (double)_maxBar * MaxBarPx) : 0;
+                        <div class="bar-column">
+                            @if (combined > 0 || main > 0)
                             {
                                 <div class="bar-tooltip">
                                     <span class="tooltip-cmc">CMC @(_labels[i])</span>
-                                    <span class="tooltip-count">@count card@(count != 1 ? "s" : "")</span>
-                                    <span class="tooltip-pct">(@((double)count / _totalNonLand * 100).ToString("F1")%)</span>
+                                    @if (_hasSideboard)
+                                    {
+                                        <span class="tooltip-count tooltip-combined">Main + SB: @combined card@(combined != 1 ? "s" : "") (@FormatPct(combined, _totalNonLand))</span>
+                                        <span class="tooltip-count tooltip-main">Main only: @main card@(main != 1 ? "s" : "") (@FormatPct(main, _totalMainNonLand))</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="tooltip-count tooltip-main">@main card@(main != 1 ? "s" : "") (@FormatPct(main, _totalMainNonLand))</span>
+                                    }
                                 </div>
                             }
-                            <div class="bar-fill"></div>
+                            <div class="bars">
+                                @if (_hasSideboard)
+                                {
+                                    @if (combined > 0)
+                                    {
+                                        <div class="bar bar-combined" style="height:@(combinedH)px"></div>
+                                    }
+                                    @if (main > 0)
+                                    {
+                                        <div class="bar bar-main" style="height:@(mainH)px"></div>
+                                    }
+                                }
+                                else if (main > 0)
+                                {
+                                    <div class="bar bar-main bar-single" style="height:@(mainH)px"></div>
+                                }
+                            </div>
                             <div class="bar-label">@_labels[i]</div>
-                            <div class="bar-value">@(count > 0 ? count.ToString() : "")</div>
                         </div>
                     }
                 </div>
@@ -86,16 +120,29 @@
 </div>
 
 @code {
+    /// <summary>Curve over main deck + sideboard (the tab's primary series).</summary>
     private int[]? _curve;
+    /// <summary>Curve over the main deck only — the second, sideboard-free series.</summary>
+    private int[]? _mainCurve;
     private double _averageCmc;
     private double _medianCmc;
+    /// <summary>Total non-land cards in main + sideboard — deck-level fact, tooltip % denominator.</summary>
     private int _totalNonLand;
+    /// <summary>Total non-land cards in the main deck only.</summary>
+    private int _totalMainNonLand;
     private int _maxBar;
     private string _peakCmcLabel = "—";
+    /// <summary>True when the node has sideboard cards (Deck nodes only — Collection nodes
+    /// have no sideboard child). False → single main-only series, no legend.</summary>
+    private bool _hasSideboard;
     private bool _loading;
     private string? _error;
 
     private static readonly string[] _labels = { "0", "1", "2", "3", "4", "5", "6", "7+" };
+
+    /// <summary>Pixel height of the tallest bar (chart-area is 200px; label row takes ~25px).
+    /// Kept in sync with .chart-area height in ManaCurvePage.razor.css.</summary>
+    private const int MaxBarPx = 170;
 
     [Parameter] public int DeckId { get; set; }
     [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
@@ -116,12 +163,24 @@
             if (cards.Count == 0)
             {
                 _curve = Array.Empty<int>();
+                _mainCurve = Array.Empty<int>();
                 _totalNonLand = 0;
+                _totalMainNonLand = 0;
             }
             else
             {
-                var result = AnalysisService.Analyze(cards);
-                BuildChartData(result);
+                // Every physical card carries its owning collection in Collection — the deck's own
+                // cards vs. the sideboard child's. Main-only series = everything but the sideboard.
+                var mainCards = cards.Where(c => c.Collection?.Id == DeckId).ToList();
+                _hasSideboard = cards.Count != mainCards.Count;
+
+                // True non-land card counts (deck-level fact — must match the Colors tab).
+                // Curve sums would undercount free cards: a {T} cost has no numeric CMC bucket.
+                // Fully qualified: the injected property name shadows the type name in this scope.
+                _totalNonLand = cards.Where(c => !MagicAssistant.Core.Analysis.AnalysisService.IsLand(c.Card)).Sum(c => c.Count);
+                _totalMainNonLand = mainCards.Where(c => !MagicAssistant.Core.Analysis.AnalysisService.IsLand(c.Card)).Sum(c => c.Count);
+
+                BuildChartData(AnalysisService.ComputeManaCurve(cards), AnalysisService.ComputeManaCurve(mainCards));
             }
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -130,20 +189,24 @@
 
     private async Task Reload() => await LoadAnalysis();
 
-    private void BuildChartData(DeckAnalysisResult result)
+    private void BuildChartData(int[] combined, int[] main)
     {
-        var curve = result.ManaCurve;
-        _curve = new int[8];
-        Array.Copy(curve, _curve, Math.Min(curve.Length, 8));
+        _curve = combined;
+        _mainCurve = main;
 
-        _totalNonLand = _curve.Sum();
-        _maxBar = _curve.Max();
+        // _totalNonLand / _totalMainNonLand are set in LoadAnalysis — true non-land card counts,
+        // not curve sums (free cards have no CMC bucket but are still non-land).
+        _maxBar = Math.Max(_curve.Max(), _mainCurve.Max());
 
+        // main[i] <= combined[i] always holds, so the peak lives in the combined series.
         var peakIdx = Array.IndexOf(_curve, _maxBar);
         _peakCmcLabel = _labels[Math.Min(peakIdx, 7)];
         _averageCmc = CalculateAverageCmc(_curve);
         _medianCmc = CalculateMedianCmc(_curve);
     }
+
+    private static string FormatPct(int count, int total) =>
+        total > 0 ? $"{((double)count / total * 100):F1}%" : "0%";
 
     private static double CalculateAverageCmc(int[] curve)
     {

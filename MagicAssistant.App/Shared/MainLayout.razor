@@ -1,7 +1,14 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject KbRefreshService KbRefresh
+@inject IDeckCardService DeckCardService
+@inject IDeckManagementService DeckManagement
+@inject SaveUserSettingCommandHandler? SaveSettingCommandHandler
+@inject GetUserSettingQueryHandler? GetSettingQueryHandler
+@inject HasAnySetQueryHandler? HasAnySet
 @using MagicAssistant.App.Services
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
 @using MagicAssistant.Data.Model.NavigatorNodes
 
 <div class="app-layout">
@@ -9,53 +16,84 @@
         <span class="title">⚔ Magic Assistant</span>
         <span class="subtitle">— Card Organizer</span>
         <span class="header-actions">
-            <span class="header-action" @onclick="OpenImportDialog" title="Import deck (current format)">Import</span>
-            <span class="header-action" @onclick="OpenExportDialog" title="Export deck">Export</span>
-            <span class="header-action" @onclick="OpenLegacyImportDialog" title="Import legacy deck (Gatherer ID + full set names)">Legacy Import</span>
-            <span class="header-action" @onclick="OpenUpdateDbDialog" title="Update DataBase from Scryfall">Update DB</span>
+            <span class="header-action @(_mode == LayoutMode.Showcase ? "active" : "")" @onclick="() => SetMode(LayoutMode.Showcase)" title="Show collector progress">Showcase</span>
+            <span class="header-action @(_mode == LayoutMode.Management ? "active" : "")" @onclick="() => SetMode(LayoutMode.Management)" title="Deck & collection management">Management</span>
+            <span class="header-action @LegacyImportClass" @onclick="OpenLegacyImportDialog" title="@LegacyImportTitle">Legacy Import</span>
+            <span class="header-action" @onclick="OpenSyncSetsDialog" title="Sync the set list from Scryfall">Sync Sets</span>
+            <span class="header-action" @onclick="OpenSyncCardsDialog" title="Sync cards of one set from Scryfall">Sync Cards</span>
         </span>
     </div>
 
     @* ── Dialogs (render only when visible) *@
-    @if (_showSyncDialog) { <SyncKnowledgeBase IsOpen="@_showSyncDialog" IsOpenChanged="@(v => _showSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
+    @if (_showSyncSetsDialog) { <SyncSets IsOpen="@_showSyncSetsDialog" IsOpenChanged="@(v => _showSyncSetsDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
+    @if (_showSyncCardsDialog) { <SyncCards IsOpen="@_showSyncCardsDialog" IsOpenChanged="@(v => _showSyncCardsDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
     @if (_showSelectedSetSyncDialog) { <SyncSelectedSetCards IsOpen="@_showSelectedSetSyncDialog" SetCode="@_selectedSetForSync" IsOpenChanged="@(v => _showSelectedSetSyncDialog = v)" OnCompleted="OnSyncKBCompleted" /> }
-    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
-    @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
-    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_selectedDeckId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
-    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_selectedDeckId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
+    @if (_showImportDialog) { <DeckImportWizard IsOpen="@_showImportDialog" ParentNodeId="@_importParentId" TargetNodeId="@_importTargetId" OnImported="OnImportCompleted" IsOpenChanged="@(v => _showImportDialog = v)" /> }
+    @if (_showLegacyImportDialog) { <OldDeckImportWizard IsOpen="@_showLegacyImportDialog" TargetNodeId="@_currentCollection.CollectionId" TargetName="@_currentCollection.Name" OnImported="OnLegacyImportCompleted" IsOpenChanged="@(v => _showLegacyImportDialog = v)" /> }
+    @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_exportTargetId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
+    @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
-    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
-    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_selectedDeckId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
-    @if (_showLocationPicker) { <LocationPickerDialog IsOpen="@_showLocationPicker" OnSelected="OnLocationSelected" IsOpenChanged="@(v => _showLocationPicker = v)" /> }
-    @if (_showDeckFilterDialog) { <DeckFilterDialog IsOpen="@_showDeckFilterDialog" OnFilterApplied="OnDeckFilterApplied" IsOpenChanged="@(v => _showDeckFilterDialog = v)" /> }
-    @if (_showEditDeckPropertiesDialog) { <EditDeckPropertiesDialog IsOpen="@_showEditDeckPropertiesDialog" DeckId="@_selectedDeckId!.Value" OnSaved="OnEditDeckPropertiesSaved" IsOpenChanged="@(v => _showEditDeckPropertiesDialog = v)" /> }
+    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
+    @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
+    @if (_showMoveDialog) { <MoveDialog IsOpen="@_showMoveDialog" Card="@_moveCardTarget" SourceCollectionId="@_currentCollection.CollectionId" SourceLabel="@_currentCollection.Name" TargetCollectionId="@_pinnedCollection.CollectionId" TargetLabel="@PinnedMoveLabel" TargetIsSideboard="@(_pinnedCollection.NodeType == NodeType.Sideboard)" OnMoveDone="OnMoveDone" IsOpenChanged="@(v => _showMoveDialog = v)" /> }
     
 
+    @* ── Management mode: everything below the header is management UI ── *@
+    @if (_mode == LayoutMode.Management)
+    {
     @* ── Main Grid ── *@
     <div class="main-grid">
-        <div class="panel-left">
-            <DecksNavigator
-                OnDeckSelected="OnDeckSelected"
-                OnOpenProperties="@(async n => await OnOpenPropertiesFromNav(n))"
-                OnShowAllCards="OnShowKB" />
-            @* TODO: Fix NullReferenceException in child components *@
+        <div class="panel-left @(_leftCollapsed ? "collapsed" : "")">
+            @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
+            @if (!_leftCollapsed)
+            {
+                <button class="panel-toggle left"
+                        @onclick="() => SetLeftCollapsed(true)"
+                        title="Collapse navigation">
+                    &lt;
+                </button>
+            }
+            @* Vertical badge label — visible only in the collapsed 20px strip; clicking it expands the panel *@
+            <span class="panel-label" @onclick="() => SetLeftCollapsed(false)" title="Expand navigation">Collections &amp; Decks</span>
+            <div class="panel-content">
+            <div class="navigator-scroll">
+                <DecksNavigator
+                    @ref="_navigator"
+                    OnDeckSelected="OnDeckSelected"
+                    OnPinToggled="OnPinToggled"
+                    OnNodeLockToggled="OnNodeLockToggled"
+                    OnShowAllCards="OnShowKB"
+                    OnNodeDeleted="OnNodeDeleted"
+                    OnImportRequested="OpenImportDialog"
+                    OnImportIntoRequested="OpenImportIntoDialog"
+                    OnExportRequested="OpenExportDialog"
+                    OnClearSideboardRequested="OnClearSideboardRequested"
+                    OnClearRequested="OnClearRequested"
+                    SelectedNodeId="@_currentCollection.CollectionId"
+                    PinnedNodeId="@_pinnedCollection.CollectionId" />
+                @* TODO: Fix NullReferenceException in child components *@
+            </div>
+
+            <hr class="divider" />
+            <LastActions Queue="@_lastActionsQueue" />
+            </div>
         </div>
 
         <div class="panel-center">
-            <SearchControl
-                OnSearchCompleted="OnGlobalSearchCompleted"
-                OnResultCountChanged="OnGlobalSearchResultCount"
-                InDeckView="false" />
+            <ContextStrip
+                PinnedCollection="@_pinnedCollection"
+                SelectedCollection="@_currentCollection"
+                RefreshTrigger="@_stripRefresh" />
 
             <div style="height:4px"></div>
 
-            @if (_selectedDeckId != null)
+            @if (_currentCollection.CollectionId != null)
             {
-                <TabBar ActiveTab="@ActiveTab" OnTabSelected="@(tab => ActiveTab = tab)" />
+                <TabBar ActiveTab="@ActiveTab" NodeKind="@_currentCollection.NodeType" OnTabSelected="@(tab => ActiveTab = tab)" />
             }
 
-            <div class="content-area" @key="_selectedDeckId">
-                @if (_selectedDeckId != null)
+            <div class="content-area" @key="_currentCollection.CollectionId">
+                @if (_currentCollection.CollectionId != null)
                 {
                     @RenderDeckContent()
                 }
@@ -70,47 +108,112 @@
             </div>
         </div>
 
-        <div class="panel-right">
+        <div class="panel-right @(_rightCollapsed ? "collapsed" : "")">
+            @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
+            @if (!_rightCollapsed)
+            {
+                <button class="panel-toggle right"
+                        @onclick="() => SetRightCollapsed(true)"
+                        title="Collapse card details">
+                    &gt;
+                </button>
+            }
+            @* Vertical badge label — visible only in the collapsed 20px strip; clicking it expands the panel *@
+            <span class="panel-label" @onclick="() => SetRightCollapsed(false)" title="Expand card details">Card description</span>
+            <div class="panel-content">
             <CardDescriptionView CardId="@_selectedCardId" ShowBack="@_selectedCardShowBack" />
             <hr class="divider" />
             <PrintingsView CardId="@_selectedCardId" OnPrintingSelected="@(c => OnCardSelected(c.Id))" OnPrintingSideChanged="OnCardSideChanged" />
             <hr class="divider" />
             <InstancesView CardId="@_selectedCardId" OnDeckSelected="OnDeckSelectedFromInstance" />
+            </div>
         </div>
     </div>
+    }
+    else
+    {
+        @* ── Showcase mode: collector progress only, no management UI ── *@
+        <div class="showcase-area">
+            <CollectorView />
+        </div>
+    }
 </div>
 
 @code {
+    // ── Layout Mode ──
+    /// <summary>Management — everything below the header bar (navigator, deck content, card details).
+    /// Showcase — CollectorView only. Persisted like panel collapse state.</summary>
+    private enum LayoutMode { Management, Showcase }
+
+    private LayoutMode _mode = LayoutMode.Management;
+    private const string ModeKey = "MainLayout.Mode";
+
     // ── Navigation State ──
-    private int? _selectedDeckId;
+    /// <summary>Collection node currently displayed in the center panel (CollectionId == null = Knowledge Base).</summary>
+    private LockableCollection _currentCollection = new();
+
+    // ── Panel collapse state (toggle buttons in the top corners of the side panels) ──
+    /// <summary>Persisted like the sets sidebar in CardsListControl — the layout remounts on
+    /// navigation, so a plain bool would reset on each deck click.</summary>
+    private bool _leftCollapsed;
+    private bool _rightCollapsed;
+    private const string LeftPanelKey = "MainLayout.LeftCollapsed";
+    private const string RightPanelKey = "MainLayout.RightCollapsed";
+
+    /// <summary>Pinned operation target: LastActions and KB-mode card adds work against it.
+    /// Changed exclusively by the navigator's Pin buttons (plus a defensive clear
+    /// in OnNodeDeleted when the pinned node is deleted).</summary>
+    private LockableCollection _pinnedCollection = new();
+
+    /// <summary>Component reference — external selections (InstancesView jump) are delegated to the navigator.</summary>
+    private DecksNavigator? _navigator;
+
+
     private Guid? _selectedCardId;
     private bool? _selectedCardShowBack;
     private string ActiveTab = "cards";
     private string _statusText = "Ready";
 
     // ── Dialog Visibility (state-based pattern) ──
-    private bool _showSyncDialog;
+    private bool _showSyncSetsDialog;
+    private bool _showSyncCardsDialog;
+
+    // First-run bootstrap: one probe per circuit — an empty CardSet table opens Sync Sets at once.
+    private bool _startupSetsChecked;
     private bool _showSelectedSetSyncDialog;
     private string _selectedSetForSync = string.Empty;
     private int _kbRefreshTrigger;
+
+    /// <summary>Bumped whenever card counts in the pinned/selected contexts may have changed —
+    /// ContextStrip re-loads its unique/total stats on change.</summary>
+    private int _stripRefresh;
     private bool _showImportDialog;
+    /// <summary>Parent node the import was requested from (add-node menu context; null = root) — new decks are created inside it.</summary>
+    private int? _importParentId;
+    /// <summary>Existing CollectionId to merge cards INTO (⋯ context menu — Import); null = wizard picks the target.</summary>
+    private int? _importTargetId;
     private bool _showLegacyImportDialog;
     private bool _showExportDialog;
+    /// <summary>Node id chosen in the navigator's ⋯ context menu — the export target (not necessarily the displayed collection).</summary>
+    private int? _exportTargetId;
     private bool _showEditCardDialog;
 
     private bool _showFilterDialog;
     private bool _showSplitDialog;
-    private bool _showLocationPicker;
-    private bool _showDeckFilterDialog;
-    private bool _showEditDeckPropertiesDialog;
+    private bool _showMoveDialog;
 
     // ── Dialog Data ──
-    private MagicCardPhysical? _editCardTarget;
+    private MyCard? _editCardTarget;
 
-    private MagicCardPhysical? _splitCardTarget;
+    private MyCard? _splitCardTarget;
+
+    private MyCard? _moveCardTarget;
 
     /// <summary>Central filter/sort state shared between CardsListControl and CardFilterDialog.</summary>
     private readonly FilterViewModel _filterViewModel = new();
+
+    /// <summary>In-memory queue of the last card actions, displayed by LastActions.</summary>
+    private readonly LastActionsQueue _lastActionsQueue = new();
 
     // ── Navigation ──
     private void OnCardSelected(Guid? cardId) => _selectedCardId = cardId;
@@ -122,42 +225,303 @@
             _selectedCardShowBack = e.showBack;
         }
     }
-    private void OnDeckSelected(int deckId)
+    /// <summary>Navigator selection — sets the display context only.
+    /// _pinnedCollection is changed exclusively by the navigator's Pin buttons.</summary>
+    private async Task OnDeckSelected(LockableCollection c)
     {
-        _selectedDeckId = deckId;
+        _currentCollection = c;
         ActiveTab = "cards";
-        InvokeAsync(StateHasChanged);
+        _filterViewModel.CurrentCollectionId = c.CollectionId;
+        _filterViewModel.CurrentCollectionNodeType = c.NodeType;
+        _filterViewModel.Apply();
+        await InvokeAsync(StateHasChanged);
     }
-    private void OnDeckSelectedFromInstance(int deckId) => OnDeckSelected(deckId);
 
-    /// <summary>Switch center panel to Knowledge Base view.</summary>
+    /// <summary>Pin toggle from the navigator — the ONLY writer of _pinnedCollection.
+    /// Clicking an already-pinned node unpins it (silently). Pinning reports to the status bar.
+    /// Handler-level guard: a locked payload is never pinned even if the menu's disabled state
+    /// went stale (lock persisted elsewhere) — unpinning stays allowed for locked nodes.</summary>
+    private void OnPinToggled(LockableCollection c)
+    {
+        if (_pinnedCollection.CollectionId == c.CollectionId)
+            _pinnedCollection = new();  // unpin — no status message
+        else if (c.IsLocked)
+            _statusText = $"Cannot pin {c.Name} — the collection is locked";
+        else
+        {
+            _pinnedCollection = c;
+            _statusText = $"Pinned {c.Name}";  // side effect of setting PinnedCollection
+        }
+    }
+
+    /// <summary>Lock state changed in the navigator — keeps the current/pinned IsLocked snapshots fresh
+    /// (ToLockable captures them at selection time only) and unpins a node that just became locked.</summary>
+    private void OnNodeLockToggled((int Id, bool Locked) e)
+    {
+        if (_currentCollection.CollectionId == e.Id)
+            _currentCollection.IsLocked = e.Locked;
+        if (e.Locked && _pinnedCollection.CollectionId == e.Id)
+            _pinnedCollection = new();  // a locked node cannot stay pinned
+    }
+
+    /// <summary>InstancesView jump — delegates the selection to the navigator: it highlights its own node
+    /// and reports back the (Id, Locked) pair through the standard OnDeckSelected path.</summary>
+    private async Task OnDeckSelectedFromInstance(int deckId)
+    {
+        if (_navigator == null) return;
+        await _navigator.SelectNodeAsync(deckId);
+    }
+
+    /// <summary>Resolves the display name of a navigation node (collection/deck/sideboard).</summary>
+    private async Task<string?> GetNodeNameAsync(int nodeId)
+    {
+        try
+        {
+            var node = await DeckManagement.GetByIdAsync(nodeId);
+            return node?.Name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Switch center panel to Knowledge Base view.
+    /// The fixed collection survives — KB card adds keep targeting it.</summary>
     private void OnShowKB()
     {
-        _selectedDeckId = null;
+        _currentCollection = new();
         _selectedCardId = null;
-    }
-
-    private async Task OnOpenPropertiesFromNav(NavigatorNodeBase node)
-    {
-        _selectedDeckId = node.Id;
-        _showEditDeckPropertiesDialog = true;
+        _filterViewModel.CurrentCollectionId = null;
+        _filterViewModel.CurrentCollectionNodeType = null;
+        _filterViewModel.Apply();
     }
 
     // ── Header Actions (clickable words in the app header) ──
-    private void OpenImportDialog() => _showImportDialog = true;
-    private void OpenExportDialog() => _showExportDialog = true;
-    private void OpenLegacyImportDialog() => _showLegacyImportDialog = true;
-    private void OpenUpdateDbDialog() => _showSyncDialog = true;
+    /// <summary>Switch layout mode and persist the choice. Render is automatic after the handler.</summary>
+    private async Task SetMode(LayoutMode mode)
+    {
+        if (_mode == mode) return;
+        _mode = mode;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(ModeKey, mode.ToString().ToLowerInvariant()));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    private void OpenLegacyImportDialog()
+    {
+        // The legacy wizard has no target picker — it merges into the selected node, so
+        // an unlocked node is a precondition; the gray header action stays silent and says
+        // why in the status line (the class below is what paints it gray).
+        if (_currentCollection.CollectionId is null)
+        {
+            _statusText = "Select a collection or deck first";
+            return;
+        }
+        if (_currentCollection.IsLocked)
+        {
+            _statusText = "Cannot import into a locked location";
+            return;
+        }
+        _showLegacyImportDialog = true;
+    }
+
+    /// <summary>Affordance of the Legacy Import action: gold when the current selection can
+    /// receive the import (unlocked coll/deck/sb), gray for kb (no node selected) or a
+    /// locked node. IsLocked is kept fresh by the navigator's lock-change handler.</summary>
+    private string LegacyImportClass =>
+        _currentCollection.CollectionId is null || _currentCollection.IsLocked ? "disabled" : "gold";
+
+    /// <summary>Tooltip follows the same condition as the class: when the action is gray,
+    /// the tooltip names the way out instead of describing the dialog behind it.</summary>
+    private string LegacyImportTitle =>
+        LegacyImportClass == "disabled"
+            ? "Select unlocked collection/deck/sideboard"
+            : "Import legacy deck (Gatherer ID + full set names)";
+    private void OpenSyncSetsDialog() => _showSyncSetsDialog = true;
+    private void OpenSyncCardsDialog() => _showSyncCardsDialog = true;
+
+    /// <summary>Import from the navigator's add-node menu — parentId null = root level (old header behavior).</summary>
+    private void OpenImportDialog(int? parentId) { _importParentId = parentId; _importTargetId = null; _showImportDialog = true; }
+
+    /// <summary>Import into an existing node from the navigator ⋯ menu — the CollectionId cards are merged into
+    /// (the clicked deck/collection node; a deck import also merges the file's sideboard into its sideboard child).
+    /// The wizard opens pre-targeted at that node.</summary>
+    private void OpenImportIntoDialog(int collectionId) { _importParentId = null; _importTargetId = collectionId; _showImportDialog = true; }
+
+    /// <summary>Export from the navigator's ⋯ context menu — targets the clicked node, not the displayed collection.</summary>
+    private void OpenExportDialog(int nodeId) { _exportTargetId = nodeId; _showExportDialog = true; }
+
+    /// <summary>Clear sideboard from the navigator ⋯ menu (deck nodes only): wipes all cards out of the
+    /// sideboard node (its own ID, not the parent deck's) via IDeckCardService — the SB node itself is kept.
+    /// Refreshes strip stats, the viewed list (in case the SB is displayed) and navigator card counts.</summary>
+    private async Task OnClearSideboardRequested(int sideboardId)
+    {
+        try
+        {
+            var removed = await DeckCardService.ClearNodeAsync(sideboardId);
+            _statusText = removed > 0 ? $"Sideboard cleared ({removed} cards)" : "Sideboard was already empty";
+            _stripRefresh++;   // ContextStrip stats may have changed (SB pinned/selected)
+            _kbRefreshTrigger++;  // reload the viewed list in case the sideboard is displayed
+            StateHasChanged();
+            if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // SB badge count in the navigator
+        }
+        catch (Exception ex)
+        {
+            _statusText = $"Clear sideboard failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Clear from the navigator ⋯ menu (deck/collection nodes, folders ignored): wipes all cards
+    /// out of the clicked node via IDeckCardService — the node itself is kept. Refreshes strip stats,
+    /// the viewed list (in case the node is displayed) and navigator card counts.</summary>
+    private async Task OnClearRequested(int nodeId)
+    {
+        try
+        {
+            var removed = await DeckCardService.ClearNodeAsync(nodeId);
+            _statusText = removed > 0 ? $"Collection cleared ({removed} cards)" : "Collection was already empty";
+            _stripRefresh++;   // ContextStrip stats may have changed (node pinned/selected)
+            _kbRefreshTrigger++;  // reload the viewed list in case this node is displayed
+            StateHasChanged();
+            if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // badge count in the navigator
+        }
+        catch (Exception ex)
+        {
+            _statusText = $"Clear failed: {ex.Message}";
+        }
+    }
 
     // ── Dialog Openers ──
-    private void OpenEditCard(MagicCardPhysical card) { _editCardTarget = card; _showEditCardDialog = true; }
+    private void OpenEditCard(MyCard card) { _editCardTarget = card; _showEditCardDialog = true; }
 
-    private void OpenSplit(MagicCardPhysical card) { _splitCardTarget = card; _showSplitDialog = true; }
+    private void OpenSplit(MyCard card) { _splitCardTarget = card; _showSplitDialog = true; }
+
+    private void OpenMoveDialog(MyCard card) { _moveCardTarget = card; _showMoveDialog = true; }
+
+    /// <summary>Move tooltip/dialog label for the pinned target: a pinned sideboard reads
+    /// "&lt;deck&gt; (sideboard)" (the store's " (sb)" suffix is replaced); null = nothing pinned,
+    /// or the pinned node is the viewed collection itself (nowhere to move).</summary>
+    private string? PinnedMoveLabel
+    {
+        get
+        {
+            if (_pinnedCollection.CollectionId is null || _pinnedCollection.Name is not { Length: > 0 } name) return null;
+            if (_pinnedCollection.CollectionId == _currentCollection.CollectionId) return null;
+            if (_pinnedCollection.NodeType == NodeType.Sideboard)
+            {
+                var deckName = name.EndsWith(" (sb)", StringComparison.Ordinal) ? name[..^" (sb)".Length] : name;
+                return $"{deckName} (sideboard)";
+            }
+            return name;
+        }
+    }
 
     // ── Lifecycle (Microsoft Learn: subscribe in OnInitialized, unsubscribe in Dispose) ──
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         KbRefresh.Subscribe(OnKbRefresh);
+        await LoadPanelStatesAsync();
+    }
+
+    /// <summary>On a knowledge base with zero sets there is nothing to render — open Sync Sets
+    /// immediately so a fresh install starts with a set sync. Runs after the first render because
+    /// the DB probe is genuinely async: in OnInitializedAsync the flag could flip after the frame
+    /// was already painted, and nothing would re-render. StateHasChanged here is the documented
+    /// continuation nudge after an awaited OnAfterRenderAsync.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _startupSetsChecked) return;
+        _startupSetsChecked = true;
+
+        try
+        {
+            if (HasAnySet is not null && !await HasAnySet.Handle(new HasAnySetQuery()))
+            {
+                _showSyncSetsDialog = true;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // A failed probe must not block the layout — Sync Sets stays one click in the header,
+            // and the error surfaces normally on the next real data load.
+        }
+    }
+
+    /// <summary>Collapse/expand the left panel and persist the choice. Render is automatic after
+    /// the handler — no StateHasChanged.</summary>
+    private async Task SetLeftCollapsed(bool collapsed)
+    {
+        _leftCollapsed = collapsed;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(LeftPanelKey, collapsed ? "1" : "0"));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    /// <summary>Collapse/expand the right panel and persist the choice.</summary>
+    private async Task SetRightCollapsed(bool collapsed)
+    {
+        _rightCollapsed = collapsed;
+
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(RightPanelKey, collapsed ? "1" : "0"));
+        }
+        catch
+        {
+            // silently fail — settings are not critical
+        }
+    }
+
+    private async Task LoadPanelStatesAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+
+        try
+        {
+            var left = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(LeftPanelKey));
+            _leftCollapsed = left == "1";
+        }
+        catch
+        {
+            // default: expanded
+        }
+
+        try
+        {
+            var right = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(RightPanelKey));
+            _rightCollapsed = right == "1";
+        }
+        catch
+        {
+            // default: expanded
+        }
+
+        try
+        {
+            var mode = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(ModeKey));
+            if (mode == "showcase") _mode = LayoutMode.Showcase;
+        }
+        catch
+        {
+            // default: management
+        }
     }
 
     /// <summary>
@@ -196,39 +560,127 @@
         _selectedSetForSync = setCode;
         _showSelectedSetSyncDialog = true;
     }
-    private void OnImportCompleted() { _statusText = "Import completed"; }
-    private void OnLegacyImportCompleted() { _statusText = "Legacy import completed"; }
+    private async Task OnImportCompleted()
+    {
+        _statusText = "Import completed";
+        _stripRefresh++;      // ContextStrip stats may have changed
+        _kbRefreshTrigger++;  // reload the viewed list in case the import targeted it
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();
+    }
+
+    private async Task OnLegacyImportCompleted()
+    {
+        _statusText = "Legacy import completed";
+        _stripRefresh++;      // ContextStrip stats may have changed
+        _kbRefreshTrigger++;  // reload the viewed list in case the import targeted it
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();
+    }
     private void OnExportCompleted() { _statusText = "Export completed"; }
-    private void OnEditCardSaved(MagicCardPhysical? card) { _statusText = "Card updated"; StateHasChanged(); }
+    private async Task OnEditCardSaved(MyCard? card)
+    {
+        _statusText = "Card updated";
+        _kbRefreshTrigger++;  // reload the viewed list so the saved changes are visible
+        _stripRefresh++;  // count may have changed — refresh ContextStrip stats
+        StateHasChanged();
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // count may have changed in the edit dialog
+    }
 
 
-    private void OnSplitDone() { _statusText = "Card split"; StateHasChanged(); }
-    private void OnLocationSelected(LocationResult result) => _statusText = $"Location: {result.DeckId}";
-    private void OnDeckFilterApplied(DeckFilterResult result) => _statusText = "Deck filter applied";
-    private void OnEditDeckPropertiesSaved() => _statusText = "Deck properties updated";
+    private async Task OnSplitDone()
+    {
+        _statusText = "Card split";
+        _kbRefreshTrigger++;  // reload the viewed list — deck/sideboard row counts changed
+        _stripRefresh++;  // cards moved main/sideboard — refresh ContextStrip stats
+        StateHasChanged();
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // cards moved between main deck and sideboard
+    }
+
+    /// <summary>MoveDialog finished — same refresh fan-out as a split: list, strip stats, navigator n/m.</summary>
+    private async Task OnMoveDone()
+    {
+        _statusText = "Card moved";
+        _kbRefreshTrigger++;  // reload the viewed list — source/target row counts changed
+        _stripRefresh++;      // copies changed nodes — refresh ContextStrip stats
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // navigator counts follow the move
+    }
+    /// <summary>Records an Add/Sub card operation in the rolling LastActions history.
+    /// The entry is labeled with the target collection's display name (Location).
+    /// The queue is never reset — entries from different collections coexist, each carrying its own location.</summary>
+    private async Task RecordLastActionAsync(CardOperationRecord op)
+    {
+        var location = await GetNodeNameAsync(op.TargetCollectionId);
+        _lastActionsQueue.Enqueue(new LastActionItem(op.TargetCollectionId, location ?? "?", op.Card, op.Count, op.Operation));
+        _stripRefresh++;  // card counts changed — refresh ContextStrip stats
+        if (_navigator is { } nav) await nav.RefreshCardCountsAsync();  // keep navigator card counts live after +/−, KB add and Move
+    }
+
+    /// <summary>A node was deleted in the navigator — drop any context that references it (direct hit or folder cascade).</summary>
+    private async Task OnNodeDeleted(int deletedNodeId)
+    {
+        var pinnedGone = _pinnedCollection.CollectionId.HasValue && await IsNodeGoneAsync(_pinnedCollection.CollectionId.Value);
+
+        // Validate the display context only if it differs from the pinned one (same node → reuse the check).
+        var currentGone = _currentCollection.CollectionId.HasValue
+            && (_currentCollection.CollectionId == _pinnedCollection.CollectionId ? pinnedGone : await IsNodeGoneAsync(_currentCollection.CollectionId.Value));
+
+        // A deleted pinned node would leave a ghost — drop it (defensive, not a user action).
+        if (pinnedGone)
+        {
+            _pinnedCollection = new();
+        }
+
+        // Same for the display context (deleting the viewed collection left a ghost before).
+        if (currentGone)
+        {
+            _currentCollection = new();
+            _selectedCardId = null;
+            _filterViewModel.CurrentCollectionId = null;
+            _filterViewModel.CurrentCollectionNodeType = null;
+            _filterViewModel.Apply();
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<bool> IsNodeGoneAsync(int nodeId)
+    {
+        try
+        {
+            return await DeckManagement.GetByIdAsync(nodeId) is null;
+        }
+        catch
+        {
+            return true;  // unreachable node — treat as gone
+        }
+    }
     // ── Global Search ──
-    private void OnGlobalSearchCompleted(string query) => _statusText = $"Search: \"{query}\"";
-    private void OnGlobalSearchResultCount(int count) => _statusText = $"{count} result(s) found";
+    private void OnGlobalSearchCompleted(string query) => _statusText = string.IsNullOrEmpty(query) ? "Ready" : $"Search: \"{query}\"";
 
     // ── Content Rendering (RenderFragment with Razor syntax — per Microsoft docs) ──
     private RenderFragment RenderDeckContent() => @<div>
         @switch (ActiveTab)
         {
-            case "curve": <ManaCurvePage DeckId="@_selectedDeckId!.Value" /> break;
-            case "colors": <SpellColourPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "creatures": <CreaturePage DeckId="@_selectedDeckId!.Value" /> break;
-            case "types": <TypePage DeckId="@_selectedDeckId!.Value" /> break;
-            case "abilities": <AbilityPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "info": <InfoPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "legality": <DeckLegalityPage DeckId="@_selectedDeckId!.Value" /> break;
-            case "collector": <CollectorView /> break;
+            case "curve": <ManaCurvePage DeckId="@_currentCollection.CollectionId!.Value" /> break;
+            case "colors": <SpellColourPage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" /> break;
+            case "creatures": <CreaturePage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" /> break;
+            case "types": <TypePage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" NodeKind="@_currentCollection.NodeType" /> break;
+            case "abilities": <AbilityPage DeckId="@_currentCollection.CollectionId!.Value" DeckName="@_currentCollection.Name" /> break;
+            case "legality": <DeckLegalityPage DeckId="@_currentCollection.CollectionId!.Value" /> break;
             default:
-                <DeckView DeckId="@_selectedDeckId!.Value"
-                          OnCardSelected="OnCardSelectedNonNullable"
-                          OnEditCard="OpenEditCard"
-                          OnSplitCard="OpenSplit"
-                          OnOpenDeckFilter="@(() => _showDeckFilterDialog = true)"
-                          OnOpenLocationPicker="@(() => _showLocationPicker = true)" />
+                @* Location mode (collection/deck/sideboard): no sync channel — KB cards are display-only here. *@
+                <CardsListControl FilterViewModel="@_filterViewModel"
+                                  OnCardSelected="OnCardSelected"
+                                  OnCardSideChanged="OnCardSideChanged"
+                                  OnOpenFilter="@(() => _showFilterDialog = true)"
+                                  RefreshTrigger="@_kbRefreshTrigger"
+                                  OnCardOperation="RecordLastActionAsync"
+                                  PinnedCollectionId="@_pinnedCollection.CollectionId"
+                                  CurrentCollectionLocked="@_currentCollection.IsLocked"
+                                  PinnedCollectionLocked="@_pinnedCollection.IsLocked"
+                                  OnEditCard="OpenEditCard"
+                                  OnSplitCard="OpenSplit"
+                                  OnMoveCardToPinned="OpenMoveDialog"
+                                  PinnedMoveLabel="@PinnedMoveLabel" />
                 break;
         }
     </div>;
@@ -241,7 +693,11 @@
                                 OnCardSideChanged="OnCardSideChanged"
                                 OnOpenFilter="@(() => _showFilterDialog = true)"
                                 OnOpenSync="OnOpenSyncDialog"
-                                RefreshTrigger="@_kbRefreshTrigger" />
+                                RefreshTrigger="@_kbRefreshTrigger"
+                                OnCardOperation="RecordLastActionAsync"
+                                PinnedCollectionId="@_pinnedCollection.CollectionId"
+                                CurrentCollectionLocked="@_currentCollection.IsLocked"
+                                PinnedCollectionLocked="@_pinnedCollection.IsLocked" />
         </div>;
     }
 }

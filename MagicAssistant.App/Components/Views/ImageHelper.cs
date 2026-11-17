@@ -4,7 +4,7 @@ namespace MagicAssistant.App.Components.Views;
 
 public static class ImageHelper
 {
-    public static string? GetImageUrl(MagicCard? card, bool getFrontImage)
+    public static string? GetImageUrl(Card? card, bool getFrontImage)
     {
         if (card == null) return null;
         var (setFolder, lang, fileName) = (card.SetCode!, card.Language!, card.Id.ToString());

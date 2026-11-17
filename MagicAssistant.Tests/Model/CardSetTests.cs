@@ -11,48 +11,27 @@ public class CardSetTests
     [Test]
     public void Constructor_SetsBasicProperties()
     {
-        var edition = new CardSet("m19", "Magic 2019", "Core", "Core Set");
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core);
 
         Assert.That(edition.SetCode, Is.EqualTo("m19"));
         Assert.That(edition.Name, Is.EqualTo("Magic 2019"));
-        Assert.That(edition.SetType, Is.EqualTo("Core Set")); // raw Scryfall type stored as-is
+        Assert.That(edition.SetType, Is.EqualTo(CardSetType.core)); // wire value round-trips as enum
         Assert.That(edition.Id, Is.GreaterThan(Guid.Empty));
     }
 
-    /// <summary>
-    /// SetType stores the raw value from Scryfall without parsing/normalization.
-    /// Full type names like "Core Set" are stored as-is.
-    /// </summary>
     [Test]
-    public void ParseSetType_ShouldHandleFullTypeNames()
+    public void Constructor_NullTypeMapsToUnknown()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, "Core Set");
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
-        Assert.That(edition.SetType, Is.EqualTo("Core Set"),
-            "SetType should store the raw Scryfall value without parsing/normalization.");
-    }
-
-    [Test]
-    public void Constructor_ParsesNullTypeAsQuestionMark()
-    {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
-
-        Assert.That(edition.SetType, Is.EqualTo("?"));
-    }
-
-    [Test]
-    public void Constructor_StoresUnknownTypeAsRawString()
-    {
-        var edition = new CardSet("m19", "Magic 2019", null, "Weird Type");
-
-        Assert.That(edition.SetType, Is.EqualTo("Weird Type"), "SetType stores the raw value without normalization.");
+        Assert.That(edition.SetType, Is.EqualTo(CardSetType.unknown));
     }
 
     [Test]
     public void Constructor_GeneratesUniqueIds()
     {
-        var e1 = new CardSet("A1", "Set A", null, null);
-        var e2 = new CardSet("A2", "Set B", null, null);
+        var e1 = new CardSet(Guid.NewGuid(), "A1", "Set A");
+        var e2 = new CardSet(Guid.NewGuid(), "A2", "Set B");
 
         Assert.That(e1.Id, Is.Not.EqualTo(e2.Id));
     }
@@ -75,7 +54,7 @@ public class CardSetTests
     [Test]
     public void ReleaseDate_CanBeSet()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
         edition.ReleaseDate = new DateTime(2018, 9, 28);
 
         Assert.That(edition.ReleaseDate!.Value.Year, Is.EqualTo(2018));
@@ -86,7 +65,7 @@ public class CardSetTests
     [Test]
     public void ReleaseDate_DefaultIsNull()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
         Assert.That(edition.ReleaseDate, Is.Null);
     }
@@ -98,9 +77,9 @@ public class CardSetTests
     [Test]
     public void Equals_BasedOnSetCode()
     {
-        var e1 = new CardSet("m19", "Magic 2019", null, null);
-        var e2 = new CardSet("m19", "Different Name", null, null);
-        var e3 = new CardSet("m20", "Magic 2020", null, null);
+        var e1 = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
+        var e2 = new CardSet(Guid.NewGuid(), "m19", "Different Name");
+        var e3 = new CardSet(Guid.NewGuid(), "m20", "Magic 2020");
 
         Assert.That(e1.Equals(e2), Is.True);
         Assert.That(e1.Equals(e3), Is.False);
@@ -110,7 +89,7 @@ public class CardSetTests
     [Test]
     public void Equals_NullReturnsFalse()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
         Assert.That(edition.Equals(null), Is.False);
     }
@@ -118,7 +97,7 @@ public class CardSetTests
     [Test]
     public void Equals_SelfReturnsTrue()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
         Assert.That(edition.Equals(edition), Is.True);
     }
@@ -126,29 +105,9 @@ public class CardSetTests
     [Test]
     public void Equals_DifferentTypeReturnsFalse()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
         Assert.That(edition.Equals("m19"), Is.False);
-    }
-
-    #endregion
-
-    #region IsHidden — hidden set detection via SetType
-
-    [Test]
-    public void IsHidden_DetectsDoubleDashPrefix()
-    {
-        var edition = new CardSet("m19", "Magic 2019", null, "--Hidden Core");
-
-        Assert.That(edition.IsHidden, Is.True);
-    }
-
-    [Test]
-    public void IsHidden_FalseForNormalType()
-    {
-        var edition = new CardSet("m19", "Magic 2019", null, "Core Set");
-
-        Assert.That(edition.IsHidden, Is.False);
     }
 
     #endregion
@@ -164,7 +123,7 @@ public class CardSetTests
     [Test]
     public void IsUnknown_FalseForNormalEdition()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
         Assert.That(edition.IsUnknown, Is.False);
     }
@@ -176,7 +135,7 @@ public class CardSetTests
     [Test]
     public void ToString_ReturnsAbbreviationAndName()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
 
         Assert.That(edition.ToString(), Is.EqualTo("m19 - Magic 2019")); // Always lowercase
     }
@@ -188,7 +147,7 @@ public class CardSetTests
     [Test]
     public void IsUsedByPrintings_ReturnsTrueWhenRegistered()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
         CardSet.EditionsInUseRegistry = new HashSet<string> { "m19" };
 
         try
@@ -204,7 +163,7 @@ public class CardSetTests
     [Test]
     public void IsUsedByPrintings_ReturnsFalseWhenNotRegistered()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
         CardSet.EditionsInUseRegistry = new HashSet<string> { "m20" };
 
         try
@@ -220,7 +179,7 @@ public class CardSetTests
     [Test]
     public void IsUsedByPrintings_FallbackForNullRegistry()
     {
-        var edition = new CardSet("m19", "Magic 2019", null, null);
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019");
         CardSet.EditionsInUseRegistry = null;
 
         Assert.That(edition.IsUsedByPrintings(), Is.True,
@@ -260,8 +219,8 @@ public class CardSetTests
     {
         var editions = new[]
         {
-            new CardSet("m19", "Magic 2019", null, "Core"),
-            new CardSet("m20", "Magic 2020", null, "Core")
+            new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core),
+            new CardSet(Guid.NewGuid(), "m20", "Magic 2020", setType: CardSetType.core)
         };
 
         Editions.Instance.Reload(editions);
@@ -272,7 +231,7 @@ public class CardSetTests
     [Test]
     public void Editions_GetNameById_ReturnsEditionName()
     {
-        var editions = new[] { new CardSet("m19", "Magic 2019", null, "Core") };
+        var editions = new[] { new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core) };
         Editions.Instance.Reload(editions);
 
         Assert.That(Editions.Instance.GetNameById("m19"), Is.EqualTo("Magic 2019"));
@@ -281,7 +240,7 @@ public class CardSetTests
     [Test]
     public void Editions_GetNameById_ReturnsIdForUnknownAbbreviation()
     {
-        var editions = new[] { new CardSet("m19", "Magic 2019", null, "Core") };
+        var editions = new[] { new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core) };
         Editions.Instance.Reload(editions);
 
         Assert.That(Editions.Instance.GetNameById("UNKNOWN"), Is.EqualTo("UNKNOWN"));

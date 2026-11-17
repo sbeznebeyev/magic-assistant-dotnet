@@ -8,15 +8,15 @@ namespace MagicAssistant.Core.Commands;
 /// Mirrors Java: DataManager.updateMCP() + EditMagicCardPhysicalDialog
 /// </summary>
 public record UpdateCardCommand(
-    string DeckId,
+    int DeckId,
     Guid CardId,
     Dictionary<MagicCardField, object?> Updates);
 
 public class UpdateCardCommandHandler
 {
-    private readonly ICardStore<MagicCardPhysical> _cardStore;
+    private readonly ICardStore<MyCard> _cardStore;
 
-    public UpdateCardCommandHandler(ICardStore<MagicCardPhysical> cardStore)
+    public UpdateCardCommandHandler(ICardStore<MyCard> cardStore)
     {
         _cardStore = cardStore;
     }
@@ -28,11 +28,9 @@ public class UpdateCardCommandHandler
     /// </summary>
     public async Task<bool> Handle(UpdateCardCommand command, CancellationToken ct = default)
     {
-        var location = Location.FromPath(command.DeckId);
-
         // Get existing instance
         var existing = await _cardStore.GetCardsAsync(command.CardId, ct);
-        var matching = existing.FirstOrDefault(e => e.Location.Id == command.DeckId && e.Card.Id == command.CardId);
+        var matching = existing.FirstOrDefault(e => e.Collection?.Id == command.DeckId && e.Card.Id == command.CardId);
 
         if (matching == null)
             return false;
@@ -52,20 +50,12 @@ public class UpdateCardCommandHandler
                     matching.IsOwn = isOwn;
                     fieldsToUpdate.Add(field);
                     break;
-                case MagicCardField.Price when value is float price:
-                    matching.Price = price;
+                case MagicCardField.MyPrice when value is float price:
+                    matching.MyPrice = price;
                     fieldsToUpdate.Add(field);
                     break;
                 case MagicCardField.Comment when value is string comment:
                     matching.Comment = comment;
-                    fieldsToUpdate.Add(field);
-                    break;
-                case MagicCardField.Special when value is string special:
-                    matching.SpecialTags = special;
-                    fieldsToUpdate.Add(field);
-                    break;
-                case MagicCardField.Custom when value is string custom:
-                    matching.Custom = custom;
                     fieldsToUpdate.Add(field);
                     break;
             }

@@ -3,6 +3,7 @@
 @inject ICardSearchService CardSearch
 @inject GetCardSetQueryHandler GetCardSetQuery
 @inject GetCardLanguagesQueryHandler GetCardLanguagesQuery
+@inject ICardImageLoader ImageLoader
 
 <div class="card-desc">
     <div class="card-desc-header">
@@ -28,12 +29,22 @@
             </div>
         }
 
-        @* ── Image ── *@
+        @* ── Image (lazy: renders once the file is on disk; missing → auto-download) ── *@
         @if (!string.IsNullOrEmpty(ImageHelper.GetImageUrl(_card, !_showBack)))
         {
-            <div class="card-image-wrap">
-                <img src="@ImageHelper.GetImageUrl(_card, !_showBack)" alt="@_card.Name" class="card-image" />
-            </div>
+            var imageExists = !_showBack ? ImageLoader.FrontExists(_card) : ImageLoader.BackExists(_card);
+            @if (imageExists)
+            {
+                <div class="card-image-wrap">
+                    <img src="@ImageHelper.GetImageUrl(_card, !_showBack)" alt="@_card.Name" class="card-image" />
+                </div>
+            }
+            else
+            {
+                <div class="card-image-wrap card-image-loading">
+                    @(_imageLoading ? "Downloading image..." : "No image")
+                </div>
+            }
         }
 
         @* ── Language Toggle Buttons ── *@
@@ -180,10 +191,11 @@
 </div>
 
 @code {
-    private MagicCard? _card;
+    private Card? _card;
     private bool _loading;
     private bool _isDoubleSided;
     private bool _showBack;
+    private bool _imageLoading;
     private string? _setDisplayName;
     private (string Language, Guid Id)[] _availableLanguages = Array.Empty<(string, Guid)>();
 
@@ -209,8 +221,38 @@
     private string? ActivePower => ActiveFace?.Power ?? _card?.Power;
     private string? ActiveToughness => ActiveFace?.Toughness ?? _card?.Toughness;
 
-    private void ToggleFront() => _showBack = false;
-    private void ToggleBack() => _showBack = true;
+    private void ToggleFront() { _showBack = false; _ = EnsureSideAsync(); }
+    private void ToggleBack() { _showBack = true; _ = EnsureSideAsync(); }
+
+    /// <summary>
+    /// Lazy image loading for the currently displayed side — no-op if the file is already cached.
+    /// Fire-and-forget: the placeholder renders immediately, the image pops in when the download lands.
+    /// </summary>
+    private async Task EnsureSideAsync()
+    {
+        var card = _card;
+        if (card is null) return;
+
+        var exists = !_showBack ? ImageLoader.FrontExists(card) : ImageLoader.BackExists(card);
+        if (exists) return;
+
+        _imageLoading = true;
+        StateHasChanged();
+        try
+        {
+            await ImageLoader.EnsureAsync(card);
+        }
+        finally
+        {
+            // Clear the flag only if this card is still the displayed one,
+            // then re-render so the freshly downloaded image replaces the placeholder.
+            if (ReferenceEquals(_card, card))
+            {
+                _imageLoading = false;
+                StateHasChanged();
+            }
+        }
+    }
 
     // Cache: setCode → CardSet (full name)
     private readonly Dictionary<string, CardSet> _setCache = new();
@@ -240,6 +282,7 @@
         {
             _card = await CardSearch.GetCardByIdAsync(CardId.Value);
             _isDoubleSided = _card?.Has2Faces ?? false;
+            _ = EnsureSideAsync(); // lazy image loading — no-op if cached
             // Load set name from cache or DB
             await LoadSetNameAsync(_card?.SetCode);
             // Load available languages for this OracleId
@@ -332,6 +375,7 @@
         {
             _card = await CardSearch.GetCardByIdAsync(lang.Id);
             _isDoubleSided = _card?.Has2Faces ?? false;
+            _ = EnsureSideAsync(); // lazy image loading — no-op if cached
             await LoadSetNameAsync(_card?.SetCode);
             // Re-load languages (same OracleId, same result — but keep consistent)
             if (_card != null)

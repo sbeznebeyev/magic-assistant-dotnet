@@ -1,3 +1,5 @@
+using MagicAssistant.Data.Model.NavigatorNodes;
+using MagicAssistant.Data.Model;
 using Dapper;
 using Microsoft.Data.Sqlite;
 
@@ -226,7 +228,7 @@ public class SqliteCardStoreTests
         var card = CreateTestCard(Guid.NewGuid(), "Name");
         await _store.AddAsync(card);
 
-        Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAsync(card));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAsync(card));
     }
 
     [Test]
@@ -235,7 +237,7 @@ public class SqliteCardStoreTests
         var card = CreateTestCard(Guid.NewGuid(), "Name");
         await _store.AddAsync(card);
 
-        Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAllAsync(new[] { card }));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await _store.RemoveAllAsync(new[] { card }));
     }
 
     [Test]
@@ -287,7 +289,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task AddEditionAsync_AddsEdition()
     {
-        var edition = new CardSet("m19", "Magic 2019", "Core", "Core Set");
+        var edition = new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core);
 
         await _store.AddSetAsync(edition);
 
@@ -299,8 +301,8 @@ public class SqliteCardStoreTests
     [Test]
     public async Task GetEditionsAsync_ReturnsAllEditions()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Magic 2019", "1", "core"));
-        await _store.AddSetAsync(new CardSet("m20", "Magic 2020", "1", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m20", "Magic 2020", setType: CardSetType.core));
 
         var editions = await _store.GetCardSetsAsync();
 
@@ -374,41 +376,6 @@ public class SqliteCardStoreTests
         }
     }
 
-    [Test]
-    public async Task BulkUpdateOwnCountAsync_PersistsStatsToOwnCounts()
-    {
-        var cardId1 = Guid.NewGuid();
-        var cardId2 = Guid.NewGuid();
-
-        var stats = new[]
-        {
-            new OwnCountStats(cardId1, 2, 4, 1),
-            new OwnCountStats(cardId2, 1, 2, 1),
-        };
-
-        await _store.AddAllAsync(new[] { CreateTestCard(cardId1, "Card 1"), CreateTestCard(cardId2, "Card 2") });
-        await _store.BulkUpdateOwnCountAsync(stats);
-
-        // Verify via direct SQL
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
-        var count = await conn.QuerySingleAsync<int>("SELECT COUNT(*) FROM OwnCounts");
-        Assert.That(count, Is.EqualTo(2));
-    }
-
-    [Test]
-    public async Task BulkUpdateOwnCountAsync_HandlesEmptyStats()
-    {
-        await _store.BulkUpdateOwnCountAsync(Array.Empty<OwnCountStats>());
-        // Should not throw
-    }
-
-    [Test]
-    public async Task BulkUpdateOwnCountAsync_HandlesNullStats()
-    {
-        await _store.BulkUpdateOwnCountAsync(null!);
-        // Should not throw
-    }
 
     // ═══ ResolveSetNamesAsync (batch: full name → abbreviation) ═══
 
@@ -423,7 +390,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_ReturnsEmpty_WhenNoInput()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Magic 2019", "1", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Magic 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(Array.Empty<string>());
 
@@ -433,7 +400,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_ResolvesSingleFullSetName()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(new[] { "Core Set 2019" });
 
@@ -444,9 +411,9 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_ResolvesMultipleFullNames()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
-        await _store.AddSetAsync(new CardSet("WOT", "War of the Spark", "Ravnica", "expansion"));
-        await _store.AddSetAsync(new CardSet("rna", "Ravnica Allegiance", "Ravnica", "expansion"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "WOT", "War of the Spark", setType: CardSetType.expansion));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "rna", "Ravnica Allegiance", setType: CardSetType.expansion));
 
         var result = await _store.ResolveSetNamesAsync(new[]
         {
@@ -464,7 +431,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_PartialMatch_OnlyKnownSetsReturned()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(new[]
         {
@@ -480,7 +447,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveSetNamesAsync_CaseInsensitiveMatch()
     {
-        await _store.AddSetAsync(new CardSet("m19", "Core Set 2019", "Core", "core"));
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "m19", "Core Set 2019", setType: CardSetType.core));
 
         var result = await _store.ResolveSetNamesAsync(new[] { "core set 2019" });
 
@@ -502,7 +469,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveCardsByNameAndSetAsync_ReturnsEmpty_WhenNoInput()
     {
-        await _store.AddAsync(new MagicCard { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
 
         var result = await _store.ResolveCardsByNameAndSetAsync(Array.Empty<(string, string?)>());
 
@@ -513,7 +480,7 @@ public class SqliteCardStoreTests
     public async Task ResolveCardsByNameAndSetAsync_ResolvesSingleCard()
     {
         var cardId = Guid.NewGuid();
-        await _store.AddAsync(new MagicCard { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = cardId, Name = "Lightning Bolt", SetCode = "m19" });
 
         var pairs = new (string, string?)[] { ("Lightning Bolt", "m19") };
         var result = await _store.ResolveCardsByNameAndSetAsync(pairs);
@@ -531,9 +498,9 @@ public class SqliteCardStoreTests
 
         await _store.AddAllAsync(new[]
         {
-            new MagicCard { Id = cardId1, Name = "Lightning Bolt", SetCode = "m19" },
-            new MagicCard { Id = cardId2, Name = "Island", SetCode = "m19" },
-            new MagicCard { Id = cardId3, Name = "Counterspell", SetCode = "wot" },
+            new Card { Id = cardId1, Name = "Lightning Bolt", SetCode = "m19" },
+            new Card { Id = cardId2, Name = "Island", SetCode = "m19" },
+            new Card { Id = cardId3, Name = "Counterspell", SetCode = "wot" },
         });
 
         var pairs = new (string, string?)[]
@@ -552,6 +519,35 @@ public class SqliteCardStoreTests
     }
 
     [Test]
+    public async Task ResolveCardsByNameAndSetAsync_BeyondCompoundSelectLimit_ResolvesAllAcrossChunks()
+    {
+        // Regression: the query used to build ONE UNION ALL branch per pair and died on
+        // large legacy decks (10k+ cards) with "too many terms in compound SELECT" —
+        // SQLite caps a compound SELECT at SQLITE_MAX_COMPOUND_SELECT = 500 terms.
+        // 550 pairs span 6 chunks of the chunked builder and also verify the global
+        // discriminator keeps every pair keyed to its own card across chunk boundaries.
+        const int n = 550;
+        var ids = Enumerable.Range(0, n).Select(_ => Guid.NewGuid()).ToList();
+        await _store.AddAllAsync(ids.Select((id, i) => new Card
+        {
+            Id = id,
+            Name = $"Chunked Card {i}",
+            SetCode = "chg",
+        }).ToList());
+
+        var pairs = Enumerable.Range(0, n)
+            .Select(i => ($"Chunked Card {i}", (string?)"chg"))
+            .ToList();
+
+        var result = await _store.ResolveCardsByNameAndSetAsync(pairs);
+
+        Assert.That(result, Has.Count.EqualTo(n));
+        for (int i = 0; i < n; i++)
+            Assert.That(result[$"Chunked Card {i}|chg"].Id, Is.EqualTo(ids[i]),
+                $"Pair {i} mapped to the wrong card — global discriminator mapping across chunks is broken.");
+    }
+
+    [Test]
     public async Task ResolveCardsByNameAndSetAsync_DistinguishesSameNameDifferentSets()
     {
         var cardId1 = Guid.NewGuid();
@@ -560,8 +556,8 @@ public class SqliteCardStoreTests
         // "Island" exists in both M19 and M20 with different UUIDs
         await _store.AddAllAsync(new[]
         {
-            new MagicCard { Id = cardId1, Name = "Island", SetCode = "m19" },
-            new MagicCard { Id = cardId2, Name = "Island", SetCode = "m20" },
+            new Card { Id = cardId1, Name = "Island", SetCode = "m19" },
+            new Card { Id = cardId2, Name = "Island", SetCode = "m20" },
         });
 
         var pairs = new (string, string?)[]
@@ -582,7 +578,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveCardsByNameAndSetAsync_PartialMatch_OnlyKnownCardsReturned()
     {
-        await _store.AddAsync(new MagicCard { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = Guid.NewGuid(), Name = "Lightning Bolt", SetCode = "m19" });
 
         var pairs = new (string, string?)[]
         {
@@ -604,7 +600,7 @@ public class SqliteCardStoreTests
     {
         var cardId = Guid.NewGuid();
         // Cards table has Set TEXT NOT NULL — empty string is the closest to "no set"
-        await _store.AddAsync(new MagicCard { Id = cardId, Name = "Token", SetCode = "" });
+        await _store.AddAsync(new Card { Id = cardId, Name = "Token", SetCode = "" });
 
         var pairs = new (string, string?)[] { ("Token", "") };
         var result = await _store.ResolveCardsByNameAndSetAsync(pairs);
@@ -617,7 +613,7 @@ public class SqliteCardStoreTests
     [Test]
     public async Task ResolveCardsByNameAndSetAsync_DeduplicatesSamePair()
     {
-        await _store.AddAsync(new MagicCard { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
+        await _store.AddAsync(new Card { Id = Guid.NewGuid(), Name = "Island", SetCode = "m19" });
 
         // Same pair repeated — result should still have only one entry per composite key
         var pairs = new (string, string?)[]
@@ -639,9 +635,9 @@ public class SqliteCardStoreTests
         // Performance test: batch resolution should use a single SQL query,
         // not N queries. We verify by checking that all results are returned
         // and the method doesn't throw or hang with many pairs.
-        var cards = new List<MagicCard>();
+        var cards = new List<Card>();
         for (int i = 0; i < 50; i++)
-            cards.Add(new MagicCard { Id = Guid.NewGuid(), Name = $"Card {i}", SetCode = "m19" });
+            cards.Add(new Card { Id = Guid.NewGuid(), Name = $"Card {i}", SetCode = "m19" });
 
         await _store.AddAllAsync(cards);
 
@@ -655,9 +651,71 @@ public class SqliteCardStoreTests
             "Batch resolution of 50 cards should return all 50 via a single query");
     }
 
-    private MagicCard CreateTestCard(Guid cardId, string name)
+    [Test]
+    public async Task GetPagedAsync_LocationFilter_ReturnsOnlyCardsInLocation()
     {
-        return new MagicCard
+        // Arrange: 3 cards in KB, 2 of them present in a deck
+        var cards = new[]
+        {
+            CreateTestCard(Guid.NewGuid(), "Lightning Bolt"),
+            CreateTestCard(Guid.NewGuid(), "Counterspell"),
+            CreateTestCard(Guid.NewGuid(), "Force of Will"),
+        };
+        await _store.AddAllAsync(cards);
+
+        var collectionStore = new SqliteCollectionStore(_dbPath);
+        await collectionStore.InitializeAsync();
+        var deck = await collectionStore.CreateDeckAsync("Test Deck");
+        await collectionStore.AddAllAsync(new[]
+        {
+            new MyCard(cards[0], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 2 },
+            new MyCard(cards[1], new Collection(deck.Id, deck.Name, null, NodeType.Deck, 0), true) { Count = 1 },
+        });
+
+        // Act: paged query restricted to the deck location
+        var result = await _store.GetPagedAsync(new CardListFilter
+        {
+            LocationFilter = deck.Id,
+            Page = 1,
+            PageSize = 50,
+        });
+
+        // Assert: only the 2 cards in the deck; KB-only card excluded
+        Assert.That(result.TotalCount, Is.EqualTo(2));
+        var names = result.Cards.Select(c => c.Name).ToList();
+        Assert.That(names, Does.Contain("Lightning Bolt"));
+        Assert.That(names, Does.Contain("Counterspell"));
+        Assert.That(names, Does.Not.Contain("Force of Will"));
+
+        // Act: location + FTS query — intersection of both conditions
+        var ftsResult = await _store.GetPagedAsync(new CardListFilter
+        {
+            LocationFilter = deck.Id,
+            Query = "bolt",
+            Page = 1,
+            PageSize = 50,
+        });
+
+        Assert.That(ftsResult.TotalCount, Is.EqualTo(1));
+        Assert.That(ftsResult.Cards.Single().Name, Is.EqualTo("Lightning Bolt"));
+    }
+
+    [Test]
+    public async Task AddSetAsync_PersistsSetTypeAsWireString()
+    {
+        await _store.AddSetAsync(new CardSet(Guid.NewGuid(), "msh", "Murders at Karlov Manor", setType: CardSetType.from_the_vault));
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var raw = await conn.ExecuteScalarAsync<string>("SELECT SetType FROM CardSet WHERE SetCode = 'msh'");
+
+        Assert.That(raw, Is.EqualTo("from_the_vault"),
+            "SetType must be persisted as the wire string in the TEXT column, not an enum ordinal.");
+    }
+
+    private Card CreateTestCard(Guid cardId, string name)
+    {
+        return new Card
         {
             Id = cardId,
             Name = name,

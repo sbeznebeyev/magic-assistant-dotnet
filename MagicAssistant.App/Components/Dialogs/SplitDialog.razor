@@ -1,132 +1,211 @@
 @using MagicAssistant.Core.Services.DeckCard
+@using MagicAssistant.Data.Model
 @inject IDeckCardService DeckCardService
+@inject ICollectionStore CollectionStore
 
 @if (!IsOpen) return;
 
-<div class="split-dialog-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+<div class="split-dialog-overlay" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
     <div class="split-dialog-box" @onclick:stopPropagation>
         @* ── Header ── *@
-        <div class="split-header">
-            <span class="split-title">Split Card Pile</span>
-            <button class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
+        <div class="split-dialog-header">
+            <span class="split-dialog-title">Split Card Pile</span>
+            <button class="split-dialog-close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
         </div>
 
         @if (_card == null)
         {
-            <div class="split-empty">No card selected.</div>
+            <div class="split-dialog-empty">No card selected.</div>
         }
         else
         {
             @* ── Card preview ── *@
-            <div class="split-preview">
-                <span class="preview-name">@_card.Name</span>
-                <span class="preview-count">× @_totalCount in deck</span>
+            <div class="split-dialog-preview">
+                <span class="split-dialog-preview-name">@ActiveName</span>
+                <span class="split-dialog-preview-count">× @_totalCount</span>
             </div>
 
-            @* ── Split form ── *@
-            <div class="split-form">
-                @* Main deck count ── *@
-                <div class="form-row">
-                    <label class="form-label">Main Deck</label>
-                    <div class="count-control">
-                        <button class="count-btn" @onclick="() => ChangeMain(-1)" disabled="@(_mainCount <= 0)">−</button>
-                        <input type="number" min="0" max="@_totalCount" @bind="_mainCount" @bind:event="oninput"
-                               class="count-input" />
-                        <button class="count-btn" @onclick="() => ChangeMain(1)" disabled="@(_mainCount >= _totalCount)">+</button>
-                    </div>
+            @* ── Split slider: drag the handle to move cards one at a time between deck and sideboard ── *@
+            <div class="split-dialog-form">
+                <div class="split-dialog-slider-heads">
+                    <span class="split-dialog-label-deck">deck</span>
+                    <span class="split-dialog-badge-sideboard">sideboard</span>
                 </div>
 
-                @* Sideboard count ── *@
-                <div class="form-row">
-                    <label class="form-label">Sideboard</label>
-                    <div class="count-control">
-                        <span class="count-value sb">@_sideCount</span>
+                <div class="split-dialog-slider-row">
+                    <span class="split-dialog-count">@_mainCount</span>
+                    <div class="split-dialog-track-wrap">
+                        <div class="split-dialog-bar">
+                            <div class="split-dialog-bar-main" style="width:@LeftBarWidthPct%"></div>
+                            <div class="split-dialog-bar-side" style="width:@RightBarWidthPct%"></div>
+                        </div>
+                        <input type="range" min="0" max="@_totalCount" step="1"
+                               value="@_sideCount" @oninput="OnSliderInput"
+                               class="split-dialog-slider" aria-label="Split between deck and sideboard" />
                     </div>
-                </div>
-
-                @* Visual indicator ── *@
-                <div class="split-bar-wrap">
-                    <div class="split-bar">
-                        <div class="split-main" style="width: @(_totalCount > 0 ? (double)_mainCount / _totalCount * 100 : 0)%"></div>
-                        <div class="split-side" style="width: @(_totalCount > 0 ? (double)_sideCount / _totalCount * 100 : 0)%"></div>
-                    </div>
+                    <span class="split-dialog-count">@_sideCount</span>
                 </div>
 
                 @* Error ── *@
                 @if (!string.IsNullOrEmpty(_error))
                 {
-                    <div class="split-error">@_error</div>
+                    <div class="split-dialog-error">@_error</div>
                 }
             </div>
 
             @* ── Footer ── *@
-            <div class="split-footer">
-                <button class="btn-split" @onclick="OnSplit" disabled="@(_invalid || _saving)">
-                    @(_saving ? "Splitting..." : "Split")
+            <div class="split-dialog-footer">
+                <button class="split-dialog-btn-move" @onclick="OnMove" disabled="@(!_moved || _saving)">
+                    @(_saving ? "Moving..." : "Move")
                 </button>
-                <button class="btn-cancel" @onclick="Close" disabled="@_saving">Cancel</button>
+                <button class="split-dialog-btn-cancel" @onclick="Close" disabled="@_saving">Cancel</button>
             </div>
         }
     </div>
 </div>
 
 @code {
-    private MagicCardPhysical? _card;
+    private MyCard? _card;
+    private MyCard? _sideboardCard;
+    private Collection? _sideboardNode;
+    private int _deckId;
     private int _totalCount = 0;
     private int _mainCount = 0;
+    private int _initialMainCount;
+    private int _initialSideCount;
+    private bool _isDoubleSided;
     private bool _saving;
     private string? _error;
-    private bool _invalid => _mainCount <= 0 || _sideCount <= 0;
+
+    /// <summary>True when the slider value differs from the distribution at open time.
+    /// The Move button is enabled only in that state.</summary>
+    private bool _moved => _mainCount != _initialMainCount;
 
     // ── Two-way binding pattern (IsOpen / IsOpenChanged) ──
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
 
-    [Parameter] public MagicCardPhysical? Card { get; set; }
+    [Parameter] public MyCard? Card { get; set; }
     [Parameter] public int? DeckId { get; set; }
     [Parameter] public EventCallback OnSplitDone { get; set; }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (IsOpen && Card != _card)
-            LoadCard(Card);
+            await LoadCardAsync(Card);
     }
 
-    private void LoadCard(MagicCardPhysical? card)
+    private async Task LoadCardAsync(MyCard? card)
     {
         _card = card;
+        _error = null;
         if (card == null) return;
 
-        _totalCount = card.Count;
-        _mainCount = _totalCount;
-        _error = null;
+        _isDoubleSided = card.Card.Has2Faces;
+
+        if (!DeckId.HasValue)
+        {
+            _totalCount = card.Count;
+            _mainCount = _initialMainCount = card.Count;
+            return;
+        }
+
+        // Resolve the deck root: in a sideboard view DeckId is the sideboard node itself,
+        // whose ParentId is the owning deck. Collections have no sideboard concept — block the move.
+        try
+        {
+            var node = await CollectionStore.GetByIdAsync(DeckId.Value);
+            if (node?.NodeType == NodeType.Sideboard)
+                _deckId = node.ParentId!.Value;   // opened from a sideboard view → resolve the owning deck
+            else if (node?.NodeType == NodeType.Deck)
+                _deckId = DeckId.Value;           // opened from a deck view
+            else
+            {
+                _error = "Split is only available for decks.";
+                _totalCount = card.Count;
+                _mainCount = _initialMainCount = card.Count;
+                return;
+            }
+
+            // Load both rows of the deck+sideboard pair so the slider opens at the real distribution.
+            _sideboardNode = await CollectionStore.GetByParentIdAsync(_deckId);
+            var rows = await CollectionStore.GetCardsAsync(card.Id);
+            var deckRow = rows.FirstOrDefault(r => r.Collection?.Id == _deckId);
+            _sideboardCard = _sideboardNode is { } sb ? rows.FirstOrDefault(r => r.Collection?.Id == sb.Id) : null;
+
+            _totalCount = (deckRow?.Count ?? 0) + (_sideboardCard?.Count ?? 0);
+            _mainCount = deckRow?.Count ?? 0;
+            _initialMainCount = _mainCount;
+            _initialSideCount = _sideboardCard?.Count ?? 0;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
     }
 
-    private void ChangeMain(int delta)
-    {
-        var newCount = _mainCount + delta;
-        if (newCount >= 0 && newCount <= _totalCount)
-            _mainCount = newCount;
-    }
+    private CardFace? ActiveFace => _isDoubleSided && _card?.Card.CardFaces is { Length: >= 2 }
+        ? _card.Card.CardFaces[0] // превью показывает лицевую сторону
+        : null;
+
+    // Scryfall fills PrintedName for many double-sided cards.
+    // Fall back to base card values if face-specific fields are empty.
+    private string ActiveName => ActiveFace is { } f
+        ? (f.PrintedName ?? f.Name ?? _card?.Card.PrintedName ?? _card?.Name ?? string.Empty)
+        : (_card?.Card.PrintedName ?? _card?.Name ?? string.Empty);
 
     private int _sideCount => _totalCount - _mainCount;
 
-    private async Task OnSplit()
+    // Bar segments are positioned relative to the slider handle (slider value = sideboard count):
+    // blue fills [0, handle], orange fills [handle, 1] — the handle sits exactly at the boundary.
+    // Whole percents via Math.Round, same as CreaturePage's bar chart: an int renders identically
+    // in any culture (no decimal separator to break the inline style).
+    private int LeftBarWidthPct => _totalCount > 0 ? (int)Math.Round(_sideCount / (double)_totalCount * 100) : 0;
+    private int RightBarWidthPct => _totalCount > 0 ? (int)Math.Round(_mainCount / (double)_totalCount * 100) : 0;
+
+    /// <summary>The slider value is the SIDEBOARD count: dragging right pushes cards into the
+    /// sideboard, dragging left pulls them back to the deck — cards flow in the direction of the drag.</summary>
+    private void OnSliderInput(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var side))
+            _mainCount = _totalCount - Math.Clamp(side, 0, _totalCount);
+    }
+
+    private async Task OnMove()
     {
         if (_card == null || !DeckId.HasValue) return;
-        if (_invalid) return;
+        if (!_moved || _saving) return;
+        if (!string.IsNullOrEmpty(_error)) return;
 
         _saving = true;
         _error = null;
+        var movedOk = false;
 
         try
         {
-            var rightPart = await DeckCardService.SplitCardAsync(DeckId.Value, _card.Id, _sideCount);
+            // Delta from the distribution at open time: positive pushes copies deck→sideboard,
+            // negative pulls them back. Full moves use MoveCardsAsync (whole-row move + merge).
+            var delta = _sideCount - _initialSideCount;
 
-            // Note: sideboard is now a separate child node with NodeType=Sideboard,
-            // SplitCardAsync handles this internally via the service layer.
+            if (delta > 0)
+            {
+                if (delta == _initialMainCount && _sideboardNode is not null)
+                    await DeckCardService.MoveCardsAsync(_deckId, new[] { _card.Id }, _sideboardNode.Id);
+                else
+                    await DeckCardService.SplitCardAsync(_deckId, _card.Id, delta);
+            }
+            else
+            {
+                // back > 0 implies the sideboard row existed at open time → node is loaded
+                var back = -delta;
+                if (back == _initialSideCount && _sideboardNode is not null)
+                    await DeckCardService.MoveCardsAsync(_sideboardNode.Id, new[] { _card.Id }, _deckId);
+                else
+                    await DeckCardService.SplitCardBackAsync(_deckId, _card.Id, back);
+            }
 
             await OnSplitDone.InvokeAsync();
+            movedOk = true;
         }
         catch (Exception ex)
         {
@@ -136,6 +215,9 @@
         {
             _saving = false;
         }
+
+        // Close after finally: Close() guards on _saving, which is still true inside the try block.
+        if (movedOk) await Close();
     }
 
     // ── Close helpers ──
@@ -146,11 +228,9 @@
         await IsOpenChanged.InvokeAsync(false);
     }
 
-    private async Task OnOverlayClick() => await Close();
-
-    private void OnKeyDown(KeyboardEventArgs e)
+    private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
-            _ = Close();
+            await Close();
     }
 }

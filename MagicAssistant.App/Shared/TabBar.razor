@@ -1,7 +1,8 @@
+@using MagicAssistant.Data.Model.NavigatorNodes
 @* TabBar — deck analysis tab navigation *@
 
 <div class="tab-bar">
-    @foreach (var tab in Tabs)
+    @foreach (var tab in VisibleTabs)
     {
         <button class="@(ActiveTab == tab.Value ? "active" : "")"
                 @onclick="@(() => SelectTab(tab.Value))">
@@ -13,6 +14,9 @@
 @code {
     [Parameter] public string ActiveTab { get; set; } = "cards";
     [Parameter] public EventCallback<string> OnTabSelected { get; set; }
+    /// <summary>Node type of the selected collection — gates node-specific tabs.
+    /// Named NodeKind so the property doesn't shadow the enum type.</summary>
+    [Parameter] public NodeType? NodeKind { get; set; }
 
     private static readonly (string Label, string Value)[] Tabs =
     [
@@ -22,10 +26,13 @@
         ("Creatures", "creatures"),
         ("Types", "types"),
         ("Abilities", "abilities"),
-        ("Info", "info"),
         ("Legality", "legality"),
-        ("Collector", "collector"),
     ];
+
+    /// <summary>Tabs visible for the current node type — Legality is Deck-only
+    /// (format rules don't apply to Collections, Sideboards or Folders).</summary>
+    private IEnumerable<(string Label, string Value)> VisibleTabs =>
+        Tabs.Where(t => t.Value != "legality" || NodeKind == NodeType.Deck);
 
     private async Task SelectTab(string tabValue)
     {

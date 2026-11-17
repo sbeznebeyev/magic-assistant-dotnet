@@ -26,7 +26,7 @@ public static class FormatExtensions
 
     /// <summary>
     /// Converts a Format enum value to its Scryfall API key (lowercase with underscores).
-    /// Used for matching against the Legal/NotLegal columns in the Cards table.
+    /// Used for matching against the Legal column in the Cards table.
     /// </summary>
     public static string ToScryfallKey(this Format format) => format switch
     {

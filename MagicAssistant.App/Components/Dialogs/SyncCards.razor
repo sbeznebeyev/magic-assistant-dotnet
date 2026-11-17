@@ -1,0 +1,409 @@
+@* SyncCards — card sync of one selected set: the lower half of the former SyncKnowledgeBase
+   dialog (set selector, images, languages, sync button, progress). Set-list sync lives in
+   SyncSets.razor. Data loading, the six-phase sync and persistence stay on the command side;
+   this component only drives it and renders the polled progress. *@
+@implements IAsyncDisposable
+@using System.Text.Json
+@using MagicAssistant.App.Dtos
+@using MagicAssistant.Core.Commands
+@using MagicAssistant.Core.Queries
+
+@if (IsOpen)
+{
+    <div class="sync-dialog-overlay">
+    <div class="sync-dialog" @onclick:stopPropagation="true">
+        @* ── Header ── *@
+        <div class="sync-header">
+            <span class="sync-title">Sync Cards from Scryfall</span>
+            <button class="close-btn" @onclick="Close">✕</button>
+        </div>
+
+        @if (_loadingSets)
+        {
+            <div class="sync-loading">Loading sets from database...</div>
+        }
+        else if (_error != null)
+        {
+            <div class="sync-error">
+                <span>@_error</span>
+                <button @onclick="RetryLoadSetsFromKB">Retry</button>
+            </div>
+        }
+        else if (!_isSyncing)
+        {
+            @* ── Selection Form ── *@
+            <div class="sync-form">
+                @* Set Selector ── *@
+                <div class="form-group">
+                    <label>Sets (@_sets.Count)</label>
+                    <div class="set-selector-wrap">
+                        <SetSelectorDropdown
+                            Value="@_selectedSetCode"
+                            ValueChanged="v => _selectedSetCode = v"
+                            Sets="@_sets"
+                            Disabled="@(_sets!.Count == 0)" />
+                    </div>
+                </div>
+
+                @* Download Images ── *@
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" @bind="_downloadImages" />
+                        <span>Download card images</span>
+                    </label>
+                </div>
+
+                @* Language Localization Toggles ── *@
+                <div class="form-group language-group">
+                    <label>Card languages</label>
+                    <div class="language-toggles">
+                        @foreach (var lang in _allLanguages)
+                        {
+                            <button type="button"
+                                    class="lang-toggle @(IsLangSelected(lang) ? "active" : "")"
+                                    @onclick="() => ToggleLanguage(lang)"
+                                    title="@GetLangDisplayName(lang)">
+                                @lang
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @* Sync Button ── *@
+                <button class="sync-btn" @onclick="StartSyncCards"
+                        disabled="@(_syncDisabled)">
+                    @GetSyncButtonLabel()
+                </button>
+            </div>
+
+            @* ── Last Result ── *@
+            @if (_lastResult != null)
+            {
+                <div class="sync-result @( _lastResult.Success ? "success" : "error")">
+                    <div class="result-header">
+                        @( _lastResult.Success ? "✓ Sync Complete" : "✗ Sync Failed")
+                    </div>
+                    <div class="result-details">
+                        @if (!string.IsNullOrEmpty(_lastResult.SetName))
+                        {
+                            <span class="detail">Set: @_lastResult.SetName</span>
+                        }
+                        <span class="detail">Cards: @_lastResult.CardsPersisted</span>
+                        <span class="detail">Images: @_lastResult.ImagesDownloaded</span>
+                        @if (_lastResult.Errors > 0)
+                        {
+                            <span class="detail error">Errors: @_lastResult.Errors</span>
+                        }
+                        <span class="detail">Duration: @_lastResult.Duration.ToString("mm\\:ss")</span>
+                    </div>
+                    @if (_lastResult.ErrorMessages.Any())
+                    {
+                        <div class="result-errors">
+                            @foreach (var err in _lastResult.ErrorMessages)
+                            {
+                                <div>⚠ @err</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            @* ── Sync In Progress ── *@
+            <div class="sync-progress-section">
+                <div class="progress-set-line">
+                    @* Global .set-symbol sprite classes (sets.css): gold gradient painted through
+                       the per-set mask — same binding pattern as CollectorView's set rows. *@
+                    <span class="progress-set-icon set-symbol set-symbol-@(_selectedSetCode)"></span>
+                    <span class="progress-set-name">@(_currentSet?.Name ?? _selectedSetCode)</span>
+                </div>
+
+                @* One status line: the message already names the phase; PhaseName rendered
+                   beside it was a duplicate of the same thought. *@
+                <div class="phase-indicator">
+                    <span class="phase-message">@_currentState?.Message</span>
+                </div>
+
+                <div class="progress-bar-wrap">
+                    @* ProgressWidthPct, not ProgressPercent: raw double under a comma culture
+                       produces "width: 70,5%" — invalid, dropped, bar renders full. *@
+                    <div class="progress-bar" style="width: @(_currentState?.ProgressWidthPct ?? 0)%"></div>
+                </div>
+
+                <div class="progress-stats">
+                    @if ((_currentState?.DownloadedPages ?? 0) > 0)
+                    {
+                        <span>Pages: @_currentState!.DownloadedPages</span>
+                    }
+                    <span>Cards: @_currentState?.ReadyCardsToSave / @_currentState?.TotalCards</span>
+                    @if (_downloadImages)
+                    {
+                        <span>Images: @_currentState?.ImagesDownloaded</span>
+                        @if ((_currentState?.ImagesFailed ?? 0) > 0)
+                        {
+                            <span class="fail">(@_currentState!.ImagesFailed failed)</span>
+                        }
+                    }
+                </div>
+
+                <button class="cancel-btn" @onclick="CancelSync">Cancel</button>
+            </div>
+        }
+    </div>
+    </div>
+}
+
+@code {
+    // ── State ────────────────────────────────────────────
+    private List<CardSetDto> _sets = new();
+    private bool _loadingSets;
+    private string? _error;
+
+    // ── Selection ────────────────────────────────────────
+    private string _selectedSetCode = "";
+    private bool _downloadImages = true;
+
+    // ── Sync ─────────────────────────────────────────────
+    private bool _isSyncing;
+    private SyncResult? _lastResult;
+    private SyncSetState? _currentState;
+    private CancellationTokenSource? _cts;
+    private Timer? _pollTimer;
+    private CardSetDto? _currentSet;
+    private string[] _languages = [];
+    private static readonly string[] _allLanguages = ["en", "ru", "es", "fr", "de", "it", "pt", "ja", "ko", "zhs", "zht"];
+
+    /// <summary>Persisted language selection. The key string is shared with DeckImportWizard and
+    /// OldDeckImportWizard on purpose — one setting drives every Scryfall download. Renaming the
+    /// component must not rename this key.</summary>
+    private const string LanguagesSettingKey = "SyncKnowledgeBase.Languages";
+
+    private static readonly Dictionary<string, string> _langDisplayNames = new()
+    {
+        { "en", "English" },
+        { "ru", "Русский" },
+        { "es", "Español" },
+        { "fr", "Français" },
+        { "de", "Deutsch" },
+        { "it", "Italiano" },
+        { "pt", "Português" },
+        { "ja", "日本語" },
+        { "ko", "한국어" },
+        { "zhs", "简体中文" },
+        { "zht", "繁體中文" }
+    };
+
+    private bool IsLangSelected(string lang) => _languages.Contains(lang);
+
+    private string GetLangDisplayName(string lang) =>
+        _langDisplayNames.TryGetValue(lang, out var name) ? name : lang;
+
+    private async Task ToggleLanguage(string lang)
+    {
+        _languages = _languages.Contains(lang)
+            ? _languages.Where(l => l != lang).ToArray()
+            : _languages.Append(lang).ToArray();
+        await SaveLanguagesAsync();
+    }
+
+    private async Task LoadLanguagesAsync()
+    {
+        if (GetSettingQueryHandler is null) return;
+        try
+        {
+            var json = await GetSettingQueryHandler.Handle(new GetUserSettingQuery(LanguagesSettingKey));
+            if (!string.IsNullOrEmpty(json))
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                _languages = JsonSerializer.Deserialize<string[]>(json, options) ?? [];
+            }
+        }
+        catch
+        {
+            // If loading fails, keep default (empty)
+            _languages = [];
+        }
+    }
+
+    private async Task SaveLanguagesAsync()
+    {
+        if (SaveSettingCommandHandler is null) return;
+        try
+        {
+            await SaveSettingCommandHandler.Handle(new SaveUserSettingCommand(LanguagesSettingKey, JsonSerializer.Serialize(_languages)));
+        }
+        catch
+        {
+            // Silently fail — settings are not critical for sync to work
+        }
+    }
+
+    private bool _syncDisabled => string.IsNullOrEmpty(_selectedSetCode) || _languages.Length == 0;
+
+    private string GetSyncButtonLabel()
+    {
+        if (string.IsNullOrEmpty(_selectedSetCode))
+            return "No selected Set";
+        if (_languages.Length == 0)
+            return "Select at least one language";
+        return $"Sync Cards of selected Set ({_languages.Length} lang)";
+    }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Notifies MainLayout after a run (list reload, strip stats, navigator counts).</summary>
+    [Parameter] public EventCallback OnCompleted { get; set; }
+
+    [Inject] private GetKBAvailableSetsQueryHandler? KBSetsQueryHandler { get; set; }
+    [Inject] private SyncKBCommandHandler? SyncCommandHandler { get; set; }
+    [Inject] private SyncSetStateRegistry? StateRegistry { get; set; }
+    [Inject] private SaveUserSettingCommandHandler? SaveSettingCommandHandler { get; set; }
+    [Inject] private GetUserSettingQueryHandler? GetSettingQueryHandler { get; set; }
+
+    // ── Lifecycle ────────────────────────────────────────
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            if (_sets.Count == 0)
+                await LoadSetsFromKB();
+            await LoadLanguagesAsync();
+        }
+    }
+
+    private async Task LoadSetsFromKB()
+    {
+        _loadingSets = true;
+        _error = null;
+        try
+        {
+            var sets = await KBSetsQueryHandler!.Handle(new GetKBAvailableSetsQuery());
+            _sets = sets.Select(DtoHelper.ToCardSetDto).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loadingSets = false;
+        }
+    }
+
+    private async Task RetryLoadSetsFromKB() => await LoadSetsFromKB();
+
+    // ── Sync Control ─────────────────────────────────────
+    private async Task StartSyncCards()
+    {
+        if (string.IsNullOrEmpty(_selectedSetCode)) return;
+
+        // Captured up front: the sync outlives individual renders, and the form is hidden while it
+        // runs — the completion path must not re-read mutable selection state.
+        var setCode = _selectedSetCode;
+
+        _isSyncing = true;
+        _lastResult = null;
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        var token = cts.Token;   // captured: the task must never re-read _cts, which DisposeAsync can null concurrently
+        StateHasChanged();
+
+        Task syncTask = Task.Run(async () =>
+        {
+            SyncResult result;
+            try
+            {
+                result = await SyncCommandHandler!.Handle(
+                    new SyncKBCommand(setCode, _languages, _downloadImages),
+                    token);
+            }
+            catch (OperationCanceledException)
+            {
+                result = new SyncResult
+                {
+                    Success = false,
+                    SetCode = setCode,
+                    ErrorMessages = { "Sync cancelled" }
+                };
+            }
+            catch (Exception ex)
+            {
+                result = new SyncResult
+                {
+                    Success = false,
+                    SetCode = setCode,
+                    ErrorMessages = { ex.Message }
+                };
+            }
+
+            // The task body runs on a thread-pool thread: every field write goes back through
+            // InvokeAsync onto the circuit. Writing them here raced the 500ms poll timer, which
+            // could StateHasChanged() mid-update and render a half-applied completion state.
+            try
+            {
+                await InvokeAsync(() =>
+                {
+                    _lastResult = result;
+                    _isSyncing = false;
+                    if (_cts == cts) _cts = null;   // only if DisposeAsync didn't already swap it
+                    StopPolling();
+                });
+            }
+            catch (Exception)
+            {
+                // Circuit already gone (page closed / navigated away): DisposeAsync cancelled the
+                // sync, and there is no UI left to write to. Swallow — an unobserved fault here
+                // would only pollute the logs.
+            }
+        });
+
+        // Poll the registry for progress (every 500ms) — InvokeAsync marshals onto the circuit.
+        _pollTimer = new Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                if (StateRegistry != null)
+                {
+                    _currentState = StateRegistry.Get(setCode);
+                    if (_currentState != null && !string.IsNullOrEmpty(_currentState.SetName))
+                        _currentSet = _sets.FirstOrDefault(s => s.Code == setCode);
+                    StateHasChanged();
+                }
+            });
+        }, null, 0, 500);
+
+        await syncTask;
+        await OnCompleted.InvokeAsync();
+    }
+
+    private void CancelSync() => _cts?.Cancel();
+
+    private void StopPolling()
+    {
+        _pollTimer?.Dispose();
+        _pollTimer = null;
+    }
+
+    /// <summary>Blazor calls this when the circuit drops or the dialog's host re-renders it away.
+    /// Without it the 500ms timer kept ticking forever (the old defect: a disposed dialog still
+    /// polling the registry) and an in-flight sync kept downloading with nobody left to watch it.
+    /// The CTS is cancelled but not disposed: the running download may still hold its token,
+    /// and disposing a source under a live registration throws. A cancelled CTS is GC-safe.</summary>
+    public ValueTask DisposeAsync()
+    {
+        StopPolling();
+        _cts?.Cancel();   // stop the download: no UI remains to report progress to
+        _cts = null;
+        return ValueTask.CompletedTask;
+    }
+
+    // ── Dialog ───────────────────────────────────────────
+    private async Task Close()
+    {
+        if (_isSyncing) return; // Don't close while syncing
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

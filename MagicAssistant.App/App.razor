@@ -15,15 +15,16 @@
 
     <!-- Site CSS (global overrides) -->
     <link rel="stylesheet" href="css/site.css" />
+    <link rel="stylesheet" href="css/sets.css" />
 
     <!-- Blazor scoped CSS (auto-generated .razor.css files) -->
     @* Microsoft .NET 10 template uses @Assets with the project namespace *@
     <link href="@Assets["MagicAssistant.App.styles.css"]" rel="stylesheet" />
 
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="_interactiveRenderMode" />
 </head>
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="_interactiveRenderMode" />
 
     <div id="blazor-error-ui">
         An unhandled error has occurred.
@@ -41,3 +42,11 @@
     <script src="js/site.js"></script>
 </body>
 </html>
+
+@* Prerendering is intentionally disabled: the app is fully interactive (all data comes from SQLite after the
+   SignalR circuit attaches), so the prerender pass would only render an empty shell and run every component's
+   OnInitializedAsync twice. One shared instance keeps HeadOutlet and Routes consistent — mixing prerendered and
+   non-prerendered interactive components in one tree is not allowed. *@
+@code {
+    private static readonly InteractiveServerRenderMode _interactiveRenderMode = new(prerender: false);
+}

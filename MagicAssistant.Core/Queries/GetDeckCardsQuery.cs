@@ -14,10 +14,10 @@ public class GetDeckCardsQueryHandler
         _collectionStore = collectionStore;
     }
 
-    public async Task<ICollection<IMagicCard>> Handle(GetDeckCardsQuery query, CancellationToken ct = default)
+    public async Task<ICollection<ICard>> Handle(GetDeckCardsQuery query, CancellationToken ct = default)
     {
         // Now uses the optimized SQL-level filter with JOIN to fetch all cards for the deck
         var deckCards = await _collectionStore.GetDeckCardsAsync(query.DeckId, ct);
-        return deckCards.Cast<IMagicCard>().ToList();
+        return deckCards.Cast<ICard>().ToList();
     }
 }

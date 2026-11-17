@@ -54,18 +54,41 @@ public sealed class SyncSetState
     public DateTimeOffset StartedAt { get; set; }
     public TimeSpan Elapsed => Completed || Failed ? DateTimeOffset.UtcNow - StartedAt : default;
 
-    /// <summary>Percentage of cards ready to save (0-100).</summary>
+    /// <summary>
+    /// Phase-weighted overall progress (0-100). Each phase owns its own band, which keeps the bar
+    /// monotonic even though ReadyCardsToSave is re-counted from zero during mapping: download
+    /// 0-35, mapping 35-70, images 70-95, saving pinned at 95 (one bulk write, no finer signal),
+    /// done 100. The old cards-only formula sat at 100% for the entire image phase.
+    /// </summary>
     public double ProgressPercent
     {
         get
         {
             lock (_lock)
             {
+                if (Completed) return 100;
                 if (TotalCards <= 0) return 0;
-                return Math.Min(ReadyCardsToSave * 100.0 / TotalCards, 100);
+                return Phase switch
+                {
+                    0 => 0,   // resolving the set code
+                    1 => Math.Min(ReadyCardsToSave * 35.0 / TotalCards, 35),
+                    2 => 35 + Math.Min(ReadyCardsToSave * 35.0 / TotalCards, 35),
+                    // Skipped-existing images count into ImagesDownloaded, so ok+fail reaches TotalCards.
+                    3 => 70 + Math.Min((ImagesDownloaded + ImagesFailed) * 25.0 / TotalCards, 25),
+                    4 => 95,
+                    _ => 100,
+                };
             }
         }
     }
+
+    /// <summary>
+    /// Whole-percent bar width for the inline style — the CreaturePage.BarWidthPct pattern. An int
+    /// never carries a decimal separator, so a comma culture cannot corrupt the CSS: the raw double
+    /// renders as "70,5" under ru-RU, the browser drops the invalid width declaration, and the bar
+    /// then sits at its default full width — the "always 100%" symptom, independent of the formula.
+    /// </summary>
+    public int ProgressWidthPct => (int)Math.Round(ProgressPercent);
 
     public SyncSetState(string setCode)
     {

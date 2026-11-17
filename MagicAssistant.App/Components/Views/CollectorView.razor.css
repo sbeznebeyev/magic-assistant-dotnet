@@ -1,0 +1,453 @@
+/* CollectorView — Showcase mode layout */
+
+/* Root: two panels side by side, filling the whole area */
+.collector-view {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Left panel — the two set nodes stacked vertically */
+.collector-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px;
+}
+
+/* Right panel — fixed 360px, reserved for future content */
+.collector-side {
+    width: 360px;
+    flex-shrink: 0;
+    border-left: 1px solid #3c3c3c;
+}
+
+/* ── Royal toolbar: dark gradient ground, gold hairline, refined controls ── */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    padding: 9px 14px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #2b2b30 0%, #232327 100%);
+    border: 1px solid rgba(255, 215, 0, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 246, 200, 0.05), 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* Fixed-width search field with a gold-tinted focus ring */
+.set-search-bar {
+    position: relative;
+    width: 300px;
+    flex-shrink: 0;
+}
+
+/* Search glyph — muted gold, sits inside the field on the left */
+.set-search-glyph {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 215, 0, 0.45);
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.set-search-input {
+    width: 100%;
+    background: #1d1d20;
+    color: #ddd;
+    border: 1px solid rgba(255, 215, 0, 0.14);
+    padding: 6px 28px 6px 30px;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.set-search-input::placeholder {
+    color: #6a6a72;
+    font-style: italic;
+}
+
+.set-search-input:focus {
+    outline: none;
+    border-color: rgba(255, 215, 0, 0.55);
+    box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.07);
+}
+
+.set-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 215, 0, 0.14);
+    color: #d9c27a;
+    border: none;
+    cursor: pointer;
+    font-size: 9px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.set-clear-btn:hover {
+    background: rgba(255, 215, 0, 0.3);
+    color: var(--gold-light);
+}
+
+/* Set type filter — small-caps gold pill; active state = lit from within */
+.set-type-filter-btn {
+    background: linear-gradient(180deg, #26262b 0%, #202024 100%);
+    border: 1px solid rgba(255, 215, 0, 0.28);
+    border-radius: 4px;
+    color: #d9c27a;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.set-type-filter-btn:hover {
+    border-color: rgba(255, 215, 0, 0.55);
+    color: var(--gold-light);
+    background: linear-gradient(180deg, #2c2c32 0%, #242429 100%);
+}
+
+/* Filter is active — at least one type pressed in the dialog */
+.set-type-filter-btn.active {
+    background: linear-gradient(180deg, rgba(255, 215, 0, 0.18) 0%, rgba(255, 215, 0, 0.05) 100%);
+    border-color: var(--gold-mid);
+    color: var(--gold-light);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.16), inset 0 1px 0 rgba(255, 246, 200, 0.14);
+}
+
+.sort-label {
+    color: #d9c27a;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Shown in a node body when the active search matches nothing there */
+.set-list-empty {
+    color: #888;
+    font-size: 12px;
+    padding: 4px 0;
+}
+
+/* Sort mode dropdown (persisted in user settings) — gold hairline, custom chevron */
+.sort-field {
+    position: relative;
+}
+
+.sort-select {
+    appearance: none;
+    background-color: #1d1d20;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 4px;
+    color: #ddd;
+    font-size: 12px;
+    padding: 6px 30px 6px 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sort-select:hover {
+    border-color: rgba(255, 215, 0, 0.4);
+}
+
+.sort-select:focus {
+    outline: none;
+    border-color: rgba(255, 215, 0, 0.55);
+    box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.07);
+}
+
+.sort-chevron {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 215, 0, 0.5);
+    font-size: 10px;
+    pointer-events: none;
+}
+
+/* Big node: collapsible header + scrollable body */
+.set-node {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+}
+
+/* Collapsed: the whole container shrinks to its header — without this, flex: 1 keeps
+   the empty box at half height after the body is removed */
+.set-node.collapsed {
+    flex: none;
+}
+
+/* Collapse root — click to toggle the body */
+.node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+    background-color: #2d2d30;
+    border-radius: 4px 4px 0 0;
+}
+
+.node-header:hover {
+    background-color: #37373d;
+}
+
+.node-toggle-glyph {
+    color: #888;
+    font-size: 11px;
+    width: 12px;
+    text-align: center;
+}
+
+.node-title {
+    color: #ccc;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Body scrolls independently when the list overflows */
+.node-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+/* Set elements flow left-to-right, top-to-bottom as space allows */
+.set-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 6px;
+}
+
+/* One set element — clickable; single selection shared across both lists */
+.set-item {
+    width: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.set-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.set-item.selected {
+    background-color: rgba(0, 120, 212, 0.18);
+    outline: 1px solid #0078d4;
+}
+
+/* 64×64 set symbol — gold gradient + mask come from global .set-symbol / .set-symbol-<code> in site.css;
+   mask-size: contain scales the mask cleanly at any size */
+.set-item .set-symbol {
+    width: 64px;
+    height: 64px;
+    display: block;
+}
+
+/* Full set name under the symbol (Not started node only) — wraps to fit the 72px column,
+   centered across the full item width; no release date, the date stays in the icon tooltip.
+   margin-top pulls it up against the icon (the shared .set-item gap is kept for the progress bar). */
+.set-item .set-name {
+    display: block;
+    width: 100%;
+    margin-top: -2px;
+    font-size: 9px;
+    color: #ccc;
+    text-align: center;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+/* Progress bar with centered label (in-collection node only) */
+.item-progress {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    /* track must be visible against the #252526 node body — #333 was lost in contrast */
+    background-color: #454545;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #0078d4;
+    /* the top list only holds sets with owned >= 1, so percent is always > 0 —
+       a sliver stays visible even for sub-pixel percentages */
+    min-width: 2px;
+}
+
+.progress-label {
+    position: relative; /* stays above the fill */
+    display: block;
+    text-align: center;
+    line-height: 14px;
+    font-size: 9px;
+    color: #fff;
+}
+
+/* ── Right panel: details of the selected set ── */
+
+.detail-placeholder {
+    color: #666;
+    font-size: 12px;
+    text-align: center;
+    padding-top: 40px;
+}
+
+.set-detail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 16px;   /* top offset */
+}
+
+/* 64×64 set symbol above the name — mask from global .set-symbol-<code>; centered by the parent's align-items */
+.detail-set-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+/* Full set name — bold gold serif, centered */
+.detail-name {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--gold, #ffd700);
+    text-align: center;
+    line-height: 1.25;
+}
+
+/* Small unobtrusive meta line under the name */
+.detail-meta {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #888;
+    text-align: center;
+}
+
+.detail-section {
+    margin-top: 24px;   /* offset between sections */
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 12px 0 24px;   /* breathing room: more air left of the icons than right of the bars */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Icon at the left edge, vertically centered against the right-hand block */
+.detail-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Right-hand block: owned/total above, bar below it; flex-grow stretches horizontally (row layout) */
+.detail-bar-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* owned/total counts at the left edge, above the bar */
+.detail-bar-counts {
+    font-size: 11px;
+    color: #bbb;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 30px set icon shaped by the global .set-symbol-<code> mask, tinted per rarity */
+.rarity-icon {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    display: inline-block;
+    background-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+/* black-and-white — common */
+.rarity-icon-common {
+    background-image: linear-gradient(110deg, #3f3f3f 0%, #8a8a8a 35%, #d9d9d9 50%, #8a8a8a 65%, #3f3f3f 100%);
+}
+
+/* silver-blue — uncommon */
+.rarity-icon-uncommon {
+    background-image: linear-gradient(110deg, #46617c 0%, #7fa0c0 35%, #cfe2f3 50%, #7fa0c0 65%, #46617c 100%);
+}
+
+/* gold — rare (same gradient as the global .set-symbol) */
+.rarity-icon-rare {
+    background-image: linear-gradient(110deg, var(--gold-deep) 0%, var(--gold) 25%, var(--gold-light) 33%, var(--gold) 41%, var(--gold-mid) 62%, var(--gold-deep) 100%);
+}
+
+/* orange — mythic */
+.rarity-icon-mythic {
+    background-image: linear-gradient(110deg, #7a2d0e 0%, #d9660f 35%, #ffb066 50%, #d9660f 65%, #7a2d0e 100%);
+}
+
+/* Mana color symbol (global .card-symbol sprite) at 24px */
+.detail-color-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+/* no flex-grow: in the column layout flex-basis: 0% would collapse the track
+   vertically and hide the bar; align-items: stretch already gives full width */
+.detail-bar-track {
+    height: 10px;
+    background-color: #454545;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.detail-bar-fill {
+    height: 100%;
+    background-color: #0078d4;
+}

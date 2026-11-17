@@ -115,88 +115,13 @@ public class QueryHandlerTests
         var coll = new Mock<ICollectionStore>();
         var analysis = new Mock<IAnalysisService>();
         coll.Setup(s => s.GetDeckWithSideboardAsync(1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<MagicCardPhysical>());
-        analysis.Setup(a => a.Analyze(It.IsAny<IEnumerable<MagicCardPhysical>>()))
+            .ReturnsAsync(Array.Empty<MyCard>());
+        analysis.Setup(a => a.Analyze(It.IsAny<IEnumerable<MyCard>>()))
             .Returns(new DeckAnalysisResult());
 
         var handler = new GetDeckAnalysisQueryHandler(coll.Object, analysis.Object);
         await handler.Handle(new GetDeckAnalysisQuery(1));
 
         coll.Verify(s => s.GetDeckWithSideboardAsync(1, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    /* ─── GetCollectorProgressQuery ───────────────────────── */
-
-    [Test]
-    public async Task GetCollectorProgress_CalculatesPercent()
-    {
-        var db = new Mock<IDbCardStore>();
-        db.Setup(s => s.GetCollectorProgressRawAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<CollectorProgressRaw> { new("m19", null, 269, 135, 80) });
-
-        var result = await new GetCollectorProgressQueryHandler(db.Object).Handle(new GetCollectorProgressQuery());
-        Assert.That(result.First().Percent, Is.GreaterThan(50));
-    }
-
-    [Test]
-    public async Task GetCollectorProgress_OnlyOwn_True_ShouldFilterToOwnedCardsOnly()
-    {
-        // BUG: Handler ignores OnlyOwn parameter — Percent is calculated from all collected cards
-        // instead of filtering to owned-only. The IDbCardStore.GetCollectorProgressRawAsync
-        // does not accept an onlyOwn parameter, and the handler performs no client-side filtering.
-        // Fix: Either add GetCollectorProgressRawAsync(bool onlyOwn) overload, or filter
-        // Collected/Percent in the handler when OnlyOwn=true.
-
-        var db = new Mock<IDbCardStore>();
-
-        // Simulate: 269 total cards in KB, 135 collected (any), 80 actually owned
-        var allCards = new List<CollectorProgressRaw> { new("m19", null, 269, 135, 80) };
-
-        db.Setup(s => s.GetCollectorProgressRawAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(allCards);
-
-        var handler = new GetCollectorProgressQueryHandler(db.Object);
-
-        var allResult = await handler.Handle(new GetCollectorProgressQuery(OnlyOwn: false));
-        var ownedResult = await handler.Handle(new GetCollectorProgressQuery(OnlyOwn: true));
-
-        // OnlyOwn=true should produce a lower Percent (80/269=29.7%) than OnlyOwn=false (135/269=50.2%)
-        // Currently both return the same value because OnlyOwn is ignored — this will fail.
-        Assert.That(
-            ownedResult.First().Percent,
-            Is.LessThan(allResult.First().Percent),
-            "BUG: OnlyOwn=true should reduce Percent to reflect only owned cards. " +
-            $"Expected < {allResult.First().Percent:F2}% (all collected), " +
-            $"got {ownedResult.First().Percent:F2}%. Handler ignores OnlyOwn parameter entirely.");
-    }
-
-    [Test]
-    public async Task GetCollectorProgress_Sorting_ShouldPutCompleteSetsFirst()
-    {
-        // BUG: Handler sorts OrderBy(r => r.Percent) (ascending), but the comment says
-        // "Sort by progress (complete first)". Complete sets have 100% — ascending puts them last.
-        // Fix: Change to OrderDescending or reverse the sort logic.
-
-        var db = new Mock<IDbCardStore>();
-        db.Setup(s => s.GetCollectorProgressRawAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<CollectorProgressRaw>
-            {
-                new("m19", "Magic 2019", 269, 269, 200), // 100% — complete
-                new("m20", "Magic 2020", 273, 50, 40),   // ~18% — incomplete
-            });
-
-        var result = await new GetCollectorProgressQueryHandler(db.Object)
-            .Handle(new GetCollectorProgressQuery());
-
-        var first = result.First();
-        var last = result.Last();
-
-        Assert.That(
-            first.Percent >= last.Percent,
-            Is.True,
-            $"BUG: Sorting is ascending but comment says 'complete first'. " +
-            $"First set '{first.SetAbbreviation}' has {first.Percent:F1}%, " +
-            $"last set '{last.SetAbbreviation}' has {last.Percent:F1}%. " +
-            $"Complete sets (100%) should appear before incomplete ones.");
     }
 }
