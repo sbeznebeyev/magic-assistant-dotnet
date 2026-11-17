@@ -33,7 +33,7 @@ public class DeckAnalysisService : IDeckAnalysisService
         if (deckId <= 0)
             throw new ArgumentException("Invalid deck ID.", nameof(deckId));
 
-        var cards = await _collectionStore.GetDeckCardsAsync(deckId, ct);
+        var cards = await _collectionStore.GetDeckCardsForAnalysisAsync(deckId, includeSideboard: false, ct);
         return _analysisService.Analyze(cards);
     }
 

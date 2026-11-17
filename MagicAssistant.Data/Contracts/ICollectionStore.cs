@@ -68,6 +68,34 @@ public interface ICollectionStore
     Task<(int Unique, int Total)> GetCollectionStatsAsync(int collectionId, CancellationToken ct = default);
 
     /// <summary>
+    /// Deck (+optional sideboard child) rows trimmed to the seven columns AnalysisService.Analyze
+    /// actually reads (Count, owning Collection.Id, Name, ManaCost, Type, OracleText, CmcNumber).
+    /// No Collection JOIN, no CardFaces — the full loaders paid two queries and ~30 columns for six fields.
+    /// Returned cards carry ONLY these fields; anything else on Card is default.
+    /// </summary>
+    Task<ICollection<MyCard>> GetDeckCardsForAnalysisAsync(int deckId, bool includeSideboard, CancellationToken ct = default);
+
+    /// <summary>
+    /// Same full physical rows as GetDeckCardsAsync but WITHOUT the CardFaces batch — the list
+    /// only reads Count/SetCode per card; the dialog preview loads one card's faces on demand
+    /// (IDbCardStore.GetCardFacesAsync). DFC-aware consumers must not use this bulk path.
+    /// </summary>
+    Task<ICollection<MyCard>> GetDeckCardsForListAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>Distinct non-null SetCodes present in the node — one DISTINCT query instead of
+    /// materializing every card just to project SetCode.</summary>
+    Task<ICollection<string>> GetNodeSetCodesAsync(int collectionId, CancellationToken ct = default);
+
+    /// <summary>Name + legality map per card in the node — the two columns the legality page reads.</summary>
+    Task<ICollection<DeckLegalityEntry>> GetDeckLegalityAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Physical rows of the given cards within one node — the targeted move load (WHERE CollectionId
+    /// AND CardId IN). Card carries only Id: RemoveAsync/AddAsync touch nothing else on it.
+    /// </summary>
+    Task<ICollection<MyCard>> GetDeckCardsForMoveAsync(int deckId, IEnumerable<Guid> cardIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Remove card rows from a collection node in a single SQL round-trip.
     /// Non-empty cardIds: all copies of each listed card; empty: every card row of the node
     /// (the "clear" operation — the node itself is kept).

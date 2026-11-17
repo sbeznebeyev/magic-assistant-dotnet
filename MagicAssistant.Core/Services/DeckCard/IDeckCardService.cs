@@ -97,6 +97,14 @@ public interface IDeckCardService
     Task<(int Unique, int Total)> GetCollectionStatsAsync(int collectionId, CancellationToken ct = default);
 
     /// <summary>
+    /// Full physical rows without CardFaces — the list view path; dialog previews load faces per card.
+    /// </summary>
+    Task<ICollection<MyCard>> GetDeckCardsForListAsync(int deckId, CancellationToken ct = default);
+
+    /// <summary>Distinct SetCodes present in the node — one DISTINCT query.</summary>
+    Task<ICollection<string>> GetNodeSetCodesAsync(int collectionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
     Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);

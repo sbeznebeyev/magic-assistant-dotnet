@@ -133,7 +133,7 @@
         _loading = true; _error = null; _main = null; _side = null; StateHasChanged();
         try
         {
-            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            var cards = await CollectionStore.GetDeckCardsForAnalysisAsync(DeckId, includeSideboard: true);
             // Each physical card carries its owning collection in Collection: the deck's own
             // cards (Id == DeckId) vs. the sideboard child's (everything else).
             var mainCards = cards.Where(c => c.Collection?.Id == DeckId).ToList();

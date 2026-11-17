@@ -75,6 +75,13 @@ public interface IDbCardStore : ICardStore<Card>
     Task<Dictionary<Guid, Card>> GetCardsByIdsAsync(ICollection<Guid> ids, CancellationToken ct = default);
 
     /// <summary>
+    /// Faces of one card (front/back) — the on-demand companion for bulk loads that skip
+    /// AttachFacesAsync (ICollectionStore.GetDeckCardsForListAsync): a dialog preview needs
+    /// the faces of exactly one card, not of the whole node.
+    /// </summary>
+    Task<CardFace[]> GetCardFacesAsync(Guid cardId, CancellationToken ct = default);
+
+    /// <summary>
     /// Collector progress for all sets — single SQL query.
     /// Returns per-set: total unique cards in KB vs unique cards the user owns in any deck.
     /// Replaces N+1 queries (GetEditions + GetBySet per edition + recursive tree walk).

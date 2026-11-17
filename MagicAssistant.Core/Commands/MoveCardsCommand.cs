@@ -40,8 +40,9 @@ public class MoveCardsCommandHandler
         if (targetDeck == null)
             throw new InvalidOperationException($"Target deck '{command.TargetDeckId}' not found");
 
-        // Targeted query — get only source deck's cards (WHERE CollectionId = @SourceDeckId)
-        var sourceCards = await _collectionStore.GetDeckCardsAsync(sourceDeck.Id, ct);
+        // Targeted query — only the moved rows of the source deck (physical columns only;
+        // Card carries Id, which is all RemoveAsync/AddAsync read from it).
+        var sourceCards = await _collectionStore.GetDeckCardsForMoveAsync(sourceDeck.Id, command.Cards.Select(c => c.Id), ct);
         var sourceCardMap = sourceCards.ToDictionary(c => c.Id);
 
         int totalMoved = 0;

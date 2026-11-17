@@ -146,7 +146,7 @@ public class CommandHandlerTests
             .ReturnsAsync(new Collection(1, "Source", null, NodeType.Deck, 0));
         coll.Setup(s => s.GetByIdAsync(2, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Collection(2, "Target", null, NodeType.Deck, 0));
-        coll.Setup(s => s.GetDeckCardsAsync(1, It.IsAny<CancellationToken>()))
+        coll.Setup(s => s.GetDeckCardsForMoveAsync(1, It.IsAny<IEnumerable<Guid>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { physical });
         cardStore.Setup(s => s.RemoveAsync(It.IsAny<MyCard>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);

@@ -114,7 +114,7 @@ public class QueryHandlerTests
     {
         var coll = new Mock<ICollectionStore>();
         var analysis = new Mock<IAnalysisService>();
-        coll.Setup(s => s.GetDeckWithSideboardAsync(1, It.IsAny<CancellationToken>()))
+        coll.Setup(s => s.GetDeckCardsForAnalysisAsync(1, true, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<MyCard>());
         analysis.Setup(a => a.Analyze(It.IsAny<IEnumerable<MyCard>>()))
             .Returns(new DeckAnalysisResult());
@@ -122,6 +122,6 @@ public class QueryHandlerTests
         var handler = new GetDeckAnalysisQueryHandler(coll.Object, analysis.Object);
         await handler.Handle(new GetDeckAnalysisQuery(1));
 
-        coll.Verify(s => s.GetDeckWithSideboardAsync(1, It.IsAny<CancellationToken>()), Times.Once);
+        coll.Verify(s => s.GetDeckCardsForAnalysisAsync(1, true, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

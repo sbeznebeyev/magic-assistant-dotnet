@@ -267,9 +267,9 @@
         List<CardSet> sets;
         if (FilterViewModel.CurrentCollectionId.HasValue)
         {
-            // Location mode: only the sets present in this node's cards.
-            var physical = await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value);
-            var codes = physical.Select(p => p.Card.SetCode).OfType<string>().Distinct().ToList();
+            // Location mode: only the sets present in this node's cards — one DISTINCT query
+            // (the old path materialized every card with faces just to project SetCode).
+            var codes = (await DeckCardService.GetNodeSetCodesAsync(FilterViewModel.CurrentCollectionId.Value)).ToList();
             sets = codes.Count == 0 ? new List<CardSet>() : (await DbStore.GetCardSetsByCodesAsync(codes)).ToList();
         }
         else

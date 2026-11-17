@@ -114,11 +114,10 @@ public class DeckCardService : IDeckCardService
         if (cardIds == null || !cardIds.Any())
             return 0;
 
-        // Get existing cards from source deck
-        var sourceCards = await _collectionStore.GetDeckCardsAsync(sourceDeckId, ct);
-        var toMove = sourceCards
-            .Where(c => cardIds.Contains(c.Id))
-            .ToList();
+        // Targeted load: only the moved rows, physical columns only (Card carries Id —
+        // RemoveAsync/AddAsync read nothing else from it).
+        var sourceCards = await _collectionStore.GetDeckCardsForMoveAsync(sourceDeckId, cardIds, ct);
+        var toMove = sourceCards.ToList();
 
         if (!toMove.Any())
             return 0;
@@ -355,6 +354,24 @@ public class DeckCardService : IDeckCardService
             throw new ArgumentException("Invalid collection ID.", nameof(collectionId));
 
         return _collectionStore.GetCollectionStatsAsync(collectionId, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<ICollection<MyCard>> GetDeckCardsForListAsync(int deckId, CancellationToken ct = default)
+    {
+        if (deckId <= 0)
+            throw new ArgumentException("Invalid deck ID.", nameof(deckId));
+
+        return _collectionStore.GetDeckCardsForListAsync(deckId, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<ICollection<string>> GetNodeSetCodesAsync(int collectionId, CancellationToken ct = default)
+    {
+        if (collectionId <= 0)
+            throw new ArgumentException("Invalid collection ID.", nameof(collectionId));
+
+        return _collectionStore.GetNodeSetCodesAsync(collectionId, ct);
     }
 
     /// <inheritdoc />

@@ -1192,6 +1192,16 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
     }
 
     /// <summary>
+    /// Public single-card faces load — the on-demand path for bulk loads that skip AttachFacesAsync.
+    /// </summary>
+    public async Task<CardFace[]> GetCardFacesAsync(Guid cardId, CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+        return await LoadCardFacesAsync(conn, cardId, ct);
+    }
+
+    /// <summary>
     /// Loads card faces from the database for a single card.
     /// </summary>
     private static async Task<CardFace[]> LoadCardFacesAsync(SqliteConnection conn, Guid cardId, CancellationToken ct = default)
@@ -1581,16 +1591,11 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             CmcText = row.CmcText,
         };
 
-        // Restore LegalityMap from comma-separated formats
+        // Restore LegalityMap from comma-separated formats — CreateFromLegal mints a fresh map
+        // per card; SetLegal on the shared LegalityMap.Empty default used to leak formats across
+        // all cards without legality data.
         if (!string.IsNullOrEmpty(row.LegalityFormats))
-        {
-            var formats = row.LegalityFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            foreach (var fmt in formats)
-            {
-                if (Enum.TryParse<Format>(fmt, true, out var format))
-                    card.LegalityMap.SetLegal(format);
-            }
-        }
+            card.LegalityMap = LegalityMap.CreateFromLegal(row.LegalityFormats);
 
         // Restore properties
         // Restore Colors from comma-separated string

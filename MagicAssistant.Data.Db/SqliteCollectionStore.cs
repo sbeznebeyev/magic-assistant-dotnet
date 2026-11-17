@@ -682,6 +682,149 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
         public int Total { get; set; }
     }
 
+    // ── Lightweight projections (audit: heavy loaders consumed by data-sipping callers) ──
+
+    private class AnalysisCardRow
+    {
+        public int CollectionId { get; set; }
+        public Guid CardId { get; set; }
+        public int Count { get; set; }
+        public string? Name { get; set; }
+        public string? ManaCost { get; set; }
+        public string? Type { get; set; }
+        public string? OracleText { get; set; }
+        public int? CmcNumber { get; set; }
+    }
+
+    public async Task<ICollection<MyCard>> GetDeckCardsForAnalysisAsync(int deckId, bool includeSideboard, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+
+        var ids = new List<int> { deckId };
+        if (includeSideboard)
+        {
+            var sb = await conn.QueryAsync<int>(
+                "SELECT Id FROM Collection WHERE ParentId = @DeckId AND NodeType = 3",
+                new { DeckId = deckId });
+            ids.AddRange(sb);
+        }
+
+        // Exactly the columns Analyze() reads. No Collection JOIN (pages compare only
+        // Collection.Id), no CardFaces — the full path paid a second 10k-id query for faces
+        // nobody in analysis touches. Cards are returned partially populated BY DESIGN.
+        var rows = await conn.QueryAsync<AnalysisCardRow>(
+            @"SELECT d.CollectionId, d.CardId, d.Count, c.Name, c.ManaCost, c.Type, c.OracleText, c.CmcNumber
+              FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id
+              WHERE d.CollectionId IN @Ids",
+            new { Ids = ids });
+
+        return rows.Select(r => new MyCard(
+            new Card
+            {
+                Id = r.CardId,
+                Name = r.Name ?? string.Empty,
+                ManaCost = r.ManaCost,
+                Type = r.Type,
+                OracleText = r.OracleText,
+                CmcNumber = r.CmcNumber,
+            },
+            // Owning node carries Id only — the main/side split compares Id.
+            new Collection(r.CollectionId, string.Empty, null, NodeType.Deck, 0),
+            false) { Count = r.Count }).ToList();
+    }
+
+    public async Task<ICollection<MyCard>> GetDeckCardsForListAsync(int deckId, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        var rows = await conn.QueryAsync<FullDeckCardRow>(
+            $"SELECT {DeckCardColumns} FROM Deck d LEFT JOIN Cards c ON d.CardId = c.Id LEFT JOIN Collection n ON d.CollectionId = n.Id WHERE d.CollectionId = @DeckId",
+            new { DeckId = deckId });
+        // No AttachFacesAsync on purpose: the list reads Count/SetCode from these rows; the
+        // Edit/Split/Move preview loads one card's faces on demand (GetCardFacesAsync).
+        return rows.Select(r => MapToFullPhysical(r)!).ToList();
+    }
+
+    public async Task<ICollection<string>> GetNodeSetCodesAsync(int collectionId, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        var codes = await conn.QueryAsync<string>(
+            @"SELECT DISTINCT c.SetCode FROM Deck d INNER JOIN Cards c ON d.CardId = c.Id
+              WHERE d.CollectionId = @CollectionId AND c.SetCode IS NOT NULL",
+            new { CollectionId = collectionId });
+        return codes.ToList();
+    }
+
+    public async Task<ICollection<DeckLegalityEntry>> GetDeckLegalityAsync(int deckId, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        var rows = await conn.QueryAsync<LegalityRow>(
+            @"SELECT c.Name, c.LegalityFormats FROM Deck d INNER JOIN Cards c ON d.CardId = c.Id
+              WHERE d.CollectionId = @DeckId",
+            new { DeckId = deckId });
+        // CreateFromLegal mints a fresh map per card — never SetLegal on the shared Empty.
+        return rows.Select(r => new DeckLegalityEntry(
+            r.Name ?? string.Empty,
+            LegalityMap.CreateFromLegal(r.LegalityFormats ?? string.Empty))).ToList();
+    }
+
+    private class LegalityRow
+    {
+        public string? Name { get; set; }
+        public string? LegalityFormats { get; set; }
+    }
+
+    private class MoveCardRow
+    {
+        public int CollectionId { get; set; }
+        public Guid CardId { get; set; }
+        public int Count { get; set; }
+        public bool IsOwn { get; set; }
+        public string? Comment { get; set; }
+        public string? DateAdded { get; set; }
+        public int? ForTradeCount { get; set; }
+        public float MyPrice { get; set; }
+        public int? Grade { get; set; }
+    }
+
+    public async Task<ICollection<MyCard>> GetDeckCardsForMoveAsync(int deckId, IEnumerable<Guid> cardIds, CancellationToken ct = default)
+    {
+        var ids = cardIds.Distinct().ToList();
+        if (ids.Count == 0) return new List<MyCard>();
+
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        var result = new List<MyCard>();
+        // Chunked defensively under SQLite's variable limit; move payloads are page-sized in practice.
+        foreach (var chunk in ids.Chunk(900))
+        {
+            // Physical row + CardId only — RemoveAsync/AddAsync read nothing else from Card.
+            var rows = await conn.QueryAsync<MoveCardRow>(
+                @"SELECT CollectionId, CardId, Count, IsOwn, Comment, DateAdded, ForTradeCount, MyPrice, Grade
+                  FROM Deck WHERE CollectionId = @CollectionId AND CardId IN @Ids",
+                new { CollectionId = deckId, Ids = chunk });
+            foreach (var r in rows)
+            {
+                var physical = new MyCard(new Card { Id = r.CardId },
+                    new Collection(r.CollectionId, string.Empty, null, NodeType.Deck, 0), r.IsOwn)
+                {
+                    Count = r.Count,
+                    MyPrice = r.MyPrice,
+                };
+                if (!string.IsNullOrEmpty(r.Comment)) physical.Comment = r.Comment;
+                if (!string.IsNullOrEmpty(r.DateAdded) && DateTimeOffset.TryParse(r.DateAdded, out var dateAdded))
+                    physical.DateAdded = dateAdded;
+                if (r.ForTradeCount.HasValue && r.ForTradeCount.Value > 0) physical.SetForTradeCount(r.ForTradeCount.Value);
+                if (r.Grade.HasValue) physical.Grade = (CardGrade)r.Grade.Value;
+                result.Add(physical);
+            }
+        }
+        return result;
+    }
+
     public async Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
@@ -936,16 +1079,12 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
             CmcText = row.CmcText,
         };
 
-        // Restore LegalityMap
+        // Restore LegalityMap — CreateFromLegal mints a fresh map per card. The old loop called
+        // SetLegal on Card's default (the shared LegalityMap.Empty singleton), so every loaded
+        // card polluted the global "empty" map and cards without legality data inherited other
+        // cards' legal formats.
         if (!string.IsNullOrEmpty(row.LegalityFormats))
-        {
-            var formats = row.LegalityFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            foreach (var fmt in formats)
-            {
-                if (Enum.TryParse<Format>(fmt, true, out var format))
-                    baseCard.LegalityMap.SetLegal(format);
-            }
-        }
+            baseCard.LegalityMap = LegalityMap.CreateFromLegal(row.LegalityFormats);
         // Stamp the owning collection node fully from the JOINed row (all-null when the node is gone).
         // CardCount is a computed POCO field, not a table column — left at 0 here.
         var collection = new Collection(

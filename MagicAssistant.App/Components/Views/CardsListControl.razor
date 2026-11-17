@@ -821,7 +821,7 @@
             // and to scope the sidebar set list to this node's distinct sets.
             if (FilterViewModel.CurrentCollectionId.HasValue)
             {
-                var physical = await Task.Run(() => DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value));
+                var physical = await Task.Run(() => DeckCardService.GetDeckCardsForListAsync(FilterViewModel.CurrentCollectionId.Value));
                 _physicalByCardId = physical.ToDictionary(p => p.Card.Id, p => p);
                 ApplyLocationScope(physical.Select(p => p.Card.SetCode).OfType<string>());
             }
@@ -988,12 +988,33 @@
         await ApplyFiltersAndPagination();
     }
 
-    private async Task EditLocationCard(MyCard card) => await OnEditCard.InvokeAsync(card);
+    private async Task EditLocationCard(MyCard card)
+    {
+        await EnsureFacesAsync(card);
+        await OnEditCard.InvokeAsync(card);
+    }
 
     /// <summary>Any count, including a single copy — the whole row moves deck↔sideboard.</summary>
-    private async Task SplitLocationCard(MyCard card) => await OnSplitCard.InvokeAsync(card);
+    private async Task SplitLocationCard(MyCard card)
+    {
+        await EnsureFacesAsync(card);
+        await OnSplitCard.InvokeAsync(card);
+    }
 
-    private async Task MoveLocationCardToPinned(MyCard card) => await OnMoveCardToPinned.InvokeAsync(card);
+    private async Task MoveLocationCardToPinned(MyCard card)
+    {
+        await EnsureFacesAsync(card);
+        await OnMoveCardToPinned.InvokeAsync(card);
+    }
+
+    /// <summary>The bulk list load skips CardFaces (10k cards × face rows for one preview).
+    /// The Edit/Split/Move previews need the faces of exactly this card — load them now;
+    /// the map entry travels by reference, so the dialog sees them.</summary>
+    private async Task EnsureFacesAsync(MyCard card)
+    {
+        if (!card.Card.Has2Faces || card.Card.CardFaces is { Length: > 0 }) return;
+        card.Card.CardFaces = await DbStore.GetCardFacesAsync(card.Card.Id);
+    }
 
     /// <summary>One grouped query over Deck: total copies of each displayed card in the pinned collection.</summary>
     /// <summary>Deck view: which of the displayed cards have ≥1 copy in the deck's sideboard.

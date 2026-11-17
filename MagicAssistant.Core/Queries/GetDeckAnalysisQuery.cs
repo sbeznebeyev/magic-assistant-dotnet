@@ -24,7 +24,7 @@ public class GetDeckAnalysisQueryHandler
 
     public async Task<DeckAnalysisResult> Handle(GetDeckAnalysisQuery query, CancellationToken ct = default)
     {
-        var deckCards = await _collectionStore.GetDeckWithSideboardAsync(query.DeckId, ct);
+        var deckCards = await _collectionStore.GetDeckCardsForAnalysisAsync(query.DeckId, includeSideboard: true, ct);
         return _analysisService.Analyze(deckCards);
     }
 }

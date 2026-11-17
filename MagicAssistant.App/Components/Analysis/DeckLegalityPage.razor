@@ -165,7 +165,7 @@
         _loading = true; _error = null; StateHasChanged();
         try
         {
-            var cards = await CollectionStore.GetDeckCardsAsync(DeckId);
+            var cards = await CollectionStore.GetDeckLegalityAsync(DeckId);
             if (cards.Count > 0) BuildLegalityData(cards);
             else _error = "No deck data available.";
         }
@@ -175,7 +175,7 @@
 
     private async Task Reload() => await LoadLegality();
 
-    private void BuildLegalityData(ICollection<MyCard> cards)
+    private void BuildLegalityData(ICollection<DeckLegalityEntry> cards)
     {
         // Enum Format → display name mapping
         var formatMap = new Dictionary<Format, string>
@@ -201,8 +201,8 @@
         {
             // Simple per-card legality: a format is legal when every card in the deck is.
             var illegalCards = cards
-                .Where(c => !c.Card.LegalityMap.IsLegal(format))
-                .Select(c => c.Card.Name)
+                .Where(c => !c.Legality.IsLegal(format))
+                .Select(c => c.Name)
                 .Distinct()
                 .ToList();
 

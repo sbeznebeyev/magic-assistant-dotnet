@@ -159,7 +159,7 @@
         _loading = true; _error = null; StateHasChanged();
         try
         {
-            var cards = await CollectionStore.GetDeckWithSideboardAsync(DeckId);
+            var cards = await CollectionStore.GetDeckCardsForAnalysisAsync(DeckId, includeSideboard: true);
             if (cards.Count == 0)
             {
                 _curve = Array.Empty<int>();
