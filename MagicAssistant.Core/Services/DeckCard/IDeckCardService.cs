@@ -92,6 +92,11 @@ public interface IDeckCardService
     Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
+    /// (unique, total) stat pair for a node — one SQL aggregate, no card materialization.
+    /// </summary>
+    Task<(int Unique, int Total)> GetCollectionStatsAsync(int collectionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>
     Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default);

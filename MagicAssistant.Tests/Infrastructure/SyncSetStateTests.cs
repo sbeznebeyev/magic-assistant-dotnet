@@ -86,27 +86,41 @@ public class SyncSetStateTests
     [Test]
     public void ProgressPercent_CalculatesCorrectly()
     {
+        // Phase-weighted formula: download owns 0-35, mapping 35-70 (see SyncSetState.ProgressPercent).
         var state = new SyncSetState("m19");
         state.TotalCards = 100;
+        state.Phase = 1;
         state.ReadyCardsToSave = 50;
 
-        Assert.That(state.ProgressPercent, Is.EqualTo(50.0),
-            "ProgressPercent should be (ReadyCardsToSave * 100 / TotalCards). " +
-            "Expected 50% for 50/100 cards.");
+        Assert.That(state.ProgressPercent, Is.EqualTo(17.5),
+            "Download phase: half of 100 cards fills half of the 0-35 band.");
+
+        state.Phase = 2;
+        Assert.That(state.ProgressPercent, Is.EqualTo(52.5),
+            "Mapping phase: the same 50/100 now fills the 35-70 band.");
     }
 
     [Test]
     public void ProgressPercent_CappedAt100()
     {
+        // Dual protection: the setter caps ReadyCardsToSave at TotalCards, and every phase band
+        // caps with Math.Min — no input may exceed 100 or leak into the next band.
         var state = new SyncSetState("m19");
         state.TotalCards = 100;
-        // Setter caps ReadyCardsToSave at TotalCards (100), so progress = 100%
-        state.ReadyCardsToSave = 150;
+        state.Phase = 1;
+        state.ReadyCardsToSave = 150;  // setter caps at TotalCards
 
-        Assert.That(state.ProgressPercent, Is.EqualTo(100.0),
-            "ProgressPercent should not exceed 100%. " +
-            "Both the setter (caps ReadyCardsToSave at TotalCards) and the getter " +
-            "(Math.Min(..., 100)) provide dual protection.");
+        Assert.That(state.ProgressPercent, Is.EqualTo(35),
+            "Download band saturates at 35, never leaks into mapping.");
+
+        state.Phase = 3;
+        state.ImagesDownloaded = 180;
+        state.ImagesFailed = 40;  // 220 image events for 100 cards
+        Assert.That(state.ProgressPercent, Is.EqualTo(95),
+            "Image band saturates at 95, never reaches the done value.");
+
+        state.Phase = 5;
+        Assert.That(state.ProgressPercent, Is.EqualTo(100));
     }
 
     // ─── Elapsed ───────────────────────────────────────────

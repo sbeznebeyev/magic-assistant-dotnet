@@ -61,6 +61,13 @@ public interface ICollectionStore
     Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default);
 
     /// <summary>
+    /// (unique, total) for one node in a single SQL aggregate: COUNT(*) rows and SUM(Count) copies.
+    /// The lightweight path for stat lines — GetDeckCardsAsync materializes every physical card
+    /// (and its faces) just to count them, which froze selection of 10k-card nodes.
+    /// </summary>
+    Task<(int Unique, int Total)> GetCollectionStatsAsync(int collectionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Remove card rows from a collection node in a single SQL round-trip.
     /// Non-empty cardIds: all copies of each listed card; empty: every card row of the node
     /// (the "clear" operation — the node itself is kept).

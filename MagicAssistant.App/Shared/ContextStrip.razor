@@ -23,7 +23,7 @@
     <div class="context-half context-selected">
         @if (SelectedCollection.CollectionId.HasValue)
         {
-            <span class="context-stats" title="unique: @_selectedUnique, total: @_selectedTotal">(@_selectedUnique/@_selectedTotal)</span>
+            <span class="context-stats" title="unique: @_selectedUnique, total: @_selectedTotal">(@StatsText(_statsShownSelectedId, SelectedCollection.CollectionId, _selectedUnique, _selectedTotal))</span>
             <span class="context-name" title="@SelectedCollection.Name">@DisplayNameOf(SelectedCollection)</span>
             @* Sideboard view: deck name + pill badge instead of the " (sb)" name suffix. *@
             @if (IsSideboard(SelectedCollection))
@@ -55,7 +55,7 @@
             {
                 <span class="sideboard-badge">Sideboard</span>
             }
-            <span class="context-stats" title="unique: @_pinnedUnique, total: @_pinnedTotal">(@_pinnedUnique/@_pinnedTotal)</span>
+            <span class="context-stats" title="unique: @_pinnedUnique, total: @_pinnedTotal">(@StatsText(_statsShownPinnedId, PinnedCollection.CollectionId, _pinnedUnique, _pinnedTotal))</span>
         }
         else
         {
@@ -94,6 +94,15 @@
     private int _selectedUnique;
     private int _selectedTotal;
 
+    /// <summary>Node ids whose numbers are currently on screen. Until a load for the current
+    /// id completes the strip shows a placeholder — stale numbers from the previous node are
+    /// worse than "…/…", and the wait must not block the rest of the render.</summary>
+    private int? _statsShownPinnedId;
+    private int? _statsShownSelectedId;
+
+    private static string StatsText(int? shownId, int? currentId, int unique, int total) =>
+        shownId == currentId && currentId.HasValue ? $"{unique}/{total}" : "…/…";
+
     /// <summary>Last loaded context ids — null = "nothing loaded yet" (the first load is forced by the trigger mismatch).</summary>
     private int? _loadedPinnedId;
     private int? _loadedSelectedId;
@@ -119,20 +128,23 @@
         var pinned = await LoadContextStatsAsync(PinnedCollection.CollectionId);
         if (generation != _loadGeneration) return;  // superseded by a newer load
         (_pinnedUnique, _pinnedTotal) = pinned;
+        _statsShownPinnedId = PinnedCollection.CollectionId;
 
         var selected = await LoadContextStatsAsync(SelectedCollection.CollectionId);
         if (generation != _loadGeneration) return;
         (_selectedUnique, _selectedTotal) = selected;
+        _statsShownSelectedId = SelectedCollection.CollectionId;
     }
 
-    /// <summary>unique = distinct cards in the node, total = sum of their counts (one row per card in Deck).</summary>
+    /// <summary>unique = distinct cards in the node, total = sum of their counts (one row per card in Deck).
+    /// SQL aggregate, off the dispatcher via Task.Run: Microsoft.Data.Sqlite is fake-async, so without
+    /// the offload the query would run on the Blazor render thread and freeze selection of big nodes.</summary>
     private async Task<(int Unique, int Total)> LoadContextStatsAsync(int? collectionId)
     {
         if (collectionId is not int id) return (0, 0);
         try
         {
-            var cards = await DeckCardService.GetDeckCardsAsync(id);
-            return (cards.Count, cards.Sum(c => c.Count));
+            return await Task.Run(() => DeckCardService.GetCollectionStatsAsync(id));
         }
         catch
         {

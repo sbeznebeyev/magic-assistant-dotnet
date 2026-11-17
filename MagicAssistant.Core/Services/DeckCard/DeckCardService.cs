@@ -349,6 +349,15 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
+    public Task<(int Unique, int Total)> GetCollectionStatsAsync(int collectionId, CancellationToken ct = default)
+    {
+        if (collectionId <= 0)
+            throw new ArgumentException("Invalid collection ID.", nameof(collectionId));
+
+        return _collectionStore.GetCollectionStatsAsync(collectionId, ct);
+    }
+
+    /// <inheritdoc />
     public Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
     {
         if (deckId <= 0)

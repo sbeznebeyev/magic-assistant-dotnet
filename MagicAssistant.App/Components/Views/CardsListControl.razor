@@ -808,13 +808,20 @@
     private async Task ApplyFiltersAndPagination()
     {
         _loading = true;
+        // Forced paint before the heavy phase: Microsoft.Data.Sqlite's "async" completes on the
+        // dispatcher, so without a real suspension the loading state would never reach the
+        // browser (same trap as the import wizard). Task.Run below keeps the dispatcher free
+        // while the 10k-card physical load runs on a pool thread — the store opens its own
+        // connection per call, so leaving the render thread is safe.
+        StateHasChanged();
+        await Task.Yield();
         try
         {
             // Location mode: load physical instances first — needed both for per-card counts/actions
             // and to scope the sidebar set list to this node's distinct sets.
             if (FilterViewModel.CurrentCollectionId.HasValue)
             {
-                var physical = await DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value);
+                var physical = await Task.Run(() => DeckCardService.GetDeckCardsAsync(FilterViewModel.CurrentCollectionId.Value));
                 _physicalByCardId = physical.ToDictionary(p => p.Card.Id, p => p);
                 ApplyLocationScope(physical.Select(p => p.Card.SetCode).OfType<string>());
             }

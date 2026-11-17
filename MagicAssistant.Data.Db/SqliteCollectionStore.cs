@@ -664,6 +664,24 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
     /// <summary>
     /// Get all physical cards for a specific deck (non-sideboard only) with full card info from Cards table.
     /// </summary>
+    public async Task<(int Unique, int Total)> GetCollectionStatsAsync(int collectionId, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        // One aggregate row: no JOIN to Cards/Collection, no face loading — the whole point
+        // is that selection stats never materialize the node's cards.
+        var row = await conn.QuerySingleAsync<CollectionStatsRow>(
+            "SELECT COUNT(*) AS \"Unique\", COALESCE(SUM(Count), 0) AS Total FROM Deck WHERE CollectionId = @CollectionId",
+            new { CollectionId = collectionId });
+        return (row.Unique, row.Total);
+    }
+
+    private class CollectionStatsRow
+    {
+        public int Unique { get; set; }
+        public int Total { get; set; }
+    }
+
     public async Task<ICollection<MyCard>> GetDeckCardsAsync(int deckId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();
