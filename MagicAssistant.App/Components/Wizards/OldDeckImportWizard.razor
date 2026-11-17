@@ -38,7 +38,7 @@
 
                 <div class="dialog-actions">
                     <button class="btn-primary" @onclick="OnImport" disabled="@(_fileName == null)">
-                        Import Legacy
+                        Import
                     </button>
                     <button class="btn-secondary" @onclick="Close">Cancel</button>
                 </div>
@@ -46,7 +46,13 @@
 
             case WizardState.Checking:
             case WizardState.Resolving:
-                <div class="dialog-loading">@(_state == WizardState.Checking ? "Checking sets..." : "Resolving cards...")</div>
+                @* Throbber covers the slow check + batch resolution (seconds on big decks);
+                   the switch leaves this case once the unresolved table / next step renders,
+                   so hiding is automatic — no flag to forget. *@
+                <div class="dialog-loading">
+                    <span class="dialog-spinner" role="status" aria-label="Resolving cards…"></span>
+                    <div>@(_state == WizardState.Checking ? "Checking sets..." : "Resolving cards...")</div>
+                </div>
                 break;
 
             case WizardState.SetPrompt:
@@ -205,7 +211,11 @@
                 break;
 
             case WizardState.Committing:
-                <div class="dialog-loading">Importing...</div>
+                @* Same throbber: the 10k-card merge is synchronous dispatcher work too. *@
+                <div class="dialog-loading">
+                    <span class="dialog-spinner" role="status" aria-label="Importing…"></span>
+                    <div>Importing...</div>
+                </div>
                 break;
         }
     </div>
@@ -406,6 +416,15 @@
         _error = null;
         _state = WizardState.Checking;
 
+        // Paint the throbber BEFORE the heavy phase. The check/resolve chain is CPU-bound
+        // and Microsoft.Data.Sqlite's "async" calls complete synchronously, so the handler
+        // never truly suspends on its own — the render queued by the state change would
+        // reach the browser only after everything is already done (the frozen-window
+        // symptom). Task.Yield forces a real suspension; the CSS spinner then keeps
+        // spinning on the browser side while the server thread is busy.
+        StateHasChanged();
+        await Task.Yield();
+
         try
         {
             _xmlContent = System.Text.Encoding.UTF8.GetString(_fileContent);
@@ -499,6 +518,8 @@
     private async Task ProceedToResolutionAsync()
     {
         _state = WizardState.Resolving;
+        StateHasChanged();
+        await Task.Yield(); // same forced paint as OnImport — flips the caption under the spinner
         _resolution = await ImportExport.ResolveLegacyCardsAsync(_xmlContent);
 
         if (_resolution.Unresolved.Count == 0)
@@ -622,6 +643,8 @@
     {
         _error = null;
         _state = WizardState.Committing;
+        StateHasChanged();
+        await Task.Yield(); // same forced paint: the merge itself is synchronous dispatcher work
 
         try
         {

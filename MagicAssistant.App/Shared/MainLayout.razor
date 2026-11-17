@@ -18,7 +18,7 @@
         <span class="header-actions">
             <span class="header-action @(_mode == LayoutMode.Showcase ? "active" : "")" @onclick="() => SetMode(LayoutMode.Showcase)" title="Show collector progress">Showcase</span>
             <span class="header-action @(_mode == LayoutMode.Management ? "active" : "")" @onclick="() => SetMode(LayoutMode.Management)" title="Deck & collection management">Management</span>
-            <span class="header-action" @onclick="OpenLegacyImportDialog" title="Import legacy deck (Gatherer ID + full set names)">Legacy Import</span>
+            <span class="header-action @LegacyImportClass" @onclick="OpenLegacyImportDialog" title="@LegacyImportTitle">Legacy Import</span>
             <span class="header-action" @onclick="OpenSyncSetsDialog" title="Sync the set list from Scryfall">Sync Sets</span>
             <span class="header-action" @onclick="OpenSyncCardsDialog" title="Sync cards of one set from Scryfall">Sync Cards</span>
         </span>
@@ -318,14 +318,33 @@
     private void OpenLegacyImportDialog()
     {
         // The legacy wizard has no target picker — it merges into the selected node, so
-        // a selection is a precondition; the header action stays silent without one.
+        // an unlocked node is a precondition; the gray header action stays silent and says
+        // why in the status line (the class below is what paints it gray).
         if (_currentCollection.CollectionId is null)
         {
             _statusText = "Select a collection or deck first";
             return;
         }
+        if (_currentCollection.IsLocked)
+        {
+            _statusText = "Cannot import into a locked location";
+            return;
+        }
         _showLegacyImportDialog = true;
     }
+
+    /// <summary>Affordance of the Legacy Import action: gold when the current selection can
+    /// receive the import (unlocked coll/deck/sb), gray for kb (no node selected) or a
+    /// locked node. IsLocked is kept fresh by the navigator's lock-change handler.</summary>
+    private string LegacyImportClass =>
+        _currentCollection.CollectionId is null || _currentCollection.IsLocked ? "disabled" : "gold";
+
+    /// <summary>Tooltip follows the same condition as the class: when the action is gray,
+    /// the tooltip names the way out instead of describing the dialog behind it.</summary>
+    private string LegacyImportTitle =>
+        LegacyImportClass == "disabled"
+            ? "Select unlocked collection/deck/sideboard"
+            : "Import legacy deck (Gatherer ID + full set names)";
     private void OpenSyncSetsDialog() => _showSyncSetsDialog = true;
     private void OpenSyncCardsDialog() => _showSyncCardsDialog = true;
 

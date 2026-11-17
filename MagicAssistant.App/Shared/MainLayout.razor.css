@@ -65,6 +65,25 @@
     font-weight: bold;
 }
 
+/* Legacy Import affordance follows the selection: gold = unlocked coll/deck/sb is ready
+   to receive the import; gray = kb or a locked node (the click is refused, not silent-failed). */
+.header-action.gold {
+    color: #ffd700;
+}
+
+.header-action.gold:hover {
+    color: #ffe9a3;
+}
+
+.header-action.disabled {
+    color: #666;
+    cursor: default;
+}
+
+.header-action.disabled:hover {
+    color: #666;
+}
+
 /* === Showcase area — CollectorView only, no management UI === */
 .showcase-area {
     flex: 1;
