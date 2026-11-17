@@ -148,7 +148,8 @@
         var data = new AbilityChartData { TotalCards = result.TotalCards };
         if (result.AbilityStats.Count == 0) return data;
 
-        var keywords = result.AbilityStats.OrderByDescending(kv => kv.Value).ToList();
+        // Alphabetical A→Z (case-insensitive) — same ordering as the creature subtype chart.
+        var keywords = result.AbilityStats.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).ToList();
         var max = keywords.Max(kv => kv.Value);
         data.Items = keywords
             .Select(kv =>

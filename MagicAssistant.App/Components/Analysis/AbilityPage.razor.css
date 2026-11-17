@@ -1,4 +1,12 @@
-.ability-page { padding: 12px; }
+.ability-page {
+    padding: 12px;
+    /* The host (.content-area in MainLayout) clips — long ability lists must scroll here.
+       Same recipe as the working .sets-list-wrapper: shrinkable flex item + min-height:0
+       + own scrollbar. Without it the page grows to content height and gets cut off. */
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+}
 
 .section-header {
     display: flex; align-items: center; justify-content: space-between;

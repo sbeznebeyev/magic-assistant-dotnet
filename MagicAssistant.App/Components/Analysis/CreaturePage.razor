@@ -40,7 +40,11 @@
                                 <div class="h-bar-row">
                                     <div class="h-bar-label @(item.IsAll ? "all" : "")">@item.Name</div>
                                     <div class="h-bar-track">
-                                        <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                        @* "all" is the total row — empty track, no bar: bars compete only among subtypes. *@
+                                        @if (!item.IsAll)
+                                        {
+                                            <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                        }
                                     </div>
                                     <div class="h-bar-value">@item.Count (@item.TotalPct.ToString("F0")%)</div>
                                 </div>
@@ -69,7 +73,11 @@
                                     <div class="h-bar-row">
                                         <div class="h-bar-label @(item.IsAll ? "all" : "")">@item.Name</div>
                                         <div class="h-bar-track">
-                                            <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                            @* "all" is the total row — empty track, no bar: bars compete only among subtypes. *@
+                                            @if (!item.IsAll)
+                                            {
+                                                <div class="h-bar-fill" style="width:@(item.BarWidthPct)%"></div>
+                                            }
                                         </div>
                                         <div class="h-bar-value">@item.Count (@item.TotalPct.ToString("F0")%)</div>
                                     </div>
@@ -151,18 +159,19 @@
         var data = new CreatureChartData { CreatureCount = result.CreatureCount };
         if (!result.CreatureSubtypes.Any()) return data;
 
-        // The type-line parser yields a bare "-" / "—" part for every creature whose line uses
-        // the standard "Creature - X" separator — that row is the creature total. Relabel it "all".
-        var dashKeys = new[] { "-", "\u2014" };
-        var dashTotal = result.CreatureSubtypes.Where(kv => dashKeys.Contains(kv.Key)).Sum(kv => kv.Value);
+        // The bold gold "all" row is the creature total itself — CreatureCount. It used to
+        // be mined from the bare "-"/"—" tokens the parser leaked per creature (one per
+        // single-faced card, TWO per double-faced card — inflating the total); the parser
+        // is fixed, so the total comes straight from the source.
         var subtypes = result.CreatureSubtypes
-            .Where(kv => !dashKeys.Contains(kv.Key))
-            .OrderByDescending(kv => kv.Value)
+            .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (dashTotal > 0)
-            subtypes.Insert(0, new KeyValuePair<string, int>("all", dashTotal));
-
+        // Bar scale: the fattest subtype row is the 100% reference. "all" is a total,
+        // not a competitor — excluded from the max and rendered as an empty track.
         var max = subtypes.Max(s => s.Value);
+        if (result.CreatureCount > 0)
+            subtypes.Insert(0, new KeyValuePair<string, int>("all", result.CreatureCount));
+
         data.Items = subtypes
             .Select(kv =>
             {
@@ -172,7 +181,7 @@
                 {
                     Name = kv.Key, Count = kv.Value,
                     IsAll = kv.Key == "all",
-                    BarWidthPct = (int)Math.Round(kv.Value / (double)max * 100),
+                    BarWidthPct = kv.Key == "all" ? 0 : (int)Math.Round(kv.Value / (double)max * 100),
                     TotalPct = result.CreatureCount > 0 ? kv.Value / (double)result.CreatureCount * 100 : 0
                 };
             })

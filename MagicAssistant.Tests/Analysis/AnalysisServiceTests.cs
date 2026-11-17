@@ -350,6 +350,35 @@ public class AnalysisServiceTests
         }
     }
 
+    [Test]
+    public void Analyze_DoubleFacedCreature_SubtypesFromCreatureFacesOnly()
+    {
+        // Regression: the parser split the joined type line without honoring the "//" face
+        // separator, so "Creature — Cat // Creature — Rat" polluted the chart with a
+        // literal "//" row, leaked "Creature" as a subtype, and leaked TWO bare-dash
+        // tokens per DFC (which the chart mined as its "all" total, inflating it).
+        // Each face must be parsed independently.
+        var dfc = CreatePhysicalCard("Daybound // Moonbound", "{1}{G}", "Creature — Cat // Creature — Rat", 2);
+        var modal = CreatePhysicalCard("Backface Brawler", "{R}", "Instant — Trap // Creature — Goblin", 1);
+
+        var result = _service.Analyze(new[] { dfc, modal });
+
+        Assert.That(result.CreatureSubtypes.ContainsKey("Cat"), Is.True);
+        Assert.That(result.CreatureSubtypes["Cat"], Is.EqualTo(2));
+        Assert.That(result.CreatureSubtypes["Rat"], Is.EqualTo(2));
+        Assert.That(result.CreatureSubtypes["Goblin"], Is.EqualTo(1),
+            "Only the creature face of a DFC contributes subtypes");
+        Assert.That(result.CreatureSubtypes.ContainsKey("Trap"), Is.False,
+            "The non-creature half of a DFC must not leak its subtype into the creature chart");
+        Assert.That(result.CreatureSubtypes.ContainsKey("//"), Is.False,
+            "The face separator is not a subtype name");
+        Assert.That(result.CreatureSubtypes.ContainsKey("Creature"), Is.False);
+        Assert.That(result.CreatureSubtypes.ContainsKey("\u2014"), Is.False,
+            "The supertype/subtype separator must not leak as a bare dash token");
+        Assert.That(result.CreatureCount, Is.EqualTo(3),
+            "Both DFC cards count once as creatures (card-level gate unchanged)");
+    }
+
     // ─── Analyze — Ability Stats ───────────────────────────
 
     [Test]

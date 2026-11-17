@@ -215,31 +215,48 @@ public class AnalysisService : IAnalysisService
     /// Extracts creature subtypes from a type line.
     /// E.g., "Creature - Human Warrior" → ["Human", "Warrior"]
     /// E.g., "Legendary Creature — Vampire Noble" → ["Vampire", "Noble"]
+    /// Double-faced cards join faces with "//" ("Creature — Cat // Creature — Rat"): each
+    /// face is parsed independently, only faces whose supertype part names "Creature"
+    /// contribute subtypes (the "Instant — Trap" half of a DFC must not leak "Trap" into
+    /// the creature chart), and the face separator itself never reaches the result.
     /// </summary>
+    private static readonly (string Token, int Length)[] SubtypeSeparators =
+    {
+        (" - ", 3),
+        (" :", 2),
+        (" \u2014 ", 3), // em dash
+        ("\u2014", 1),   // em dash without spaces
+    };
+
     private static IEnumerable<string> ExtractCreatureSubtypes(string typeLine)
     {
-        // Find the separator between super types and sub types (- : —)
-        var separatorPositions = new[]
+        foreach (var face in typeLine.Split(new[] { "//" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            typeLine.IndexOf(" - ", StringComparison.OrdinalIgnoreCase),
-            typeLine.IndexOf(" :", StringComparison.OrdinalIgnoreCase),
-            typeLine.IndexOf(" \u2014 ", StringComparison.OrdinalIgnoreCase), // em dash
-            typeLine.IndexOf("—", StringComparison.Ordinal), // em dash without spaces
-        }.Where(p => p >= 0).OrderBy(p => p).FirstOrDefault();
+            // Earliest separator wins; skip its FULL length. The old code advanced one char
+            // past the match start, leaking the dash itself into the list as a bare "—" token.
+            var sepPos = -1;
+            var sepLen = 0;
+            foreach (var (token, length) in SubtypeSeparators)
+            {
+                var idx = face.IndexOf(token, StringComparison.Ordinal);
+                if (idx >= 0 && (sepPos < 0 || idx < sepPos))
+                {
+                    sepPos = idx;
+                    sepLen = length;
+                }
+            }
+            if (sepPos < 0) continue; // no subtype section on this face ("Creature", "Instant", …)
 
-        if (separatorPositions < 0)
-            yield break;
+            // Gate on THIS face's supertype part — a DFC contributes only its creature half.
+            if (!HasType(face[..sepPos], _creatureTypes)) continue;
 
-        var subTypePart = typeLine[(separatorPositions + 1)..].Trim();
-        if (string.IsNullOrEmpty(subTypePart))
-            yield break;
-
-        // Split by comma or space to get individual subtypes
-        foreach (var part in subTypePart.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var trimmed = part.Trim();
-            if (!string.IsNullOrEmpty(trimmed))
-                yield return trimmed;
+            var subTypePart = face[(sepPos + sepLen)..].Trim();
+            foreach (var part in subTypePart.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                // Defensive: a stray separator can never become a subtype name again.
+                if (part is "-" or "\u2014" or ":") continue;
+                yield return part;
+            }
         }
     }
 }
