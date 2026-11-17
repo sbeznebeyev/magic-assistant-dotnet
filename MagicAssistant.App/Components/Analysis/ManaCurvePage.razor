@@ -147,11 +147,26 @@
     [Parameter] public int DeckId { get; set; }
     [Inject] private ICollectionStore CollectionStore { get; set; } = default!;
     [Inject] private IAnalysisService AnalysisService { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     protected override async Task OnParametersSetAsync()
     {
         if (DeckId <= 0) return;
         await LoadAnalysis();
+    }
+
+    private IJSObjectReference? _jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _jsModule == null)
+        {
+            // ES Module (same pattern as CardsListControl's splitter): the CSS-only tooltip
+            // anchored to the full-height column and stuck to the chart top — this module
+            // floats it above the cursor. Listener is guarded module-side; re-entry is free.
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/manaTooltip.js");
+            await _jsModule.InvokeVoidAsync("attachBarTooltips");
+        }
     }
 
     private async Task LoadAnalysis()
