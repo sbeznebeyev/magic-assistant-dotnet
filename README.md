@@ -14,6 +14,8 @@ A modern **Magic: The Gathering** deck and collection manager, built as a spirit
 
 MagicAssistant is a full-featured desktop-class application for managing MTG card collections and decks. Sync your knowledge base from Scryfall, import/export decks in Magic Assistant XML format, analyze mana curves, color distribution, creature types, keyword abilities, and format legality — all through a responsive Blazor Server UI.
 
+It is a **single-user** application: there are no user accounts or profiles, and no way to keep separate collections and decks for different people. One installation, one knowledge base, one collection — the way a personal organizer should be.
+
 ---
 
 ## Architecture at a Glance
