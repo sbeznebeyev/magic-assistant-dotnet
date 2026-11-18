@@ -3,9 +3,13 @@
     <File Path="LICENSE.md" />
     <File Path="README.md" />
   </Folder>
-  <Folder Name="/Solution Items/docs/">
-    <File Path="docs/architecture.md" />
-    <File Path="docs/ui.md" />
+  <Folder Name="/Solution Items/docs/" />
+  <Folder Name="/Solution Items/docs/en/">
+    <File Path="docs/en/architecture.md" />
+    <File Path="docs/en/ui.md" />
+  </Folder>
+  <Folder Name="/Solution Items/docs/ru/">
+    <File Path="docs/ru/architecture.md" />
   </Folder>
   <Project Path="MagicAssistant.App/MagicAssistant.App.csproj" />
   <Project Path="MagicAssistant.Core/MagicAssistant.Core.csproj" Id="93fc8946-4423-4316-ae2d-ef1f58802bd8" />
