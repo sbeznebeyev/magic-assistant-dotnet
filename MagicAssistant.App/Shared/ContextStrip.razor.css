@@ -56,6 +56,16 @@
     margin-left: auto;
 }
 
+/* Locations browse (0/≥2 chips): the selected half shows a mode label, not a node —
+   muted like inactive chrome; the arrow dims with it (no operation target to point at) */
+.context-name-muted {
+    color: #6c7086;
+}
+
+.context-arrow-muted {
+    opacity: 0.35;
+}
+
 /* Right half: stats pushed to the outer right edge (name stays by the arrow) */
 .context-pinned .context-stats {
     margin-left: auto;

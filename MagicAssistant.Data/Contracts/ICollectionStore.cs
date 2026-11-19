@@ -86,6 +86,14 @@ public interface ICollectionStore
     /// materializing every card just to project SetCode.</summary>
     Task<ICollection<string>> GetNodeSetCodesAsync(int collectionId, CancellationToken ct = default);
 
+    /// <summary>Flat list of every location node (folders/collections/decks/sideboards) for the
+    /// Locations filter picker — one small query, no card data.</summary>
+    Task<ICollection<LocationNodeInfo>> GetLocationNodesAsync(CancellationToken ct = default);
+
+    /// <summary>Distinct non-null SetCodes across multiple nodes (null/empty = every node) —
+    /// the sidebar scope for the Locations multi-chip search.</summary>
+    Task<ICollection<string>> GetNodesSetCodesAsync(ICollection<int>? nodeIds, CancellationToken ct = default);
+
     /// <summary>Name + legality map per card in the node — the two columns the legality page reads.</summary>
     Task<ICollection<DeckLegalityEntry>> GetDeckLegalityAsync(int deckId, CancellationToken ct = default);
 

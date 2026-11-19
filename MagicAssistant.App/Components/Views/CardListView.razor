@@ -11,11 +11,11 @@
         <table class="card-table">
             <thead>
                 <tr>
-                    @if (IsDeckMode || PinnedCounts != null)
+                    @if (IsDeckMode || PinnedCounts != null || LocationNames != null)
                     {
-                        <th class="col-total">Total</th>
+                        <th class="col-total">@(LocationNames != null ? "Location" : "Total")</th>
                     }
-                    @if (!IsDeckMode)
+                    @if (!IsDeckMode && LocationNames == null)
                     {
                         <th class="col-num">#</th>
                     }
@@ -89,7 +89,15 @@
                                 }
                             </td>
                         }
-                        @if (!IsDeckMode)
+                        else if (LocationNames != null)
+                        {
+                            @* Locations multi-chip / all-locations: which selected nodes the card lives in —
+                               "where is this card from"; a card in two decks shows both names. No −/+ here:
+                               the row has no single node to aim them at *@
+                            var from = LocationNames.GetValueOrDefault(card.Id, "");
+                            <td class="col-total col-location" title="@from">@from</td>
+                        }
+                        @if (!IsDeckMode && LocationNames == null)
                         {
                             <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
                         }
@@ -182,6 +190,10 @@
     /// pinned target only — in deck mode the Total column shows the current deck's count instead).
     /// Null = column hidden. 0/absent → empty cell, the column keeps its fixed width.</summary>
     [Parameter] public Dictionary<Guid, int>? PinnedCounts { get; set; }
+
+    /// <summary>Locations multi-chip mode: the selected nodes each displayed card lives in, comma-joined
+    /// (leftmost "Location" column, read-only). Null outside that mode — mutually exclusive with PinnedCounts.</summary>
+    [Parameter] public IReadOnlyDictionary<Guid, string>? LocationNames { get; set; }
 
     /// <summary>Deck view only: CardId → the deck's sideboard holds ≥1 copy of the card (one bulk
     /// query per page). Null = the read-only SB capsule is hidden (KB/sideboard/collection view).</summary>

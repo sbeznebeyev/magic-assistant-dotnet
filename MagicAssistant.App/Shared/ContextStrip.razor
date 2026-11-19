@@ -31,6 +31,11 @@
                 <span class="sideboard-badge">Sideboard</span>
             }
         }
+        else if (LocationsBrowseLabel != null)
+        {
+            @* Locations browse (0 or ≥2 chips): no single node — no stats, muted name, dimmed arrow *@
+            <span class="context-name context-name-muted">@LocationsBrowseLabel</span>
+        }
         else
         {
             @* KB panel — replaces the selected half when no collection is displayed *@
@@ -39,7 +44,7 @@
     </div>
 
     @* Middle — gold arrow pointing right *@
-    <div class="context-arrow" aria-hidden="true">
+    <div class="context-arrow @(LocationsBrowseLabel != null ? "context-arrow-muted" : "")" aria-hidden="true">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M4 12H18" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round"></path>
             <path d="M13 6L19 12L13 18" stroke="#ffd700" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -70,6 +75,10 @@
 
     /// <summary>Currently displayed collection (null id = Knowledge Base mode).</summary>
     [Parameter] public LockableCollection SelectedCollection { get; set; } = new();
+
+    /// <summary>Locations browse without a single selected node (0/≥2 location chips): the label shown
+    /// in the selected half instead of "KnowledgeBase Cards", without stats. Null = not in that state.</summary>
+    [Parameter] public string? LocationsBrowseLabel { get; set; }
 
     /// <summary>Bumped by MainLayout whenever card counts in either context may have changed.</summary>
     [Parameter] public int RefreshTrigger { get; set; }

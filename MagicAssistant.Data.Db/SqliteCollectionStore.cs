@@ -757,6 +757,31 @@ public class SqliteCollectionStore : ICollectionStore, ICardStore<MyCard>, IAsyn
         return codes.ToList();
     }
 
+    public async Task<ICollection<LocationNodeInfo>> GetLocationNodesAsync(CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        var rows = await conn.QueryAsync<CollectionRow>(
+            "SELECT Id, Name, ParentId, NodeType FROM Collection ORDER BY ParentId, Name");
+        return rows
+            .Select(r => new LocationNodeInfo(r.Id, r.Name, (NodeType)r.NodeType, r.ParentId))
+            .ToList();
+    }
+
+    public async Task<ICollection<string>> GetNodesSetCodesAsync(ICollection<int>? nodeIds, CancellationToken ct = default)
+    {
+        using var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        // null/empty = every node: the same DISTINCT query without the node predicate —
+        // one round-trip for the multi-chip sidebar scope, never a loop over nodes.
+        var sql = @"SELECT DISTINCT c.SetCode FROM Deck d INNER JOIN Cards c ON d.CardId = c.Id
+                    WHERE c.SetCode IS NOT NULL";
+        if (nodeIds is { Count: > 0 })
+            sql += " AND d.CollectionId IN @Ids";
+        var codes = await conn.QueryAsync<string>(sql, new { Ids = nodeIds });
+        return codes.ToList();
+    }
+
     public async Task<ICollection<DeckLegalityEntry>> GetDeckLegalityAsync(int deckId, CancellationToken ct = default)
     {
         using var conn = CreateConnection();

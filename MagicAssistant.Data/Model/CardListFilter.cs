@@ -25,6 +25,14 @@ public class CardListFilter
     /// Null = full Knowledge Base.</summary>
     public int? LocationFilter { get; init; }
 
+    /// <summary>Locations multi-chip filter (the Locations row in Card Filter). Mutually exclusive with
+    /// <see cref="LocationFilter"/> (single chip keeps the deck-mode JOIN path).
+    /// Non-null restricts the list to physical cards via EXISTS over Deck:
+    /// empty list = every collection/deck/sideboard; non-empty = only these nodes.
+    /// Null = locations filter off (KB mode). The Deck alias inside EXISTS also carries the
+    /// collection filters (ownership/count/price/forTrade/comment).</summary>
+    public List<int>? LocationNodeIds { get; init; }
+
     /// <summary>Card name filter (LIKE-based). Searches PrintedName/Name on Cards, plus all face names on CardFaces for double-faced cards.</summary>
     public string? NameFilter { get; init; }
 
@@ -104,9 +112,13 @@ public class CardListFilter
 /// <summary>
 /// Result of a paginated card list query.
 /// </summary>
+/// <param name="LocationNames">Locations multi-chip mode only: the names of the selected nodes each
+/// displayed card lives in, comma-joined (a card in two decks shows both). One GROUP BY over Deck
+/// joined to Collection for the page ids. Null outside that mode.</param>
 public record CardListResult(
     ICollection<Card> Cards,
-    int TotalCount);
+    int TotalCount,
+    IReadOnlyDictionary<Guid, string>? LocationNames = null);
 
 /// <summary>
 /// Numeric property filter (Power / Toughness / CMC).

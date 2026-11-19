@@ -15,8 +15,10 @@
         <span>Collections &amp; Decks</span>
     </div>
 
-    @* ── KnowledgeBase pseudo-node: sits above the tree, looks like a node but is not part of it ── *@
-    <button class="btn-kb-node @(SelectedNodeId == null ? "active" : "")"
+    @* ── KnowledgeBase pseudo-node: sits above the tree, looks like a node but is not part of it.
+       Active only in true KB mode — locations browse (0/≥2 chips) also has no selected node, but it
+       is not the KB; without InLocationsMode the KB button would light up on chip clearing ── *@
+    <button class="btn-kb-node @(SelectedNodeId == null && !InLocationsMode ? "active" : "")"
             @onclick="HandleShowAllCards"
             title="Browse all knowledge base cards">
         <span class="kb-icon"></span>
@@ -311,6 +313,11 @@
     /// Pure projection: non-null highlights that node, null (KB mode) highlights nothing —
     /// clicking the KnowledgeBase button clears the tree selection.</summary>
     [Parameter] public int? SelectedNodeId { get; set; }
+
+    /// <summary>Locations mode (a node was selected in the navigator, chips may since be cleared):
+    /// suppresses the KB pseudo-node highlight while browsing locations without a selected node.
+    /// Only its click (OnShowAllCards) leaves the mode — the tree then belongs to the KB.</summary>
+    [Parameter] public bool InLocationsMode { get; set; }
 
     /// <summary>ID of the currently pinned node (MainLayout._pinnedCollection.CollectionId)
     /// — drives the Pin/Unpin labels in the ⋯ context menu and the green marker dot on node rows.</summary>

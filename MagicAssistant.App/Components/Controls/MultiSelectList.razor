@@ -23,6 +23,18 @@
                 aria-label="Add item">
             +
         </button>
+
+        @* Bulk clear — only when there is something to clear; consumers sync their drafts via OnCleared *@
+        @if (!ViewModel.IsEmpty)
+        {
+            <button type="button"
+                    class="msl-clear-btn"
+                    @onclick="HandleClearAll"
+                    aria-label="Clear all items"
+                    title="Clear all">
+                Clear all
+            </button>
+        }
     </div>
 
     @* ── Second form: add dialog ── *@
@@ -71,6 +83,11 @@
     [Parameter]
     public EventCallback<MultiSelectItemBase> OnItemRemoved { get; set; }
 
+    /// <summary>Fired after the "Clear all" button emptied the view model — consumers mirror the
+    /// bulk removal in their drafts/state (per-chip OnItemRemoved does not fire for bulk clear).</summary>
+    [Parameter]
+    public EventCallback OnCleared { get; set; }
+
     protected override void OnInitialized()
     {
         ViewModel.Changed += OnViewModelChanged;
@@ -85,6 +102,12 @@
     {
         ViewModel.RemoveItem(item);
         await OnItemRemoved.InvokeAsync(item);
+    }
+
+    private async Task HandleClearAll()
+    {
+        ViewModel.Clear();
+        await OnCleared.InvokeAsync();
     }
 
     private async Task HandleAddClick()

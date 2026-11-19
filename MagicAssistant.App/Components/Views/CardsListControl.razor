@@ -22,7 +22,9 @@
         <div class="sets-sidebar @(_setsCollapsed ? "collapsed" : "")" style="width: @(_setsCollapsed ? "28px" : _sidebarWidth + "px");">
             <div class="sets-header">
                 <span class="sets-title">@(IsLocationMode
-                    ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
+                    ? FilterViewModel.CurrentCollectionId.HasValue
+                        ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
+                        : $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}"
                     : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()})")</span>
                 @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
                 @if (!_setsCollapsed)
@@ -172,6 +174,7 @@
                                   TotalPages="@_totalPages"
                                   PageSize="@_pageSize"
                                   Physicals="_physicalByCardId"
+                                  LocationNames="_locationNamesByCardId"
                                   Locked="@CurrentCollectionLocked"
                                   PinnedLocked="@PinnedCollectionLocked"
                                   OnCountChanged="ChangeCardCount"
@@ -249,6 +252,10 @@
 
     /// <summary>Physical instances of cards in the current location (deck mode). Null = KB mode.</summary>
     private Dictionary<Guid, MyCard>? _physicalByCardId;
+
+    /// <summary>Locations multi-chip mode: the selected nodes each displayed card lives in,
+    /// comma-joined — the leftmost column answers "where is this card from". Null outside that mode.</summary>
+    private IReadOnlyDictionary<Guid, string>? _locationNamesByCardId;
 
     /// <summary>Total copies of each displayed card in the pinned collection (KB mode with a pinned target only —
     /// deck mode shows the current deck's count in the Total column instead). Null otherwise.</summary>
@@ -459,10 +466,13 @@
 
     private int GetDisplayedCardsCount()
     {
-        if (IsLocationMode)
+        if (FilterViewModel.CurrentCollectionId.HasValue)
             // Unique cards in the current node, narrowed by the active set when one is clicked.
             return _physicalByCardId?.Values
                 .Count(p => FilterViewModel.ActiveCardSets is null || p.Card.SetCode == FilterViewModel.ActiveCardSets[0]) ?? 0;
+        if (FilterViewModel.InLocationsMode)
+            // Locations multi-chip / all-locations: unique cards from the server EXISTS query.
+            return _totalCount;
         if (FilterViewModel.ActiveCardSets is { Count: 1 })
             return _filteredSets.FirstOrDefault(s => s.SetCode == FilterViewModel.ActiveCardSets![0])?.CardCount ?? 0;
         // KB, no set selected: total cards from DB
@@ -825,6 +835,16 @@
                 _physicalByCardId = physical.ToDictionary(p => p.Card.Id, p => p);
                 ApplyLocationScope(physical.Select(p => p.Card.SetCode).OfType<string>());
             }
+            else if (FilterViewModel.InLocationsMode)
+            {
+                // Locations multi-chip / all-locations: no physical load — the server EXISTS path
+                // decides membership; the sidebar scope is the union of the selected nodes' sets,
+                // one DISTINCT query (never a loop over nodes).
+                _physicalByCardId = null;
+                var chips = FilterViewModel.LocationNodeIds;
+                var codes = await Task.Run(() => DeckCardService.GetNodesSetCodesAsync(chips.Count > 0 ? chips : null));
+                ApplyLocationScope(codes);
+            }
             else
             {
                 _physicalByCardId = null;
@@ -864,6 +884,7 @@
                 NameFilter = effectiveNameFilter,
                 Query = string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery) ? null : FilterViewModel.SearchQuery.Trim(),
                 LocationFilter = FilterViewModel.CurrentCollectionId,
+                LocationNodeIds = FilterViewModel.IsLocationsBrowse ? FilterViewModel.LocationNodeIds : null,
                 TypeFilters = FilterViewModel.TypeFilter.Count > 0 ? FilterViewModel.TypeFilter : null,
                 Artist = string.IsNullOrEmpty(FilterViewModel.Artist) ? null : FilterViewModel.Artist,
                 ColorType = string.IsNullOrEmpty(FilterViewModel.ColorType) ? null : FilterViewModel.ColorType,
@@ -894,12 +915,14 @@
             var result = await CardSearch!.GetPagedAsync(filter);
             _displayCards = result.Cards.Cast<Card>().ToList();
             _totalCount = result.TotalCount;
+            _locationNamesByCardId = result.LocationNames;   // non-null only in locations multi-chip mode
             _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
 
             // KB mode with a pinned target: totals of the displayed cards in the pinned collection
-            // (deck mode shows the current deck's count in the Total column — no pinned query needed)
-            _pinnedCountByCardId = FilterViewModel.CurrentCollectionId is null && PinnedCollectionId.HasValue
+            // (deck mode shows the current deck's count in the Total column — no pinned query needed;
+            // locations multi-chip shows its own read-only CopyTotals — pinned +/− has no address here)
+            _pinnedCountByCardId = FilterViewModel.CurrentCollectionId is null && !FilterViewModel.InLocationsMode && PinnedCollectionId.HasValue
                 ? await LoadPinnedCountsAsync(_displayCards)
                 : null;
 
@@ -916,6 +939,7 @@
             _totalCount = 0;
             _totalPages = 0;
             _sbPresenceByCardId = null;
+            _locationNamesByCardId = null;
         }
         finally
         {
@@ -932,7 +956,7 @@
     private async Task RefreshSelectedSetHasCardsAsync()
     {
         if (_displayCards.Count > 0
-            || FilterViewModel.CurrentCollectionId.HasValue
+            || FilterViewModel.InLocationsMode
             || FilterViewModel.ActiveCardSets is not { Count: > 0 })
         {
             _selectedSetHasCards = false;
@@ -1207,7 +1231,7 @@
 
     /// <summary>True when a collection/deck/sideboard is displayed (location mode) — the control
     /// then only shows KB cards filtered by membership; Sync is not available in this mode.</summary>
-    private bool IsLocationMode => FilterViewModel.CurrentCollectionId.HasValue;
+    private bool IsLocationMode => FilterViewModel.InLocationsMode;
 
     /// <summary>Label of the first sidebar item: "All Sets" in KB mode, "All sets of collection/deck/sideboard"
     /// when a location is displayed (the node type arrives with the navigation state — no DB lookup).</summary>

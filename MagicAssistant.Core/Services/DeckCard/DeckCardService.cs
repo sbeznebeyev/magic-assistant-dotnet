@@ -375,6 +375,14 @@ public class DeckCardService : IDeckCardService
     }
 
     /// <inheritdoc />
+    public Task<ICollection<LocationNodeInfo>> GetLocationNodesAsync(CancellationToken ct = default)
+        => _collectionStore.GetLocationNodesAsync(ct);
+
+    /// <inheritdoc />
+    public Task<ICollection<string>> GetNodesSetCodesAsync(ICollection<int>? nodeIds, CancellationToken ct = default)
+        => _collectionStore.GetNodesSetCodesAsync(nodeIds, ct);
+
+    /// <inheritdoc />
     public Task<ICollection<MyCard>> GetDeckWithSideboardAsync(int deckId, CancellationToken ct = default)
     {
         if (deckId <= 0)

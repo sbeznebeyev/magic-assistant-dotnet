@@ -170,12 +170,34 @@ public class FilterViewModel
     // ── Current collection (navigation state) ──
 
     /// <summary>Collection node Id currently displayed in the card list (deck/sideboard/collection/folder).
-    /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
+    /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.
+    /// In locations mode this mirrors the single-chip state: exactly one chip ⇔ non-null.</summary>
     public int? CurrentCollectionId { get; set; }
 
     /// <summary>Node type of <see cref="CurrentCollectionId"/> (Collection/Deck/Sideboard — folders never select).
     /// Navigation state, not a filter — intentionally excluded from Clear(). Null = Knowledge Base view.</summary>
     public NodeType? CurrentCollectionNodeType { get; set; }
+
+    // ── Locations filter (Card Filter dialog, above Sets) ──
+
+    /// <summary>True while the card list browses collections/decks/sideboards (a node was selected in the
+    /// navigator) instead of the Knowledge Base. Navigation state, excluded from Clear() — "Clear All"
+    /// clears the chips (→ search across all locations), it does not eject the user back to the KB.
+    /// The KB button resets it together with <see cref="CurrentCollectionId"/>.</summary>
+    public bool InLocationsMode { get; set; }
+
+    /// <summary>Location chips. Empty = search every collection/deck/sideboard; one chip ⇔
+    /// <see cref="CurrentCollectionId"/> (deck mode, full operations); several chips = OR over the nodes.
+    /// A filter — Clear() empties it. Meaningless while <see cref="InLocationsMode"/> is false.</summary>
+    public List<int> LocationNodeIds { get; set; } = new();
+
+    /// <summary>Replace the location chips (deduplicated, order-insensitive).</summary>
+    public void SetLocationChips(IEnumerable<int>? ids)
+        => LocationNodeIds = ids is null ? new List<int>() : ids.Distinct().ToList();
+
+    /// <summary>True while browsing locations with anything other than exactly one chip — the list
+    /// renders KB-style (no −/+/✎/⫯), the server query uses the EXISTS path with a Total column.</summary>
+    public bool IsLocationsBrowse => InLocationsMode && CurrentCollectionId == null;
 
     // ── Sort properties ──
 
@@ -291,6 +313,10 @@ public class FilterViewModel
     public void Clear()
     {
         ClearGeneration++;
+        // Clear All clears the location chips too (agreed semantics): the chips are a filter like
+        // any other, so after Clear the list searches across ALL locations. InLocationsMode itself
+        // is navigation state — the user stays in locations, the KB button owns that flag.
+        LocationNodeIds = new List<int>();
         // In location mode (collection/deck/sideboard) the set scope is driven by the node,
         // so Card Filter must not reset it; only the KB mode resets it back to "all sets".
         if (CurrentCollectionId == null)

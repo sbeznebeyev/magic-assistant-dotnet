@@ -33,7 +33,7 @@
     @if (_showExportDialog) { <DeckExportWizard IsOpen="@_showExportDialog" DeckId="@_exportTargetId" OnExported="OnExportCompleted" IsOpenChanged="@(v => _showExportDialog = v)" /> }
     @if (_showEditCardDialog) { <EditMagicCardPhysicalDialog IsOpen="@_showEditCardDialog" Card="@_editCardTarget" DeckId="@_currentCollection.CollectionId" OnSaved="OnEditCardSaved" IsOpenChanged="@(v => _showEditCardDialog = v)" /> }
 
-    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
+    @if (_showFilterDialog) { <CardFilterDialog IsOpen="@_showFilterDialog" FilterViewModel="@_filterViewModel" OnSearchCompleted="OnGlobalSearchCompleted" OnLocationsApplied="OnLocationsApplied" IsOpenChanged="@(v => _showFilterDialog = v)" /> }
     @if (_showSplitDialog) { <SplitDialog IsOpen="@_showSplitDialog" Card="@_splitCardTarget" DeckId="@_currentCollection.CollectionId" OnSplitDone="OnSplitDone" IsOpenChanged="@(v => _showSplitDialog = v)" /> }
     @if (_showMoveDialog) { <MoveDialog IsOpen="@_showMoveDialog" Card="@_moveCardTarget" SourceCollectionId="@_currentCollection.CollectionId" SourceLabel="@_currentCollection.Name" TargetCollectionId="@_pinnedCollection.CollectionId" TargetLabel="@PinnedMoveLabel" TargetIsSideboard="@(_pinnedCollection.NodeType == NodeType.Sideboard)" OnMoveDone="OnMoveDone" IsOpenChanged="@(v => _showMoveDialog = v)" /> }
     
@@ -70,6 +70,7 @@
                     OnClearSideboardRequested="OnClearSideboardRequested"
                     OnClearRequested="OnClearRequested"
                     SelectedNodeId="@_currentCollection.CollectionId"
+                    InLocationsMode="@_filterViewModel.InLocationsMode"
                     PinnedNodeId="@_pinnedCollection.CollectionId" />
                 @* TODO: Fix NullReferenceException in child components *@
             </div>
@@ -83,6 +84,7 @@
             <ContextStrip
                 PinnedCollection="@_pinnedCollection"
                 SelectedCollection="@_currentCollection"
+                LocationsBrowseLabel="@LocationsBrowseLabel"
                 RefreshTrigger="@_stripRefresh" />
 
             <div style="height:4px"></div>
@@ -92,10 +94,14 @@
                 <TabBar ActiveTab="@ActiveTab" NodeKind="@_currentCollection.NodeType" OnTabSelected="@(tab => ActiveTab = tab)" />
             }
 
-            <div class="content-area" @key="_currentCollection.CollectionId">
+            <div class="content-area" @key="ContentKey">
                 @if (_currentCollection.CollectionId != null)
                 {
                     @RenderDeckContent()
+                }
+                else if (_filterViewModel.InLocationsMode)
+                {
+                    @RenderLocationsContent()
                 }
                 else
                 {
@@ -151,6 +157,20 @@
     // ── Navigation State ──
     /// <summary>Collection node currently displayed in the center panel (CollectionId == null = Knowledge Base).</summary>
     private LockableCollection _currentCollection = new();
+
+    /// <summary>Content-area remount key. A bare CollectionId would keep the old subtree alive when the
+    /// list switches between KB and locations browse (both have no node) — the mode belongs to the key.
+    /// Chip edits inside one mode (1→2 chips) keep the key stable: the list re-queries, it does not remount.</summary>
+    private string ContentKey =>
+        _currentCollection.CollectionId?.ToString()
+        ?? (_filterViewModel.InLocationsMode ? "locations" : "kb");
+
+    /// <summary>ContextStrip label for the selected half while locations browse has no single node
+    /// (0 or ≥2 location chips). Null outside that state — the strip keeps its KB invariant.</summary>
+    private string? LocationsBrowseLabel =>
+        _filterViewModel.InLocationsMode && _currentCollection.CollectionId == null
+            ? (_filterViewModel.LocationNodeIds.Count > 0 ? $"{_filterViewModel.LocationNodeIds.Count} locations" : "All locations")
+            : null;
 
     // ── Panel collapse state (toggle buttons in the top corners of the side panels) ──
     /// <summary>Persisted like the sets sidebar in CardsListControl — the layout remounts on
@@ -233,6 +253,9 @@
         ActiveTab = "cards";
         _filterViewModel.CurrentCollectionId = c.CollectionId;
         _filterViewModel.CurrentCollectionNodeType = c.NodeType;
+        // A navigator click is a single-chip locations selection — the chips own the selected context.
+        _filterViewModel.InLocationsMode = c.CollectionId.HasValue;
+        _filterViewModel.SetLocationChips(c.CollectionId.HasValue ? new[] { c.CollectionId.Value } : null);
         _filterViewModel.Apply();
         await InvokeAsync(StateHasChanged);
     }
@@ -294,7 +317,44 @@
         _selectedCardId = null;
         _filterViewModel.CurrentCollectionId = null;
         _filterViewModel.CurrentCollectionNodeType = null;
+        _filterViewModel.InLocationsMode = false;
+        _filterViewModel.SetLocationChips(null);
         _filterViewModel.Apply();
+    }
+
+    /// <summary>The Card Filter dialog committed the location chips — they own the selected context:
+    /// exactly one chip promotes that node to selected (the same state a navigator click produces);
+    /// zero or several chips drop the selection (the list keeps browsing all/selected locations,
+    /// pinned survives — its only writer is the Pin buttons). Called by the dialog BEFORE its
+    /// FilterViewModel.Apply(), so the re-query happens exactly once.</summary>
+    private async Task OnLocationsApplied(List<int> chips)
+    {
+        if (chips.Count == 1)
+        {
+            var id = chips[0];
+            if (_currentCollection.CollectionId == id) return;   // already selected — nothing to sync
+            var node = await DeckManagement.GetByIdAsync(id);
+            if (node is null) return;   // vanished node — chips stay as committed; the query finds nothing
+            _currentCollection = new LockableCollection
+            {
+                CollectionId = node.Id,
+                Name = node.Name,
+                NodeType = node.NodeType,
+                IsLocked = node.Locked,
+            };
+            ActiveTab = "cards";
+            _filterViewModel.CurrentCollectionId = node.Id;
+            _filterViewModel.CurrentCollectionNodeType = node.NodeType;
+            _filterViewModel.SetLocationChips(new[] { node.Id });
+        }
+        else if (_currentCollection.CollectionId != null)
+        {
+            _currentCollection = new();
+            _selectedCardId = null;
+            _filterViewModel.CurrentCollectionId = null;
+            _filterViewModel.CurrentCollectionNodeType = null;
+        }
+        await InvokeAsync(StateHasChanged);
     }
 
     // ── Header Actions (clickable words in the app header) ──
@@ -639,6 +699,14 @@
             _filterViewModel.Apply();
         }
 
+        // Location chips referencing the deleted node (directly or via a folder cascade) must not
+        // linger — an orphan chip would silently narrow the search to nothing. Chips are few:
+        // the per-id existence check is cheaper than reasoning about cascade membership.
+        var chips = _filterViewModel.LocationNodeIds;
+        for (var i = chips.Count - 1; i >= 0; i--)
+            if (await IsNodeGoneAsync(chips[i]))
+                chips.RemoveAt(i);
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -695,6 +763,23 @@
                                 OnOpenSync="OnOpenSyncDialog"
                                 RefreshTrigger="@_kbRefreshTrigger"
                                 OnCardOperation="RecordLastActionAsync"
+                                PinnedCollectionId="@_pinnedCollection.CollectionId"
+                                CurrentCollectionLocked="@_currentCollection.IsLocked"
+                                PinnedCollectionLocked="@_pinnedCollection.IsLocked" />
+        </div>;
+    }
+
+    /// <summary>Locations browse (0 or ≥2 location chips): the server-side list in KB-style rendering.
+    /// No TabBar — there is no single node to analyze; no sync channel — locations are not the KB;
+    /// no edit/split/move — rows have no single-node address (−/+ are hidden by the view itself).</summary>
+    private RenderFragment RenderLocationsContent()
+    {
+        return @<div>
+            <CardsListControl FilterViewModel="@_filterViewModel"
+                                OnCardSelected="OnCardSelected"
+                                OnCardSideChanged="OnCardSideChanged"
+                                OnOpenFilter="@(() => _showFilterDialog = true)"
+                                RefreshTrigger="@_kbRefreshTrigger"
                                 PinnedCollectionId="@_pinnedCollection.CollectionId"
                                 CurrentCollectionLocked="@_currentCollection.IsLocked"
                                 PinnedCollectionLocked="@_pinnedCollection.IsLocked" />

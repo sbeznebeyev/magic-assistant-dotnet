@@ -104,6 +104,12 @@ public interface IDeckCardService
     /// <summary>Distinct SetCodes present in the node — one DISTINCT query.</summary>
     Task<ICollection<string>> GetNodeSetCodesAsync(int collectionId, CancellationToken ct = default);
 
+    /// <summary>Every location node (folders/collections/decks/sideboards) for the Locations picker.</summary>
+    Task<ICollection<LocationNodeInfo>> GetLocationNodesAsync(CancellationToken ct = default);
+
+    /// <summary>Distinct SetCodes across multiple nodes (null/empty = every node) — multi-chip sidebar scope.</summary>
+    Task<ICollection<string>> GetNodesSetCodesAsync(ICollection<int>? nodeIds, CancellationToken ct = default);
+
     /// <summary>
     /// Get all physical cards for a specific deck including sideboard with full card info.
     /// </summary>

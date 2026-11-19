@@ -1,5 +1,6 @@
 @using MagicAssistant.App.Shared
 @using MagicAssistant.Data.Model
+@using MagicAssistant.Data.Model.NavigatorNodes
 
 @if (!IsOpen) return;
 
@@ -18,15 +19,61 @@
 
         @* ── Fields — all bound directly to shared FilterViewModel ── *@
         <div class="filter-tab-content">
-                @* Sets scope is editable only in KB mode; in collection/deck/sideboard it is driven by the node. *@
-                @if (FilterViewModel.CurrentCollectionId == null)
+                @* ── Locations — location mode only. Chips own the selected context:
+                   exactly one chip ⇔ the selected node; 0/≥2 chips = browse all/selected locations.
+                   Draft until Apply — like every other filter in this dialog. ── *@
+                @if (FilterViewModel.InLocationsMode)
+                {
+                <div class="filter-field-row">
+                    <label class="filter-label">Locations</label>
+                    <MultiSelectList ViewModel="@_locationVm"
+                                    @bind-IsAddDialogOpen="_showLocationPicker"
+                                    OnAddItemClicked="OnLocationPickerOpening"
+                                    OnItemRemoved="OnLocationRemoved"
+                                    OnCleared="OnLocationCleared">
+                        <AddDialogContent>
+                            <div class="locations-picker">
+                                <div class="locations-picker-list">
+                                    @foreach (var (node, label, depth) in _locationOptions)
+                                    {
+                                        @if (node.NodeType == NodeType.Folder)
+                                        {
+                                            <div class="locations-folder-header" style="padding-left:@(4 + depth * 14)px">@label</div>
+                                        }
+                                        else
+                                        {
+                                            @* Toggle buttons in the mana-color style — one click to select *@
+                                            <button type="button"
+                                                    class="color-toggle location-toggle @(_locationDraft.Contains(node.Id) ? "active" : "")"
+                                                    style="margin-left:@(depth * 14)px; max-width:calc(100% - @(depth * 14)px)"
+                                                    @onclick="() => ToggleLocationInPicker(node.Id)">
+                                                @label
+                                            </button>
+                                        }
+                                    }
+                                </div>
+                                <div class="sets-picker-footer">
+                                    <button type="button" class="picker-btn picker-btn-apply" @onclick="OnLocationPickerApply">Apply</button>
+                                    <button type="button" class="picker-btn picker-btn-cancel" @onclick="OnLocationPickerCancel">Cancel</button>
+                                </div>
+                            </div>
+                        </AddDialogContent>
+                    </MultiSelectList>
+                </div>
+                }
+
+                @* Sets scope is editable only in KB mode; in any location mode (single node or
+                   locations browse) it is driven by the node chips — in browse the auto-scope is the
+                   union of all selected nodes' sets, which would flood the chip area. *@
+                @if (!FilterViewModel.InLocationsMode)
                 {
                 <div class="filter-field-row">
                     <label class="filter-label">Sets</label>
                     <MultiSelectList ViewModel="@_setVm"
                                     @bind-IsAddDialogOpen="_showSetPicker"
                                     OnAddItemClicked="OnSetPickerOpening"
-                                    OnItemRemoved="OnSetRemoved">
+                                    OnItemRemoved="OnSetRemoved"
+                                    OnCleared="OnSetCleared">
                         <AddDialogContent>
                             <div class="sets-picker">
                                 <input class="sets-picker-search"
@@ -60,7 +107,8 @@
                     <label class="filter-label">Type</label>
                     <MultiSelectList ViewModel="@_typeVm"
                                     @bind-IsAddDialogOpen="_showTypePicker"
-                                    OnItemRemoved="OnTypeRemoved">
+                                    OnItemRemoved="OnTypeRemoved"
+                                    OnCleared="OnTypeCleared">
                         <AddDialogContent>
                             <div class="type-picker-list">
                                 @foreach (var type in _allTypes)
@@ -80,7 +128,8 @@
                     <label class="filter-label">Rarity</label>
                     <MultiSelectList ViewModel="@_rarityVm"
                                     @bind-IsAddDialogOpen="_showRarityPicker"
-                                    OnItemRemoved="OnRarityRemoved">
+                                    OnItemRemoved="OnRarityRemoved"
+                                    OnCleared="OnRarityCleared">
                         <AddDialogContent>
                             <div class="rarity-picker-list">
                                 @foreach (var rarity in _allRarities)
@@ -188,6 +237,11 @@
     /// <summary>Shared filter/sort view model — mutations here propagate to CardsListControl.</summary>
     [Parameter] public required FilterViewModel FilterViewModel { get; set; } = new();
 
+    /// <summary>Locations chips were committed (Apply) — MainLayout syncs the selected context:
+    /// exactly one chip promotes that node to selected, zero/several drop the selection.
+    /// Fired BEFORE FilterViewModel.Apply(), so the list re-queries exactly once.</summary>
+    [Parameter] public EventCallback<List<int>> OnLocationsApplied { get; set; }
+
     // ── Rarity MultiSelectList ──
     private readonly MultiSelectViewModel<string, string> _rarityVm = new();
     private bool _showRarityPicker;
@@ -230,14 +284,30 @@
     /// <summary>Apply: fire Changed event so CardsListControl re-queries via InvokeAsync.</summary>
     private async Task OnApply()
     {
+        // Chips own the selected context: commit the draft, let MainLayout sync selected
+        // (1 chip → select that node; 0/≥2 → drop selection), then fire the single re-query.
+        if (FilterViewModel.InLocationsMode)
+        {
+            var committed = _locationDraft.ToList();
+            FilterViewModel.SetLocationChips(committed);
+            await OnLocationsApplied.InvokeAsync(committed);
+        }
         FilterViewModel.Apply();  // fires Changed → CardsListControl wraps in InvokeAsync
         await Close();
     }
 
-    /// <summary>Clear all filter/sort fields and trigger re-query.</summary>
+    /// <summary>Clear all filter/sort fields and trigger re-query. Clear All clears the location
+    /// chips too (agreed semantics): draft empties → search across ALL locations, and MainLayout
+    /// drops the selected context together with the last chip.</summary>
     private async Task OnClearAndApply()
     {
-        FilterViewModel.ClearAndApply();  // clears + fires Changed
+        if (FilterViewModel.InLocationsMode)
+        {
+            _locationDraft.Clear();
+            SyncLocationChips();
+            await OnLocationsApplied.InvokeAsync(new List<int>());
+        }
+        FilterViewModel.ClearAndApply();  // clears + fires Changed (chips included — Clear() empties them)
         await Close();
     }
 
@@ -257,6 +327,14 @@
         {
             await LoadSetsForPickerAsync();
             SyncSetChipsFromScope();
+            if (FilterViewModel.InLocationsMode)
+            {
+                await LoadLocationsAsync();
+                _locationDraft.Clear();
+                foreach (var id in FilterViewModel.LocationNodeIds)
+                    AddDraftWithSideboard(id);
+                SyncLocationChips();
+            }
         }
         _wasDialogOpen = IsOpen;
     }
@@ -337,11 +415,164 @@
         FilterViewModel.SetFilteredSetCodes(_setVm.GetAllItems().Select(s => s.SetCode));
     }
 
+    private void OnSetCleared()
+    {
+        // Bulk clear mirrors the last-chip removal: empty scope = all sets in the KB.
+        FilterViewModel.SetFilteredSetCodes(Enumerable.Empty<string>());
+    }
+
+    // ── Locations MultiSelectList (location mode only) ──
+    private readonly MultiSelectViewModel<int, LocationNodeInfo> _locationVm = new();
+    private bool _showLocationPicker;
+    private List<LocationNodeInfo> _allLocationNodes = new();
+    private List<(LocationNodeInfo Node, string Label, int Depth)> _locationOptions = new();
+
+    /// <summary>Draft of the chip selection for this dialog session — committed to FilterViewModel
+    /// (and to the selected context via MainLayout) only on Apply, like every other filter here.
+    /// Chip removals and picker toggles both mutate the draft; picker Cancel restores the snapshot
+    /// taken when the picker opened.</summary>
+    private readonly HashSet<int> _locationDraft = new();
+    private HashSet<int> _locationPickerSnapshot = new();
+
+    // ── Locations picker: catalog, tree order, draft selection ──
+    private async Task LoadLocationsAsync()
+    {
+        _allLocationNodes = (await DeckCardService.GetLocationNodesAsync()).ToList();
+        _locationOptions = BuildLocationOptions(_allLocationNodes);
+    }
+
+    /// <summary>Tree order for the picker: root collections and decks first (alphabetical together),
+    /// then folder sections (alphabetical); inside each folder the same rule. Sideboards are NOT
+    /// selectable rows — a deck carries its sideboard implicitly (see
+    /// <see cref="AddDraftWithSideboard"/>); the only sideboard chip that can appear is the one
+    /// matching the navigator-selected sideboard.</summary>
+    private static List<(LocationNodeInfo Node, string Label, int Depth)> BuildLocationOptions(List<LocationNodeInfo> nodes)
+    {
+        var byParent = nodes.GroupBy(n => n.ParentId).ToDictionary(g => g.Key ?? -1, g => g.ToList());
+        var result = new List<(LocationNodeInfo, string, int)>();
+
+        void Walk(int? parentId, int depth)
+        {
+            if (!byParent.TryGetValue(parentId ?? -1, out var children)) return;
+            // Root and inside folders: collections and decks first, alphabetically together;
+            // then folder sections, alphabetically. Sideboards are never rows (deck-carried).
+            foreach (var node in children
+                         .Where(n => n.NodeType != NodeType.Sideboard)
+                         .OrderBy(n => n.NodeType == NodeType.Folder ? 1 : 0)
+                         .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (node.NodeType == NodeType.Folder)
+                {
+                    result.Add((node, node.Name, depth));
+                    Walk(node.Id, depth + 1);
+                }
+                else
+                {
+                    result.Add((node, node.Name, depth));
+                }
+            }
+        }
+
+        Walk(null, 0);
+        return result;
+    }
+
+    /// <summary>Rebuild the chips from the draft. Sideboards carried by a drafted deck stay
+    /// invisible — chips show collections and decks only; a sideboard without its deck in the draft
+    /// (the navigator-selected sideboard) keeps its own chip. A draft id without a node (vanished
+    /// between open and sync) keeps a #id placeholder.</summary>
+    private void SyncLocationChips()
+    {
+        var visible = _locationDraft.Where(id =>
+        {
+            var n = _allLocationNodes.FirstOrDefault(x => x.Id == id);
+            return n is null || n.NodeType != NodeType.Sideboard || !_locationDraft.Contains(n.ParentId ?? -1);
+        });
+        _locationVm.Initialize(
+            visible.Select(id => (Key: id, Item: _allLocationNodes.FirstOrDefault(n => n.Id == id)
+                                     ?? new LocationNodeInfo(id, $"#{id}", NodeType.Collection, null))),
+            n => n.Name);
+    }
+
+    private void OnLocationPickerOpening() => _locationPickerSnapshot = new HashSet<int>(_locationDraft);
+
+    /// <summary>Locations-filter-only default: a selected deck brings its sideboard along — the
+    /// typical "browse the deck" intent includes the sideboard. The user may still uncheck the
+    /// sideboard alone afterwards; unchecking the deck removes the pair again (a lone sideboard
+    /// chip without its deck is left alone — it is a legitimate standalone selection).</summary>
+    private void AddDraftWithSideboard(int id)
+    {
+        _locationDraft.Add(id);
+        if (_allLocationNodes.FirstOrDefault(n => n.Id == id)?.NodeType == NodeType.Deck)
+        {
+            var sb = _allLocationNodes.FirstOrDefault(n => n.NodeType == NodeType.Sideboard && n.ParentId == id);
+            if (sb != null)
+                _locationDraft.Add(sb.Id);
+        }
+    }
+
+    private void ToggleLocationInPicker(int id)
+    {
+        if (_locationDraft.Remove(id))
+        {
+            // Turning the deck off turns its sideboard off too (they came in as a pair).
+            var sb = _allLocationNodes.FirstOrDefault(n => n.NodeType == NodeType.Sideboard && n.ParentId == id);
+            if (sb != null)
+                _locationDraft.Remove(sb.Id);
+        }
+        else
+        {
+            AddDraftWithSideboard(id);
+        }
+    }
+
+    private void OnLocationPickerApply()
+    {
+        SyncLocationChips();          // draft → chips; the dialog's Apply commits
+        _showLocationPicker = false;  // same close contract as the Sets picker
+    }
+
+    private void OnLocationPickerCancel()
+    {
+        _locationDraft.Clear();
+        foreach (var id in _locationPickerSnapshot)
+            _locationDraft.Add(id);
+        SyncLocationChips();
+        _showLocationPicker = false;  // same close contract as the Sets picker
+    }
+
+    private void OnLocationRemoved(MultiSelectItemBase item)
+    {
+        // Chips are live like Type/Rarity/Sets: removal drops the node from the draft immediately
+        // (still uncommitted until Apply). The chip carries its node id as the key — exact match,
+        // no name lookup (two drafted decks may share a name).
+        if (item is not MultiSelectItem<int, LocationNodeInfo> chip)
+            return;
+        _locationDraft.Remove(chip.Key);
+        // Removing a deck chip also removes its auto-added sideboard — the pair leaves together.
+        if (chip.Item.NodeType == NodeType.Deck)
+        {
+            var sb = _allLocationNodes.FirstOrDefault(n => n.NodeType == NodeType.Sideboard && n.ParentId == chip.Key);
+            if (sb != null)
+                _locationDraft.Remove(sb.Id);
+        }
+        SyncLocationChips();
+    }
+
+    private void OnLocationCleared()
+    {
+        // Bulk clear = no chips = search across ALL locations (draft emptied; Apply commits).
+        _locationDraft.Clear();
+        SyncLocationChips();
+    }
+
     // ── Rarity MultiSelectList handlers ──
     private void OnRarityRemoved(MultiSelectItemBase item)
     {
         SyncRarityToFilterViewModel();
     }
+
+    private void OnRarityCleared() => SyncRarityToFilterViewModel();
 
     private void OnSelectRarity(string rarity)
     {
@@ -378,6 +609,8 @@
     {
         SyncTypeToFilterViewModel();
     }
+
+    private void OnTypeCleared() => SyncTypeToFilterViewModel();
 
     private void OnSelectType(string type)
     {

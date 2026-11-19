@@ -193,6 +193,10 @@ tr:hover .count-btn,
 }
 
 .col-total  { width: 1%; min-width: 44px; white-space: nowrap; text-align: center; color: #666; }
+
+/* Locations multi-chip mode: the same slot as Total, but node names — they can be long,
+   so the cell truncates with an ellipsis and the tooltip (title) carries the full list */
+.col-location { min-width: 90px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; text-align: left; color: #b09aa5; }
 .col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
 .col-name   { width: 50%; }
 .col-cost   { width: 1%; white-space: nowrap; }

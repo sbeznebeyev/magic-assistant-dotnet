@@ -655,51 +655,71 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             whereParts.Add("GameChanger = 1");
         }
 
-        // Location filter: restrict to cards present in a specific collection node
-        // (deck/sideboard/collection/folder). Composite PK (CollectionId, CardId)
-        // guarantees one row per card — no duplicates in pagination.
+        // Location filters. Two mutually exclusive paths:
+        //  • single node (deck mode) — INNER JOIN Deck on the composite PK: one row per card,
+        //    the hot path, untouched by the Locations multi-chip feature;
+        //  • chips (0 = all locations, N = selected nodes) — EXISTS over Deck: a JOIN would
+        //    multiply rows when a card lives in several selected nodes and break pagination.
+        // Collection filters (ownership/count/price/forTrade/comment) ride the Deck alias in
+        // both paths — inside EXISTS they mean "in at least one selected node".
         var fromClause = "FROM Cards";
+        var deckConditions = new List<string>();
+        if (!string.IsNullOrEmpty(filter.Ownership) && filter.Ownership != "all")
+        {
+            deckConditions.Add(filter.Ownership == "owned" ? "d.IsOwn = 1" : "d.IsOwn = 0");
+        }
+        if (filter.MinCount.HasValue)
+        {
+            deckConditions.Add("d.Count >= @MinCount");
+            parameters.Add("MinCount", filter.MinCount.Value);
+        }
+        if (filter.MaxCount.HasValue)
+        {
+            deckConditions.Add("d.Count <= @MaxCount");
+            parameters.Add("MaxCount", filter.MaxCount.Value);
+        }
+        // Price range on Cards.Usd (TEXT from Scryfall — cast to REAL; guard NULL/empty).
+        // Cards.* is visible inside the correlated EXISTS too, so this reads the same in both paths.
+        if (filter.MinPrice.HasValue)
+        {
+            deckConditions.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) >= @MinPrice)");
+            parameters.Add("MinPrice", filter.MinPrice.Value);
+        }
+        if (filter.MaxPrice.HasValue)
+        {
+            deckConditions.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) <= @MaxPrice)");
+            parameters.Add("MaxPrice", filter.MaxPrice.Value);
+        }
+        if (filter.HasForTrade)
+        {
+            deckConditions.Add("d.ForTradeCount IS NOT NULL AND d.ForTradeCount > 0");
+        }
+        if (filter.HasComment)
+        {
+            deckConditions.Add("d.Comment IS NOT NULL AND d.Comment != ''");
+        }
+        // filter.IsFoil — placeholder: no foil flag column yet, intentionally not used in SQL.
+
         if (filter.LocationFilter.HasValue)
         {
             fromClause = @"FROM Cards
                 INNER JOIN Deck d ON d.CardId = Cards.Id AND d.CollectionId = @LocationId";
             parameters.Add("LocationId", filter.LocationFilter.Value);
-
-            // Collection filters — location mode only (alias d exists here).
-            if (!string.IsNullOrEmpty(filter.Ownership) && filter.Ownership != "all")
-            {
-                whereParts.Add(filter.Ownership == "owned" ? "d.IsOwn = 1" : "d.IsOwn = 0");
-            }
-            if (filter.MinCount.HasValue)
-            {
-                whereParts.Add("d.Count >= @MinCount");
-                parameters.Add("MinCount", filter.MinCount.Value);
-            }
-            if (filter.MaxCount.HasValue)
-            {
-                whereParts.Add("d.Count <= @MaxCount");
-                parameters.Add("MaxCount", filter.MaxCount.Value);
-            }
-            // Price range on Cards.Usd (TEXT from Scryfall — cast to REAL; guard NULL/empty).
-            if (filter.MinPrice.HasValue)
-            {
-                whereParts.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) >= @MinPrice)");
-                parameters.Add("MinPrice", filter.MinPrice.Value);
-            }
-            if (filter.MaxPrice.HasValue)
-            {
-                whereParts.Add("(Cards.Usd IS NOT NULL AND Cards.Usd != '' AND CAST(Cards.Usd AS REAL) <= @MaxPrice)");
-                parameters.Add("MaxPrice", filter.MaxPrice.Value);
-            }
-            if (filter.HasForTrade)
-            {
-                whereParts.Add("d.ForTradeCount IS NOT NULL AND d.ForTradeCount > 0");
-            }
-            if (filter.HasComment)
-            {
-                whereParts.Add("d.Comment IS NOT NULL AND d.Comment != ''");
-            }
-            // filter.IsFoil — placeholder: no foil flag column yet, intentionally not used in SQL.
+            whereParts.AddRange(deckConditions);
+        }
+        else if (filter.LocationNodeIds is not null)
+        {
+            // idx_deck_cardid answers the correlated lookup; the node predicate rides the
+            // composite PK (CollectionId, CardId) prefix when chips narrow the search.
+            var nodePredicate = filter.LocationNodeIds.Count > 0
+                ? " AND d.CollectionId IN @LocationIds"
+                : string.Empty;
+            if (filter.LocationNodeIds.Count > 0)
+                parameters.Add("LocationIds", filter.LocationNodeIds);
+            var inner = deckConditions.Count > 0
+                ? " AND " + string.Join(" AND ", deckConditions)
+                : string.Empty;
+            whereParts.Add($"EXISTS (SELECT 1 FROM Deck d WHERE d.CardId = Cards.Id{nodePredicate}{inner})");
         }
 
         var whereClause = whereParts.Count > 0 ? "WHERE " + string.Join(" AND ", whereParts) : "";
@@ -753,7 +773,32 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
                 card.ImageUris = imageUris;
         }
 
-        return new CardListResult(cards, totalCount);
+        // Locations multi-chip mode: which selected nodes each displayed card lives in — the
+        // leftmost column answers "where is this card from" (a card in two decks shows both names).
+        // The composite PK (CollectionId, CardId) means one Deck row per node, so GROUP_CONCAT
+        // needs no DISTINCT; one query for the whole page, same indexes as the EXISTS filter.
+        IReadOnlyDictionary<Guid, string>? locationNames = null;
+        if (filter.LocationNodeIds is not null && !filter.LocationFilter.HasValue && cardIds.Count > 0)
+        {
+            var namesNodePredicate = filter.LocationNodeIds.Count > 0
+                ? " AND d.CollectionId IN @NamesIds"
+                : string.Empty;
+            var names = await conn.QueryAsync<LocationNamesRow>(
+                $@"SELECT d.CardId, GROUP_CONCAT(c.Name, ', ') AS Names
+                   FROM Deck d INNER JOIN Collection c ON c.Id = d.CollectionId
+                   WHERE d.CardId IN @Ids{namesNodePredicate}
+                   GROUP BY d.CardId",
+                new { Ids = cardIds, NamesIds = filter.LocationNodeIds.Count > 0 ? filter.LocationNodeIds : null });
+            locationNames = names.ToDictionary(r => r.CardId, r => r.Names ?? string.Empty);
+        }
+
+        return new CardListResult(cards, totalCount, locationNames);
+    }
+
+    private class LocationNamesRow
+    {
+        public Guid CardId { get; set; }
+        public string? Names { get; set; }
     }
 
     // === CardSet methods ===
