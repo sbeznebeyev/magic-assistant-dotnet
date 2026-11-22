@@ -18,7 +18,8 @@
                 @onclick="OnSetGroup">Set</button>
     </div>
 
-    @* ── Tree groups ── *@
+    @* ── Tree groups — mosaic of fixed 300px tiles; auto-fill wraps to a single
+       vertical stack when the area narrows. ── *@
     <div class="tree-groups">
         @foreach (var group in _groups)
         {
@@ -47,7 +48,7 @@
                             <div class="tree-card @(SelectedCardId.HasValue && SelectedCardId.Value == card.Id ? "selected" : "")"
                                  @onclick="() => SelectCard(card)">
                                 <span class="card-name">@card.Name@(Counts != null && Counts.TryGetValue(card.Id, out var count) && count > 1 ? $" ×{count}" : "")</span>
-                                <span class="card-cmc">@card.CmcText</span>
+                                <span class="card-cmc">@FormatCmc(card.CmcText)</span>
                             </div>
                         }
                     </div>
@@ -134,8 +135,8 @@
         _groups = dict.OrderByDescending(g => g.Value.Count)
                       .ToDictionary(g => g.Key, g => g.Value, StringComparer.OrdinalIgnoreCase);
 
-        // Expand all groups initially
-        _expandedGroups = new HashSet<string>(_groups.Keys);
+        // Groups start collapsed — the user opens only what they need.
+        _expandedGroups = new HashSet<string>();
     }
 
     /// <summary>
@@ -200,5 +201,14 @@
             _expandedGroups.Remove(key);
         else
             _expandedGroups.Add(key);
+    }
+
+    /// <summary>Same as the list view: "3.0" → "3", "2.5" stays; CMC 0 renders as empty
+    /// (lands on the right edge of the row — the tree has no "—" placeholder).</summary>
+    private static string FormatCmc(string? cmcText)
+    {
+        if (string.IsNullOrEmpty(cmcText)) return string.Empty;
+        if (cmcText.EndsWith(".0")) cmcText = cmcText[..^2];
+        return cmcText == "0" ? string.Empty : cmcText;
     }
 }

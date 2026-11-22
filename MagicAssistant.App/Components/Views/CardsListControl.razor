@@ -418,19 +418,29 @@
     }
 
     private IJSObjectReference? _jsModule;
+    private bool _disposed;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && _jsModule == null)
         {
-            // ES Module — Microsoft Learn pattern: путь относительно wwwroot
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/js/splitter.js");
+            try
+            {
+                // ES Module — Microsoft Learn pattern: путь относительно wwwroot
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", "/js/splitter.js");
 
-            // Register C# callback — модуль вызовет OnSidebarResize из C#
-            await _jsModule.InvokeVoidAsync(
-                "init",
-                DotNetObjectReference.Create(this));
+                // Register C# callback — модуль вызовет OnSidebarResize из C#
+                await _jsModule.InvokeVoidAsync(
+                    "init",
+                    DotNetObjectReference.Create(this));
+            }
+            catch (JSDisconnectedException) { /* circuit lost mid-init */ }
+            catch (OperationCanceledException) when (_disposed)
+            {
+                // Circuit dropped / component torn down while the browser answered the import
+                // (page reload, tab close) — TaskCanceledException here is a benign race.
+            }
         }
     }
 
@@ -1327,6 +1337,8 @@
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
+        _disposed = true;
+
         // Unsubscribe from FilterViewModel
         FilterViewModel.Changed -= OnFilterChanged;
 
