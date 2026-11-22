@@ -4,6 +4,9 @@ namespace MagicAssistant.Data.Contracts;
 
 public interface IDbCardStore : ICardStore<Card>
 {
+    /// <summary>Merges the FTS5 index segments after bulk writes (sync/import) — keeps search fast.</summary>
+    Task OptimizeFtsAsync(CancellationToken ct = default);
+
     Task<ICollection<Card>> SearchAsync(string query, int limit = 100, CancellationToken ct = default);
     Task<ICollection<Card>> GetBySetAsync(string setCode, CancellationToken ct = default);
 

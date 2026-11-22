@@ -238,47 +238,70 @@ public static class InitializeDb
     }
 
     /// <summary>
-    /// Creates an FTS5 virtual table for full-text search over card Name, Type, OracleText, Artist.
-    /// Standard (non-external) mode — data is stored in the FTS5 index itself.
+    /// Creates the FTS5 full-text index over card Name, Type, OracleText, Artist (new DBs only).
+    /// External content mode: the index stores only postings, the text lives in Cards — no
+    /// duplication, and DELETE by rowid is O(log n) instead of a full index scan.
+    /// remove_diacritics=2 makes "jose" find "José"; prefix='2 3 4' backs the fly* prefix search.
+    /// Migrations are NEVER run here (standing rule): an existing legacy index aborts startup
+    /// with a pointer to the manual migration file.
     /// Triggers keep the index in sync on INSERT/UPDATE/DELETE from Cards.
     /// </summary>
     private static async Task CreateFtsTable(SqliteConnection conn)
     {
+        // Legacy index present? Refuse to run — its shape is incompatible with the rowid-join
+        // queries, and silently 'fixing' it here would be an unattended migration.
+        var existingSql = await conn.QueryFirstOrDefaultAsync<string>(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'CardsFts'");
+        if (existingSql is not null && existingSql.Contains("CardId", StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "CardsFts is in the legacy shape (CardId column). Apply " +
+                "MagicAssistant.Data.Db/Migrations/004_Fts_External_Content_Index.sql manually: " +
+                "sqlite3 cards.db \".read Migrations/004_Fts_External_Content_Index.sql\"");
+
         // Drop existing triggers first (they can't be created IF NOT EXISTS in SQLite)
         await conn.ExecuteAsync(@"DROP TRIGGER IF EXISTS cards_fts_ai");
         await conn.ExecuteAsync(@"DROP TRIGGER IF EXISTS cards_fts_ad");
         await conn.ExecuteAsync(@"DROP TRIGGER IF EXISTS cards_fts_ud");
 
-        // FTS5 virtual table — stores searchable data directly.
-        // CardId column stores the Scryfall card ID (TEXT) for joining back to Cards.
-        // rowid is auto-assigned INTEGER by FTS5 internally.
         await conn.ExecuteAsync(@"
             CREATE VIRTUAL TABLE IF NOT EXISTS CardsFts USING fts5(
-                CardId UNINDEXED, Name, Type, OracleText, Artist
+                Name, Type, OracleText, Artist,
+                content='Cards', content_rowid='rowid',
+                tokenize='unicode61 remove_diacritics 2',
+                prefix='2 3 4'
             )");
 
-        // AFTER INSERT — add new card to FTS index
+        // A freshly created index over a populated Cards (DB created before this code shipped
+        // without FTS) is empty — fill it once. Not a migration: same-shape index, data is intact.
+        var ftsRows = await conn.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM CardsFts");
+        var cardRows = await conn.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM Cards");
+        if (ftsRows == 0 && cardRows > 0)
+            await conn.ExecuteAsync("INSERT INTO CardsFts(CardsFts) VALUES('rebuild')");
+
+        // AFTER INSERT — mirror the new row into the index by rowid
         await conn.ExecuteAsync(@"
             CREATE TRIGGER cards_fts_ai AFTER INSERT ON Cards
             BEGIN
-                INSERT INTO CardsFts(CardId, Name, Type, OracleText, Artist)
-                VALUES (new.Id, new.Name, new.Type, new.OracleText, new.Artist);
+                INSERT INTO CardsFts(rowid, Name, Type, OracleText, Artist)
+                VALUES (new.rowid, new.Name, new.Type, new.OracleText, new.Artist);
             END");
 
-        // AFTER DELETE — remove from FTS index
+        // AFTER DELETE — the 'delete' command keeps external content consistent
         await conn.ExecuteAsync(@"
             CREATE TRIGGER cards_fts_ad AFTER DELETE ON Cards
             BEGIN
-                DELETE FROM CardsFts WHERE CardId = old.Id;
+                INSERT INTO CardsFts(CardsFts, rowid, Name, Type, OracleText, Artist)
+                VALUES ('delete', old.rowid, old.Name, old.Type, old.OracleText, old.Artist);
             END");
 
-        // AFTER UPDATE — update FTS index (delete + insert)
+        // AFTER UPDATE — delete old entry, insert new one (both by rowid)
         await conn.ExecuteAsync(@"
             CREATE TRIGGER cards_fts_ud AFTER UPDATE ON Cards
             BEGIN
-                DELETE FROM CardsFts WHERE CardId = old.Id;
-                INSERT INTO CardsFts(CardId, Name, Type, OracleText, Artist)
-                VALUES (new.Id, new.Name, new.Type, new.OracleText, new.Artist);
+                INSERT INTO CardsFts(CardsFts, rowid, Name, Type, OracleText, Artist)
+                VALUES ('delete', old.rowid, old.Name, old.Type, old.OracleText, old.Artist);
+                INSERT INTO CardsFts(rowid, Name, Type, OracleText, Artist)
+                VALUES (new.rowid, new.Name, new.Type, new.OracleText, new.Artist);
             END");
     }
 }

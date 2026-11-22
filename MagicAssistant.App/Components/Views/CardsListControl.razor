@@ -25,7 +25,7 @@
                     ? FilterViewModel.CurrentCollectionId.HasValue
                         ? $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}, total: {GetLocationTotalCount()}"
                         : $"sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()}"
-                    : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsCount()})")</span>
+                    : $"KB (sets: {GetDisplayedSetsCount()}, cards: {GetDisplayedCardsText()})")</span>
                 @* Collapse-only button — hidden when collapsed; the badge is the sole way back *@
                 @if (!_setsCollapsed)
                 {
@@ -200,6 +200,7 @@
                                   OnNextPage="NextPage"
                                   SortField="@FilterViewModel.SortField"
                                   SortAsc="@FilterViewModel.SortAsc"
+                                  HasSearchQuery="@(!string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery))"
                                   OnSortColumnClicked="ToggleSort" />
                 }
             }
@@ -270,6 +271,7 @@
     /// <summary>Deck view only: CardId → the deck's sideboard holds ≥1 copy. Null = SB badges hidden.</summary>
     private Dictionary<Guid, bool>? _sbPresenceByCardId;
     private int? _previousPinnedCollectionId;
+    private bool _ftsTruncated;
     private int _totalCount;
     private int _currentPage = 1;
     private int _totalPages = 0;
@@ -469,6 +471,10 @@
 
     // ── Header stats (dynamic based on filter context) ─────────────────────
     private int GetDisplayedSetsCount() => _filteredSets.Count;
+
+    /// <summary>KB card count text — "5000+" when the FTS hit set hit the working-set cap, so the
+    /// ceiling is visible instead of a confidently wrong exact number.</summary>
+    private string GetDisplayedCardsText() => _ftsTruncated ? "5000+" : GetDisplayedCardsCount().ToString();
 
     private int GetDisplayedCardsCount()
     {
@@ -928,6 +934,7 @@
             var result = await CardSearch!.GetPagedAsync(filter);
             _displayCards = result.Cards.Cast<Card>().ToList();
             _totalCount = result.TotalCount;
+            _ftsTruncated = result.Truncated;
             _locationNamesByCardId = result.LocationNames;   // non-null only in locations multi-chip mode
             _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
@@ -951,6 +958,7 @@
             _displayCards = new List<Card>();
             _totalCount = 0;
             _totalPages = 0;
+            _ftsTruncated = false;
             _sbPresenceByCardId = null;
             _locationNamesByCardId = null;
         }
@@ -1120,7 +1128,13 @@
     // ── Sort — through single channel ────────────────────
     private void ToggleSort(string field)
     {
-        if (FilterViewModel.SortField == field)
+        // Relevance has one meaningful order (best first) — the store ignores SortAsc for it; no
+        // ascending flip here, so the header arrow never lies about a direction that isn't applied.
+        if (field == CardListFilter.SortFields.Relevance)
+        {
+            FilterViewModel.SortField = field;
+        }
+        else if (FilterViewModel.SortField == field)
             FilterViewModel.SortAsc = !FilterViewModel.SortAsc;
         else
         {

@@ -106,6 +106,8 @@ public class CardListFilter
         public const string Type = "Type";
         public const string SetCode = "SetCode";
         public const string Rarity = "Rarity";
+        /// <summary>FTS5 relevance rank — only meaningful together with a non-empty Query.</summary>
+        public const string Relevance = "Relevance";
     }
 }
 
@@ -115,10 +117,13 @@ public class CardListFilter
 /// <param name="LocationNames">Locations multi-chip mode only: the names of the selected nodes each
 /// displayed card lives in, comma-joined (a card in two decks shows both). One GROUP BY over Deck
 /// joined to Collection for the page ids. Null outside that mode.</param>
+/// <param name="Truncated">True when the FTS hit set hit the top-5000 working-set cap — the UI
+/// shows "5000+" instead of pretending the count is exact. False outside search.</param>
 public record CardListResult(
     ICollection<Card> Cards,
     int TotalCount,
-    IReadOnlyDictionary<Guid, string>? LocationNames = null);
+    IReadOnlyDictionary<Guid, string>? LocationNames = null,
+    bool Truncated = false);
 
 /// <summary>
 /// Numeric property filter (Power / Toughness / CMC).

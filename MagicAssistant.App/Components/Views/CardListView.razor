@@ -32,6 +32,12 @@
                         @onclick="@(() => SortHeader(CardListFilter.SortFields.SetCode))">Set<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.SetCode)</span></th>
                     <th class="col-type sortable @(IsSorted(CardListFilter.SortFields.Type) ? "sorted" : "")"
                         @onclick="@(() => SortHeader(CardListFilter.SortFields.Type))">Type<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Type)</span></th>
+                    @* Relevance appears only while a search is active — it is the FTS5 rank order. *@
+                    @if (HasSearchQuery)
+                    {
+                        <th class="col-relevance sortable @(IsSorted(CardListFilter.SortFields.Relevance) ? "sorted" : "")"
+                            @onclick="@(() => SortHeader(CardListFilter.SortFields.Relevance))">Relevance<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Relevance)</span></th>
+                    }
                 </tr>
             </thead>
             <tbody>
@@ -223,6 +229,9 @@
 
     /// <summary>Active sort field (internal name from CardListFilter.SortFields) — the matching header shows the indicator.</summary>
     [Parameter] public string SortField { get; set; } = "";
+
+    /// <summary>True while an FTS search is active — shows the Relevance sort column.</summary>
+    [Parameter] public bool HasSearchQuery { get; set; }
 
     /// <summary>Sort direction for the active field (true = ascending).</summary>
     [Parameter] public bool SortAsc { get; set; } = true;

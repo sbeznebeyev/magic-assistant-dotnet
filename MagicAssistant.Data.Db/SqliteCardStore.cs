@@ -377,6 +377,15 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
+    /// <summary>FTS5 'optimize': merges index segments built by bulk inserts (sync/import).
+    /// One-shot maintenance — cheap, and the first searches after an import stay fast.</summary>
+    public async Task OptimizeFtsAsync(CancellationToken ct = default)
+    {
+        using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
+        await conn.OpenAsync(ct);
+        await conn.ExecuteAsync("INSERT INTO CardsFts(CardsFts) VALUES('optimize')");
+    }
+
     /// <summary>
     /// Turns a user-typed FTS5 query into a prefix query: bare words get a trailing '*' so
     /// "fly" also finds "flying" — the way people expect search to work. Quoted phrases, boolean
@@ -413,10 +422,46 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             var start = i;
             while (i < userQuery.Length && !char.IsWhiteSpace(userQuery[i]) && userQuery[i] != '"' && userQuery[i] != '(' && userQuery[i] != ')')
                 i++;
-            sb.Append(PrefixToken(userQuery[start..i]));
+            var token = userQuery[start..i];
+            sb.Append(PrefixToken(token));
+
+            // NEAR / N — the distance number must stay bare (5* would be a syntax error).
+            if (token.Equals("NEAR", StringComparison.OrdinalIgnoreCase))
+            {
+                var j = i;
+                while (j < userQuery.Length && char.IsWhiteSpace(userQuery[j])) j++;
+                if (j < userQuery.Length && userQuery[j] == '/')
+                {
+                    j++;
+                    while (j < userQuery.Length && char.IsWhiteSpace(userQuery[j])) j++;
+                    var numStart = j;
+                    while (j < userQuery.Length && char.IsDigit(userQuery[j])) j++;
+                    if (j > numStart)
+                    {
+                        sb.Append(userQuery[i..j]);   // " / 5" verbatim, whitespace preserved
+                        i = j;
+                    }
+                }
+            }
         }
         return sb.ToString();
     }
+
+    /// <summary>True for FTS5 query failures worth retrying sanitized: syntax errors
+    /// ('fts5: syntax error near ...') and unknown column filters ('no such column: color' —
+    /// a typo'd name: prefix). Dapper wraps the native SqliteException; code 1 is SQLITE_ERROR.</summary>
+    private static bool IsFtsSyntaxError(SqliteException e) =>
+        e.SqliteErrorCode == 1 &&
+        (e.Message.Contains("fts5", StringComparison.OrdinalIgnoreCase) ||
+         e.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Last-resort query: every whitespace-separated token quoted, so FTS5 treats it as
+    /// plain words. Semantics degrade (operators become literals) but the search never dies silently.</summary>
+    internal static string SanitizeFtsQuery(string? userQuery) =>
+        string.IsNullOrWhiteSpace(userQuery)
+            ? string.Empty
+            : string.Join(" ", userQuery.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => "\"" + t.Replace("\"", "\"\"") + "\""));
 
     private static string PrefixToken(string token)
     {
@@ -447,13 +492,24 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         //   - Phrase: '"lightning bolt"' → exact phrase match
         //   - Boolean: "lightning OR bolt" → either word
         var ftsSql = @"
-            SELECT c.* FROM CardsFts f
-            JOIN Cards c ON c.Id = f.CardId
+            SELECT c.* FROM Cards c
+            JOIN CardsFts f ON c.rowid = f.rowid
             WHERE CardsFts MATCH @Query
             ORDER BY rank
             LIMIT @Limit";
 
-        var rows = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = BuildPrefixQuery(query), Limit = limit });
+        IEnumerable<MagicCardRow> ftsRowsResult;
+        try
+        {
+            ftsRowsResult = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = BuildPrefixQuery(query), Limit = limit });
+        }
+        catch (SqliteException e) when (IsFtsSyntaxError(e))
+        {
+            // Unparseable query (typo'd operator, stray colon) — retry with every token quoted:
+            // words-only semantics beats a silent empty result.
+            ftsRowsResult = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = SanitizeFtsQuery(query), Limit = limit });
+        }
+        var rows = ftsRowsResult;
         var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
@@ -626,12 +682,29 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             }
             whereParts.Add("(" + string.Join(" OR ", rarityConditions) + ")");
         }
-        // Text search: FTS5 via CardsFts virtual table (relevance-ranked).
-        // Bare words get prefix semantics (fly → fly*, matches flying); quoted phrases stay exact.
-        if (!string.IsNullOrWhiteSpace(filter.Query))
+        // Text search: FTS5 via CardsFts (external content, rowid join). One MATCH per page load:
+        // hits materialize once into a temp table — count and data queries reuse it instead of
+        // running MATCH twice, and the rank column survives for relevance sorting.
+        // Top-5000 by relevance is the working set; beyond it the result is flagged Truncated.
+        var useFts = !string.IsNullOrWhiteSpace(filter.Query);
+        var ftsTruncated = false;
+        if (useFts)
         {
-            whereParts.Add(@"Id IN (SELECT CardId FROM CardsFts WHERE CardsFts MATCH @QueryFTS ORDER BY rank LIMIT 5000)");
-            parameters.Add("QueryFTS", BuildPrefixQuery(filter.Query));
+            const string hitsSql = @"
+                CREATE TEMP TABLE fts_hits AS
+                SELECT rowid AS CardRowId, rank FROM CardsFts
+                WHERE CardsFts MATCH @Q ORDER BY rank LIMIT 5000";
+            await conn.ExecuteAsync("DROP TABLE IF EXISTS fts_hits");
+            try
+            {
+                await conn.ExecuteAsync(hitsSql, new { Q = BuildPrefixQuery(filter.Query) });
+            }
+            catch (SqliteException e) when (IsFtsSyntaxError(e))
+            {
+                await conn.ExecuteAsync(hitsSql, new { Q = SanitizeFtsQuery(filter.Query) });
+            }
+            ftsTruncated = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM fts_hits") >= 5000;
+            whereParts.Add("Cards.rowid IN (SELECT CardRowId FROM fts_hits)");
         }
         // Type filters: multiple values combined as OR (item1 OR item2 OR ...)
         if (filter.TypeFilters != null && filter.TypeFilters.Count > 0)
@@ -783,22 +856,32 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
         var whereClause = whereParts.Count > 0 ? "WHERE " + string.Join(" AND ", whereParts) : "";
 
-        // Validate sort field
+        // Validate sort field. Relevance is only meaningful with an active search — without a
+        // query it degrades to Name rather than ordering by a non-existent column.
         var allowedSortFields = new[] { CardListFilter.SortFields.Name, CardListFilter.SortFields.CmcNumber,
-            CardListFilter.SortFields.Type, CardListFilter.SortFields.SetCode, CardListFilter.SortFields.Rarity };
+            CardListFilter.SortFields.Type, CardListFilter.SortFields.SetCode, CardListFilter.SortFields.Rarity,
+            CardListFilter.SortFields.Relevance };
         var sortField = allowedSortFields.Contains(filter.SortField, StringComparer.OrdinalIgnoreCase)
             ? filter.SortField : CardListFilter.SortFields.Name;
+        var isRelevance = useFts
+            && string.Equals(sortField, CardListFilter.SortFields.Relevance, StringComparison.OrdinalIgnoreCase);
+        if (!isRelevance && string.Equals(sortField, CardListFilter.SortFields.Relevance, StringComparison.OrdinalIgnoreCase))
+            sortField = CardListFilter.SortFields.Name;
 
         // Count query
         var countSql = $"SELECT COUNT(*) {fromClause} {whereClause}";
         var totalCount = await conn.QuerySingleAsync<int>(countSql, parameters);
 
-        // Data query with sorting and pagination
+        // Data query with sorting and pagination. Relevance = FTS5 rank (best first — the
+        // SortAsc toggle is meaningless for it, so it is deliberately ignored).
         var sortDirection = filter.SortAsc ? "ASC" : "DESC";
+        var orderBy = isRelevance
+            ? "ORDER BY (SELECT rank FROM fts_hits WHERE CardRowId = Cards.rowid) ASC"
+            : $"ORDER BY [{sortField}] {sortDirection}";
         var dataSql = $@"
             SELECT Cards.* {fromClause}
             {whereClause}
-            ORDER BY [{sortField}] {sortDirection}
+            {orderBy}
             LIMIT @Limit OFFSET @Offset";
 
         parameters.Add("Limit", filter.PageSize);
@@ -851,7 +934,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             locationNames = names.ToDictionary(r => r.CardId, r => r.Names ?? string.Empty);
         }
 
-        return new CardListResult(cards, totalCount, locationNames);
+        return new CardListResult(cards, totalCount, locationNames, ftsTruncated);
     }
 
     private class LocationNamesRow

@@ -183,6 +183,9 @@ public class KnowledgeBaseSyncService : IKnowledgeBaseSyncService
             await _dbCardStore.AddAllAsync(magicCards, ct);
             result.CardsPersisted = magicCards.Count;
 
+            // Merge FTS index segments built by the bulk insert — one-shot, keeps first searches fast.
+            await _dbCardStore.OptimizeFtsAsync(ct);
+
             // ── Phase 5: Done ──
             sw.Stop();
             state.Phase = 5;

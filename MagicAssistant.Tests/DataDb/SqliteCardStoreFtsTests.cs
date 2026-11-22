@@ -372,16 +372,15 @@ public class SqliteCardStoreFtsTests
     }
 
     [Test]
-    public async Task SearchAsync_PartialWord_DoesNotMatch()
+    public async Task SearchAsync_PartialWord_MatchesByPrefix()
     {
+        // Prefix semantics (agreed): bare words get fly* — partial 'light' finds 'Lightning'.
         await AddCard("c1", "Lightning Bolt", "Instant");
 
         var results = await _store.SearchAsync("light");
 
-        Assert.That(results, Is.Empty,
-            "FTS5 default tokenizer performs whole-word token matching only. " +
-            "Partial prefix 'light' should NOT match full token 'Lightning'. " +
-            "Use wildcard syntax (e.g., 'light*') for prefix matching.");
+        Assert.That(results, Has.Count.EqualTo(1),
+            "bare partial word matches by prefix since BuildPrefixQuery appends '*'");
     }
 
     [Test]
@@ -397,19 +396,16 @@ public class SqliteCardStoreFtsTests
     }
 
     [Test]
-    public async Task SearchAsync_Stemming_DoesNotWorkWithPorterTokenizer()
+    public async Task SearchAsync_DerivedWordForms_MatchViaPrefix()
     {
+        // Porter stemming never worked in this build — the agreed fix made it moot:
+        // BuildPrefixQuery turns 'protect' into 'protect*', so derived forms match as a side effect.
         await AddCard("c1", "Protection Card", "Enchantment");
         await AddCard("c2", "Other Card", "Instant");
 
         var results = await _store.SearchAsync("protect");
 
-        Assert.That(results, Is.Empty,
-            "BUG: SQLite FTS5 porter tokenizer does NOT perform stemming in this build. " +
-            "Searching 'protect' returns 0 results even though 'Protection' is indexed. " +
-            "The porter tokenizer normalizes to lowercase and splits on punctuation, " +
-            "but does not reduce words to their root form (e.g., 'protection' → 'protect'). " +
-            "This means derived word forms will NOT match each other via FTS5 search. " +
-            "Workaround: use wildcard queries (e.g., 'protect*') instead of relying on stemming.");
+        Assert.That(results, Has.Count.EqualTo(1),
+            "prefix semantics ('protect*') match 'Protection' without stemming");
     }
 }
