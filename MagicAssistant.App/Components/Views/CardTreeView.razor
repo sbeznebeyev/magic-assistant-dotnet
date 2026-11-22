@@ -16,6 +16,9 @@
                 @onclick="OnTypeGroup">Type</button>
         <button class="group-btn @(_groupBy == "set" ? "active" : "")"
                 @onclick="OnSetGroup">Set</button>
+        <button class="group-btn collapse-all-btn" @onclick="ToggleAllGroups">
+            @(AllExpanded ? "Collapse All" : "Expand All")
+        </button>
     </div>
 
     @* ── Tree groups — mosaic of fixed 300px tiles; auto-fill wraps to a single
@@ -25,7 +28,7 @@
         {
             <div class="tree-group">
                 <div class="group-header" @onclick="() => ToggleGroup(group.Key)">
-                    <span class="expand-icon">@(_expandedGroups.Contains(group.Key) ? "▾" : "▸")</span>
+                    <span class="expand-icon">@(ExpandedGroups.Contains(group.Key) ? "▾" : "▸")</span>
                     @* Color groups lead with mana symbols — same icons as the filter dialog checkboxes. *@
                     @if (_groupBy == "color")
                     {
@@ -40,7 +43,7 @@
                     <span class="group-count">(@group.Value.Count)</span>
                 </div>
 
-                @if (_expandedGroups.Contains(group.Key))
+                @if (ExpandedGroups.Contains(group.Key))
                 {
                     <div class="group-cards">
                         @foreach (var card in group.Value)
@@ -76,9 +79,13 @@
     /// <summary>Copy counts per card Id (location mode). Null = KB mode — no counts shown.</summary>
     [Parameter] public Dictionary<Guid, int>? Counts { get; set; }
 
+    /// <summary>Expanded group keys — owned by the parent: the tree unmounts during every
+    /// loading cycle, so per-group collapsed/expanded state must live above it. Entering tree
+    /// mode hands over an empty set (all collapsed); filtering reuses the same set.</summary>
+    [Parameter] public HashSet<string> ExpandedGroups { get; set; } = new();
+
     // Grouping state (display-only — grouping is applied to the full list)
     private Dictionary<string, List<Card>> _groups = new();
-    private HashSet<string> _expandedGroups = new();
     private string _groupBy = "color";
     private IReadOnlyList<Card>? _lastCards;
 
@@ -102,7 +109,6 @@
         if (Cards.Count == 0)
         {
             _groups = new Dictionary<string, List<Card>>();
-            _expandedGroups = new HashSet<string>();
             return;
         }
 
@@ -134,9 +140,8 @@
         // Sort groups by count descending
         _groups = dict.OrderByDescending(g => g.Value.Count)
                       .ToDictionary(g => g.Key, g => g.Value, StringComparer.OrdinalIgnoreCase);
-
-        // Groups start collapsed — the user opens only what they need.
-        _expandedGroups = new HashSet<string>();
+        // ExpandedGroups is parent-owned and deliberately untouched here: filtering must keep
+        // each group's state; unknown keys (new groups) simply read as collapsed.
     }
 
     /// <summary>
@@ -197,10 +202,23 @@
 
     private void ToggleGroup(string key)
     {
-        if (_expandedGroups.Contains(key))
-            _expandedGroups.Remove(key);
+        if (ExpandedGroups.Contains(key))
+            ExpandedGroups.Remove(key);
         else
-            _expandedGroups.Add(key);
+            ExpandedGroups.Add(key);
+    }
+
+    /// <summary>Toolbar toggle over the parent-owned ExpandedGroups (the same set every
+    /// header click mutates): all expanded → collapse everything, otherwise expand everything.
+    /// Mixed state shows "Expand All" — one click always reaches the full state.</summary>
+    private bool AllExpanded => _groups.Count > 0 && _groups.Keys.All(ExpandedGroups.Contains);
+
+    private void ToggleAllGroups()
+    {
+        if (AllExpanded)
+            ExpandedGroups.Clear();
+        else
+            foreach (var key in _groups.Keys) ExpandedGroups.Add(key);
     }
 
     /// <summary>Same as the list view: "3.0" → "3", "2.5" stays; CMC 0 renders as empty

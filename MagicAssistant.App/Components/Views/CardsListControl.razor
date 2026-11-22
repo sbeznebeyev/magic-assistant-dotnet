@@ -166,6 +166,7 @@
                     <CardTreeView Cards="_displayCards"
                                   Counts="GetCountMap()"
                                   SelectedCardId="@_selectedCardId"
+                                  ExpandedGroups="_treeExpandedGroups"
                                   OnCardClicked="SelectCard" />
                 }
                 else
@@ -319,6 +320,9 @@
 
     // View mode (list / gallery) — persisted like other UI settings
     private string _viewMode = "list";
+    // Expanded group keys for the tree view — parent-owned so toggles survive the loading
+    // remount; reset to empty (all collapsed) on every entry into tree mode.
+    private HashSet<string> _treeExpandedGroups = new();
     private const string ViewModeSettingKey = "KBCardsListControl.ViewMode";
 
     // Settings persistence
@@ -1162,6 +1166,10 @@
         if (_viewMode == mode) return;
         if (mode == "tree" && !TreeAvailable) return;  // button is disabled — belt-and-braces
         _viewMode = mode;
+        // Entering tree mode starts collapsed; leaving it discards the toggles, so the next
+        // entry is collapsed again. While in tree mode the set survives every filtering/query
+        // cycle (the tree unmounts during loading, this field does not).
+        if (mode == "tree") _treeExpandedGroups = new HashSet<string>();
         await SaveViewModeAsync();
         // The tree queries the full list, list/gallery query a page — different page sizes,
         // so every mode switch needs a fresh query.

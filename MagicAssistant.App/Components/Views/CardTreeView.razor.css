@@ -53,6 +53,19 @@
     font-size: 11px;
 }
 
+/* Collapse/Expand All rides the right edge of the toolbar, away from the Group by cluster. */
+.collapse-all-btn {
+    margin-left: auto;
+    color: #f9e2af;
+    border-color: #f9e2af;
+}
+
+.collapse-all-btn:hover {
+    background: rgba(249, 226, 175, 0.12);
+    border-color: #f9e2af;
+    color: #f9e2af;
+}
+
 .group-btn:hover {
     background: #383838;
     border-color: #0078d4;
