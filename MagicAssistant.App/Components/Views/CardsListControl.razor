@@ -109,7 +109,8 @@
                     <button class="view-btn @(_viewMode == "gallery" ? "active" : "")"
                             @onclick="@(() => SetViewMode("gallery"))" title="Gallery view">Gallery</button>
                     <button class="view-btn @(_viewMode == "tree" ? "active" : "")"
-                            @onclick="@(() => SetViewMode("tree"))" title="Tree view">Tree</button>
+                            @onclick="@(() => SetViewMode("tree"))" disabled="@(!TreeAvailable)"
+                            title="@(TreeAvailable ? "Tree view" : "Tree view needs a selected deck (location) or exactly one set (KB)")">Tree</button>
                 </div>
                 <div class="filter-area">
                     <select value="@(GetTypeSelectValue())" @onchange="(e) => OnTypeChanged(e)" class="filter-select">
@@ -163,15 +164,9 @@
                 else if (_viewMode == "tree")
                 {
                     <CardTreeView Cards="_displayCards"
-                                  CurrentPage="@_currentPage"
-                                  TotalPages="@_totalPages"
-                                  PageSize="@_pageSize"
                                   Counts="GetCountMap()"
                                   SelectedCardId="@_selectedCardId"
-                                  OnCardClicked="SelectCard"
-                                  OnPrevPage="PrevPage"
-                                  OnNextPage="NextPage"
-                                  OnPageSizeChanged="OnGalleryPageSizeChanged" />
+                                  OnCardClicked="SelectCard" />
                 }
                 else
                 {
@@ -833,6 +828,13 @@
     // Server-side: filters + sort + pagination in one SQL query via GetPagedAsync
     private async Task ApplyFiltersAndPagination()
     {
+        // Global CardTreeView rules: the tree never pages (the parent loads the full filtered
+        // list) and is only available for a selected deck (location) or exactly one set (KB).
+        // If availability was lost since the last render — set deselected, node switched —
+        // fall back to the list view instead of querying an unbounded full list.
+        if (_viewMode == "tree" && !TreeAvailable) _viewMode = "list";
+        var treeMode = _viewMode == "tree";
+
         _loading = true;
         // Forced paint before the heavy phase: Microsoft.Data.Sqlite's "async" completes on the
         // dispatcher, so without a real suspension the loading state would never reach the
@@ -898,8 +900,8 @@
                 Rarity = FilterViewModel.Rarity.Count > 0 ? FilterViewModel.Rarity : null,
                 SortField = sortField,
                 SortAsc = FilterViewModel.SortAsc,
-                Page = _currentPage,
-                PageSize = _pageSize,
+                Page = treeMode ? 1 : _currentPage,
+                PageSize = treeMode ? int.MaxValue : _pageSize,
                 NameFilter = effectiveNameFilter,
                 Query = string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery) ? null : FilterViewModel.SearchQuery.Trim(),
                 LocationFilter = FilterViewModel.CurrentCollectionId,
@@ -936,7 +938,7 @@
             _totalCount = result.TotalCount;
             _ftsTruncated = result.Truncated;
             _locationNamesByCardId = result.LocationNames;   // non-null only in locations multi-chip mode
-            _totalPages = (int)Math.Ceiling((double)_totalCount / _pageSize);
+            _totalPages = treeMode ? 1 : (int)Math.Ceiling((double)_totalCount / _pageSize);
             if (_currentPage > _totalPages && _totalPages > 0) _currentPage = _totalPages;
 
             // KB mode with a pinned target: totals of the displayed cards in the pinned collection
@@ -1148,8 +1150,12 @@
     private async Task SetViewMode(string mode)
     {
         if (_viewMode == mode) return;
+        if (mode == "tree" && !TreeAvailable) return;  // button is disabled — belt-and-braces
         _viewMode = mode;
         await SaveViewModeAsync();
+        // The tree queries the full list, list/gallery query a page — different page sizes,
+        // so every mode switch needs a fresh query.
+        await ApplyFiltersAndPagination();
     }
 
     private async Task LoadViewModeAsync()
@@ -1259,6 +1265,14 @@
     /// <summary>True when a collection/deck/sideboard is displayed (location mode) — the control
     /// then only shows KB cards filtered by membership; Sync is not available in this mode.</summary>
     private bool IsLocationMode => FilterViewModel.InLocationsMode;
+
+    /// <summary>CardTreeView availability (global rules): location mode — only a selected deck;
+    /// KB mode — only when exactly one set is active. Locations multi-chip and all-KB have no
+    /// bounded full list, so the tree stays off for them.</summary>
+    private bool TreeAvailable => IsLocationMode
+        ? FilterViewModel.CurrentCollectionId is not null
+          && FilterViewModel.CurrentCollectionNodeType == NodeType.Deck
+        : FilterViewModel.ActiveCardSets is { Count: 1 };
 
     /// <summary>Label of the first sidebar item: "All Sets" in KB mode, "All sets of collection/deck/sideboard"
     /// when a location is displayed (the node type arrives with the navigation state — no DB lookup).</summary>

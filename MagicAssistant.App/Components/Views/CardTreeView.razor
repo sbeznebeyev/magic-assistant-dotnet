@@ -5,6 +5,7 @@
    Grouping (color/type/set) is a display-only concern — kept inside this
    component and applied to the current page. *@
 
+@using System.Text
 <div class="tree-view-container">
     @* ── Group selector ── *@
     <div class="tree-toolbar">
@@ -24,7 +25,16 @@
             <div class="tree-group">
                 <div class="group-header" @onclick="() => ToggleGroup(group.Key)">
                     <span class="expand-icon">@(_expandedGroups.Contains(group.Key) ? "▾" : "▸")</span>
-                    <span class="group-color-dot" style="background:@GetColorHex(group.Key);"></span>
+                    @* Color groups lead with mana symbols — same icons as the filter dialog checkboxes. *@
+                    @if (_groupBy == "color")
+                    {
+                        <span class="group-symbols">
+                            @foreach (var ch in group.Key == "Colorless" ? "C" : group.Key)
+                            {
+                                <span class="card-symbol card-symbol-@ch"></span>
+                            }
+                        </span>
+                    }
                     <span class="group-name">@group.Key</span>
                     <span class="group-count">(@group.Value.Count)</span>
                 </div>
@@ -50,64 +60,30 @@
     <div class="tree-summary">
         <span>@Cards.Count cards in @_groups.Count groups</span>
     </div>
-
-    @* ── Pagination (page size stepper + prev/next) ── *@
-    <div class="tree-pagination">
-        <div class="size-slider-group">
-            <button type="button" class="slider-arrow" @onclick="() => PageSizeStep(-1)">◀</button>
-            <span>Page size: </span><span class="size-value">@PageSize</span>
-            <button type="button" class="slider-arrow" @onclick="() => PageSizeStep(1)">▶</button>
-        </div>
-        <div class="pagination-buttons">
-            <button @onclick="PrevPage" disabled="@(!HasPrev)" class="page-btn">← Prev</button>
-            <span class="page-info">Page @CurrentPage / @TotalPages</span>
-            <button @onclick="NextPage" disabled="@(!HasNext)" class="page-btn">Next →</button>
-        </div>
-    </div>
 </div>
 
 @code {
-    /// <summary>Cards of the current page (parent already applied filter/sort/paging).</summary>
+    /// <summary>The FULL filtered card list — the tree never pages; the parent loads every
+    /// matching card (scoped to a deck or a single set by the view-availability rules).</summary>
     [Parameter] public IReadOnlyList<Card> Cards { get; set; } = Array.Empty<Card>();
-
-    /// <summary>1-based index of the current page.</summary>
-    [Parameter] public int CurrentPage { get; set; } = 1;
-
-    [Parameter] public int TotalPages { get; set; }
-
-    /// <summary>Page size — must match the size used by the parent for its query.
-    /// The stepper emits OnPageSizeChanged with a clamped value; the parent re-queries.</summary>
-    [Parameter] public int PageSize { get; set; } = 50;
 
     [Parameter] public Guid? SelectedCardId { get; set; }
 
     /// <summary>Card row clicked.</summary>
     [Parameter] public EventCallback<Card> OnCardClicked { get; set; }
 
-    /// <summary>← Prev requested (parent re-queries page CurrentPage - 1).</summary>
-    [Parameter] public EventCallback OnPrevPage { get; set; }
-
-    /// <summary>Next → requested (parent re-queries page CurrentPage + 1).</summary>
-    [Parameter] public EventCallback OnNextPage { get; set; }
-
-    /// <summary>New page size requested by the stepper (clamped to 1..150).</summary>
-    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
-
     /// <summary>Copy counts per card Id (location mode). Null = KB mode — no counts shown.</summary>
     [Parameter] public Dictionary<Guid, int>? Counts { get; set; }
 
-    // Grouping state (display-only — grouping is applied to the current page)
+    // Grouping state (display-only — grouping is applied to the full list)
     private Dictionary<string, List<Card>> _groups = new();
     private HashSet<string> _expandedGroups = new();
     private string _groupBy = "color";
     private IReadOnlyList<Card>? _lastCards;
 
-    private bool HasPrev => CurrentPage > 1;
-    private bool HasNext => CurrentPage < TotalPages;
-
     protected override void OnParametersSet()
     {
-        // Rebuild groups when the parent hands over a new page of cards
+        // Rebuild groups when the parent hands over a new list of cards
         if (!ReferenceEquals(Cards, _lastCards))
         {
             _lastCards = Cards;
@@ -133,20 +109,25 @@
 
         foreach (var card in Cards)
         {
-            string key = _groupBy switch
+            // One card can belong to several groups — same OR-semantics as the filter dialog
+            // (an Artifact Creature passes both the artifact and the creature filter).
+            var keys = _groupBy switch
             {
-                "color" => card.ColorType ?? "Colorless",
-                "type"  => GetPrimaryType(card.Type),
-                "set"   => card.SetCode ?? "Unknown",
-                _       => "Uncategorized"
+                "color" => ColorGroupKeys(card),
+                "type"  => TypeGroupKeys(card),
+                "set"   => new[] { card.SetCode ?? "Unknown" },
+                _       => new[] { "Uncategorized" }
             };
 
-            if (!dict.TryGetValue(key, out var list))
+            foreach (var key in keys)
             {
-                list = new List<Card>();
-                dict[key] = list;
+                if (!dict.TryGetValue(key, out var list))
+                {
+                    list = new List<Card>();
+                    dict[key] = list;
+                }
+                list.Add(card);
             }
-            list.Add(card);
         }
 
         // Sort groups by count descending
@@ -157,19 +138,49 @@
         _expandedGroups = new HashSet<string>(_groups.Keys);
     }
 
-    private static string GetPrimaryType(string? typeLine)
+    /// <summary>
+    /// Canonical card types — the exact list the filter dialog offers. Membership predicate is
+    /// the same too: case-insensitive substring of the Type line (SQL: ma_like('%type%', Type)),
+    /// so "Legendary Creature — Elf" is a Creature, and split/hybrid lines land in every group
+    /// they contain. Cards matching none (Battle, Dungeon…) fall into "Other".
+    /// </summary>
+    private static readonly (string Label, string Needle)[] CanonicalTypes =
     {
-        if (string.IsNullOrEmpty(typeLine)) return "Unknown";
+        ("Artifact", "artifact"), ("Creature", "creature"), ("Enchantment", "enchantment"),
+        ("Instant", "instant"), ("Land", "land"), ("Planeswalker", "planeswalker"), ("Sorcery", "sorcery"),
+    };
 
-        // Extract the primary type (first word before " - " or ":")
-        var separatorPos = Math.Max(
-            typeLine.IndexOf(" - ", StringComparison.OrdinalIgnoreCase),
-            typeLine.IndexOf(" :", StringComparison.OrdinalIgnoreCase)
-        );
+    private static IEnumerable<string> TypeGroupKeys(Card card)
+    {
+        var line = (card.Type ?? string.Empty).ToLowerInvariant();
+        var keys = CanonicalTypes.Where(t => line.Contains(t.Needle)).Select(t => t.Label).ToList();
+        return keys.Count > 0 ? keys : new[] { "Other" };
+    }
 
-        if (separatorPos > 0)
-            return typeLine[..separatorPos].Trim();
-        return typeLine.Trim();
+    /// <summary>
+    /// Color groups from ColorBits — the same bitmask the filter dialog filters on, not the
+    /// ColorType string. Key = the card's WUBRG combination ("W", "WU", …), colorless → "Colorless".
+    /// DFCs (ColorBits is null — bits live on faces) join the group of every face combination,
+    /// mirroring the dialog's OR-over-faces matching.
+    /// </summary>
+    private static IEnumerable<string> ColorGroupKeys(Card card)
+    {
+        if (card.ColorBits is int bits)
+            return new[] { ColorKey(bits) };
+        if (card.CardFaces is { Length: > 0 } faces)
+            return faces.Select(f => ColorKey(f.ColorBits)).Distinct().ToList();
+        return new[] { "Colorless" };
+    }
+
+    private static string ColorKey(int bits)
+    {
+        var sb = new StringBuilder();
+        if ((bits & (int)ColorBitFlags.W) != 0) sb.Append('W');
+        if ((bits & (int)ColorBitFlags.U) != 0) sb.Append('U');
+        if ((bits & (int)ColorBitFlags.B) != 0) sb.Append('B');
+        if ((bits & (int)ColorBitFlags.R) != 0) sb.Append('R');
+        if ((bits & (int)ColorBitFlags.G) != 0) sb.Append('G');
+        return sb.Length == 0 ? "Colorless" : sb.ToString();
     }
 
     private void SetGroupBy(string groupBy)
@@ -189,36 +200,5 @@
             _expandedGroups.Remove(key);
         else
             _expandedGroups.Add(key);
-    }
-
-    private async Task PageSizeStep(int delta)
-    {
-        var newSize = Math.Clamp(PageSize + delta, 1, 150);
-        if (newSize == PageSize) return;
-        await OnPageSizeChanged.InvokeAsync(newSize);
-    }
-
-    private async Task PrevPage()
-    {
-        await OnPrevPage.InvokeAsync();
-    }
-
-    private async Task NextPage()
-    {
-        await OnNextPage.InvokeAsync();
-    }
-
-    private static string GetColorHex(string colorType)
-    {
-        return colorType.ToLowerInvariant() switch
-        {
-            "w" or "monow" => "#ffffff",
-            "u" or "monou" => "#5bc0de",
-            "b" or "monob" => "#888",
-            "r" or "monor" => "#e74c3c",
-            "g" or "monog" => "#2ecc71",
-            "colorless" or "c" => "#666",
-            _ => "#f0ad4e"  // multi-color default
-        };
     }
 }

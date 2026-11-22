@@ -65,11 +65,10 @@ public class FtsMigrationTests
     {
         // Standing rule: no automatic migrations — by the app or by anyone else. The initializer
         // must abort with a pointer to the migration file rather than silently touching data.
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await InitializeDb.EnsureCreatedAsync(_dbPath));
 
         Assert.That(ex!.Message, Does.Contain("004_Fts_External_Content_Index.sql"),
             "error must name the migration file to apply");
     }
-}
 }
