@@ -78,4 +78,23 @@ public class FtsPrefixSearchTests
 
         Assert.That(result.Cards.Select(c => c.Id), Is.EquivalentTo(new[] { _fly, _flying }));
     }
+
+    [Test]
+    public async Task ColumnAliases_ShortAndLongFormsResolve()
+    {
+        // n/t/o/a and "oracle" are app-level aliases — FTS5 itself only knows the Cards column names.
+        var id = Guid.NewGuid();
+        await _store.AddAllAsync(new[]
+        {
+            new Card { Id = id, Name = "Wing Beats", ManaCost = "{1}", Type = "Instant", SetCode = "m19", Rarity = "Common", OracleText = "Target creature gains flying" },
+        });
+
+        var shortForm = await Search("o:flying");
+        var longForm = await Search("oracle:flying");
+        var nameAlias = await Search("n:wing");
+
+        Assert.That(shortForm.Cards.Select(c => c.Id), Contains.Item(id), "o: must search OracleText");
+        Assert.That(longForm.Cards.Select(c => c.Id), Contains.Item(id), "oracle: must search OracleText");
+        Assert.That(nameAlias.Cards.Select(c => c.Id), Contains.Item(id), "n: must search Name");
+    }
 }

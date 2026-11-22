@@ -463,6 +463,17 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             : string.Join(" ", userQuery.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => "\"" + t.Replace("\"", "\"\"") + "\""));
 
+    /// <summary>User-facing column aliases for the column: filter. FTS5 columns must mirror the
+    /// Cards table (external content resolves them by SQL name), so short forms and "oracle" are
+    /// rewritten here — the tooltip teaches n/t/o/a, the store speaks OracleText.</summary>
+    private static readonly Dictionary<string, string> ColumnAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["n"] = "name", ["name"] = "name",
+        ["t"] = "type", ["type"] = "type",
+        ["o"] = "OracleText", ["oracle"] = "OracleText",
+        ["a"] = "artist", ["artist"] = "artist",
+    };
+
     private static string PrefixToken(string token)
     {
         if (token.Length == 0) return token;
@@ -470,7 +481,14 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
         var colon = token.IndexOf(':');
         if (colon >= 0)
-            return token[..(colon + 1)] + PrefixWord(token[(colon + 1)..]);   // name:fly → name:fly*
+        {
+            var col = token[..colon];
+            var rest = token[(colon + 1)..];
+            // Known alias → canonical FTS column; unknown columns pass through untouched so the
+            // syntax-error fallback can still sanitize them.
+            var canonical = ColumnAliases.TryGetValue(col, out var mapped) ? mapped : col;
+            return canonical + ":" + PrefixWord(rest);   // o:fly → OracleText:fly*
+        }
 
         return PrefixWord(token);
     }

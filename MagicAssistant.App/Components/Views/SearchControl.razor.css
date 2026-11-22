@@ -99,7 +99,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    width: 260px;
+    width: 320px;
     background: #313244;
     border: 1px solid #45475a;
     border-radius: 6px;
@@ -126,20 +126,25 @@
     color: #a6adc8;
 }
 
-.hint-row code {
+/* Same chip style inside the note — the searchable fields must read like the query examples. */
+.hint-row code,
+.hint-note code {
     background: #1e1e2e;
     border: 1px solid #45475a;
     border-radius: 3px;
     padding: 1px 5px;
     font-family: Consolas, monospace;
+    font-style: normal;
     font-size: 11px;
     color: #f9e2af;
     white-space: nowrap;
 }
 
 .hint-note {
-    margin-top: 2px;
-    color: #6c7086;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #45475a;   /* divider between query examples and the field note */
+    color: #bac2de;
     font-style: italic;
 }
 
