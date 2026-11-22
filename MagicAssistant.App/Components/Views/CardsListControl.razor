@@ -126,7 +126,13 @@
                             <option value="@r" selected="@(FilterViewModel.Rarity.Count == 1 && FilterViewModel.Rarity[0] == r)">@r</option>
                         }
                     </select>
-                    <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">Filters</button>
+                    <button class="filter-btn" @onclick="OnFilterClick" title="Advanced filter">
+                        Filters
+                        @if (FilterViewModel.ActiveFilterCount > 0)
+                        {
+                            <span class="filter-badge">@FilterViewModel.ActiveFilterCount</span>
+                        }
+                    </button>
                     <button class="clear-filters-btn @(HasActiveFilters ? "active" : "")" disabled="@(!HasActiveFilters)" @onclick="OnClearFiltersClick" title="Clear all filters">✕</button>
                 </div>
             </div>
@@ -533,6 +539,10 @@
         if (FilterViewModel.ActiveCardSets is not null
             && !codes.Contains(FilterViewModel.ActiveCardSets[0], StringComparer.OrdinalIgnoreCase))
             FilterViewModel.SetActiveCardSets(null);
+
+        // Everything above is re-query housekeeping (node-driven scope trim/fallback), not a user
+        // edit — the dirty tracker must not light Apply because of it.
+        FilterViewModel.MarkCommitted();
     }
 
     private async Task SelectSetFilter(string setCode)
@@ -851,7 +861,10 @@
                 // KB mode: drop only the stale location-mode auto-fill (node codes from a previous visit);
                 // an explicit user selection (Sets filter in Card Filter) carries over to the KB list.
                 if (FilterViewModel.SetScopeAuto && FilterViewModel.FilteredSetCodes.Count > 0)
+                {
                     FilterViewModel.ResetSetScope();
+                    FilterViewModel.MarkCommitted();  // internal housekeeping, not a user edit — no dirty flag
+                }
             }
 
             // Load the scoped set list for the sidebar (lazy DB view of FilteredSetCodes),

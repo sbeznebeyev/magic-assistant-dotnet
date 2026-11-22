@@ -481,3 +481,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Dirty Apply: draft differs from the last committed state — gold glow until committed. */
+.btn-dirty {
+    border-color: #f0d9a0;
+    box-shadow: 0 0 8px rgba(240, 217, 160, 0.35);
+}

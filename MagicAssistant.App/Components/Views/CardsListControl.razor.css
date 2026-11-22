@@ -492,3 +492,18 @@
     transform: translateY(0);
     box-shadow: 0 1px 4px rgba(0, 120, 212, 0.3);
 }
+
+/* Active-filter count badge on the Filters button — gold chip, visible without opening the dialog */
+.filter-badge {
+    display: inline-block;
+    min-width: 16px;
+    margin-left: 5px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: #f0d9a0;
+    color: #1e1e1e;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}

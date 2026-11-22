@@ -165,6 +165,30 @@ public class GetPagedLocationsFilterTests
     }
 
     [Test]
+    public async Task Query_WithLocationFilter_FtsRespectsNodeScope()
+    {
+        // FTS inside a deck (single-chip mode) must not leak matches from other nodes —
+        // the contract behind "search works in deck mode too".
+        var bolt = Guid.NewGuid();
+        var greaves = Guid.NewGuid();
+        await _cardStore.AddAllAsync(new[] { Card(bolt, "Lightning Bolt"), Card(greaves, "Lightning Greaves") });
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath};Default Timeout=30");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(
+            "INSERT INTO Deck (CollectionId, CardId, Count, IsOwn) VALUES (@d1, @b, 1, 1), (@d2, @g, 1, 1)",
+            new { d1 = _deck1, d2 = _deck2, b = bolt, g = greaves });
+
+        var result = await _cardStore.GetPagedAsync(new CardListFilter
+        {
+            Page = 1, PageSize = 50, Query = "lightning", LocationFilter = _deck1,
+        });
+
+        Assert.That(result.Cards.Select(c => c.Id), Is.EquivalentTo(new[] { bolt }),
+            "deck1 search finds Bolt but not Greaves from deck2");
+    }
+
+    [Test]
     public async Task GetLocationNodesAndSetCodes_FlatNodesAndUnionScopes()
     {
         var collectionStore = new SqliteCollectionStore(_dbPath);

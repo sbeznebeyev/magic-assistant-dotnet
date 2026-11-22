@@ -1,61 +1,59 @@
 @*
-    SearchControl — FTS5 full-text search over the knowledge base.
-    Pure input control for the FilterViewModel channel: writes SearchQuery and calls Apply().
-    The re-query is performed by CardsListControl (single Changed channel, per architecture.md).
+    SearchControl — FTS5 full-text search input over the knowledge base.
+    Pure controlled draft input: it never touches FilterViewModel and never re-queries.
+    The owning dialog keeps the draft, commits it to FilterViewModel.SearchQuery on its
+    Apply (single commit point), and receives Enter/Escape intents via callbacks.
     FTS5 syntax: "phrase", name:term, OR/AND/NOT.
 *@
 
 <div class="search-control">
     <div class="search-toolbar">
-        <input @bind="_searchQuery" @bind:event="oninput" @onkeydown="OnKeyDown"
-               placeholder="Search cards (FTS5)..."
+        <input value="@Value" @oninput="OnInput" @onkeydown="OnKeyDown" @onkeydown:stopPropagation
+               placeholder="Search cards"
                class="search-input" />
-        
-        @if (!string.IsNullOrWhiteSpace(_searchQuery))
+
+        @if (!string.IsNullOrWhiteSpace(Value))
         {
-            <button class="clear-btn" @onclick="ClearSearch" title="Clear search">✕</button>
+            <button type="button" class="clear-btn" @onclick="OnClear" title="Clear search">✕</button>
         }
 
-        <button class="search-btn" @onclick="ApplySearch" title="Search">🔍</button>
-
-        <span class="syntax-hint" tabindex="0">ⓘ<span class="hint-tooltip">FTS5: "exact phrase" · name:term · term1 OR term2</span></span>
+        <span class="syntax-hint" tabindex="0">ⓘ<span class="hint-tooltip">
+            <span class="hint-title">How to search</span>
+            <span class="hint-row"><code>lightning bolt</code><span>both words, any card text</span></span>
+            <span class="hint-row"><code>"Lightning Bolt"</code><span>exact phrase</span></span>
+            <span class="hint-row"><code>name:lightning</code><span>word in card name only</span></span>
+            <span class="hint-row"><code>dragon OR angel</code><span>either word</span></span>
+            <span class="hint-row"><code>dragon NOT flying</code><span>dragons without "flying"</span></span>
+            <span class="hint-note">Words match by prefix (fly → flying); quotes mean exact. Searches name, type, oracle text and artist.</span>
+        </span></span>
     </div>
 </div>
 
 @code {
+    /// <summary>Draft text owned by the parent dialog.</summary>
     [Parameter]
-    public FilterViewModel FilterViewModel { get; set; } = default!;
+    public string Value { get; set; } = string.Empty;
 
     [Parameter]
-    public EventCallback<string> OnSearchCompleted { get; set; }
+    public EventCallback<string> ValueChanged { get; set; }
 
-    private string _searchQuery = string.Empty;
+    /// <summary>Enter pressed — the dialog applies everything (single commit point).</summary>
+    [Parameter]
+    public EventCallback OnEnter { get; set; }
 
-    /// <summary>Push the current input into the filter channel and trigger a re-query.</summary>
-    private async Task ApplySearch()
-    {
-        var query = _searchQuery.Trim();
-        if (query.Length == 0) return;
-        FilterViewModel.SearchQuery = query;
-        FilterViewModel.Apply();
-        await OnSearchCompleted.InvokeAsync(query);
-    }
+    private async Task OnInput(ChangeEventArgs e)
+        => await ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty);
 
-    /// <summary>Remove the FTS filter from the channel and trigger a re-query.</summary>
-    private async Task ClearSearch()
-    {
-        _searchQuery = string.Empty;
-        if (FilterViewModel.SearchQuery.Length == 0) return;
-        FilterViewModel.SearchQuery = string.Empty;
-        FilterViewModel.Apply();
-        await OnSearchCompleted.InvokeAsync(string.Empty);
-    }
+    private async Task OnClear()
+        => await ValueChanged.InvokeAsync(string.Empty);
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
+        // stopPropagation on the input: the dialog root never sees these keys —
+        // Enter here means "apply everything" (parent decides), Escape clears the draft only.
         if (e.Key == "Enter")
-            await ApplySearch();
+            await OnEnter.InvokeAsync();
         else if (e.Key == "Escape")
-            await ClearSearch();
+            await ValueChanged.InvokeAsync(string.Empty);
     }
 }

@@ -12,9 +12,9 @@
             <button class="close-btn" @onclick="Close" aria-label="Close dialog">✕</button>
         </div>
 
-        @* ── Search (FTS5) — moved here from MainLayout's center panel, top of the window ── *@
+        @* ── Search (FTS5) — draft input; committed to FilterViewModel only via Apply/Enter ── *@
         <div class="filter-search">
-            <SearchControl FilterViewModel="@FilterViewModel" OnSearchCompleted="OnSearchCompleted" />
+            <SearchControl Value="@_searchDraft" ValueChanged="@(v => _searchDraft = v)" OnEnter="OnApply" />
         </div>
 
         @* ── Fields — all bound directly to shared FilterViewModel ── *@
@@ -221,7 +221,7 @@
         <div class="filter-footer">
             <button type="button" class="btn-advanced" @onclick="() => _showAdvanced = true">Advanced</button>
             <div class="filter-footer-actions">
-                <button class="btn-apply" @onclick="OnApply">Apply</button>
+                <button class="btn-apply @(FilterViewModel.IsDirty ? "btn-dirty" : "")" @onclick="OnApply">Apply</button>
                 <button class="btn-clear" @onclick="OnClearAndApply">Clear All</button>
                 <button class="btn-cancel" @onclick="Close">Cancel</button>
             </div>
@@ -281,9 +281,19 @@
     /// <summary>Forwarded to MainLayout so the status bar keeps reporting search commits.</summary>
     [Parameter] public EventCallback<string> OnSearchCompleted { get; set; }
 
-    /// <summary>Apply: fire Changed event so CardsListControl re-queries via InvokeAsync.</summary>
+    /// <summary>FTS5 draft — lives only in the dialog; committed to FilterViewModel.SearchQuery
+    /// on Apply (or Enter in the search field). Resynced from the model on every open.</summary>
+    private string _searchDraft = string.Empty;
+
+    /// <summary>Apply: single commit point — search draft, location chips, then one re-query.</summary>
     private async Task OnApply()
     {
+        var query = _searchDraft.Trim();
+        if (query != FilterViewModel.SearchQuery)
+        {
+            FilterViewModel.SearchQuery = query;
+            await OnSearchCompleted.InvokeAsync(query);
+        }
         // Chips own the selected context: commit the draft, let MainLayout sync selected
         // (1 chip → select that node; 0/≥2 → drop selection), then fire the single re-query.
         if (FilterViewModel.InLocationsMode)
@@ -301,6 +311,7 @@
     /// drops the selected context together with the last chip.</summary>
     private async Task OnClearAndApply()
     {
+        _searchDraft = string.Empty;
         if (FilterViewModel.InLocationsMode)
         {
             _locationDraft.Clear();
@@ -325,6 +336,7 @@
         // Load the set catalog once per open and sync the chips from the current scope.
         if (IsOpen && !_wasDialogOpen)
         {
+            _searchDraft = FilterViewModel.SearchQuery;
             await LoadSetsForPickerAsync();
             SyncSetChipsFromScope();
             if (FilterViewModel.InLocationsMode)
@@ -648,7 +660,12 @@
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
+        // Nested layers (pickers, Advanced sub-dialog) own the keyboard while open —
+        // Enter there must never commit the whole dialog.
+        if (_showSetPicker || _showLocationPicker || _showAdvanced) return;
         if (e.Key == "Escape")
             await Close();
+        else if (e.Key == "Enter")
+            await OnApply();  // global Enter = Apply (agreed): one action for the whole dialog
     }
 }

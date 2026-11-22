@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using MagicAssistant.Data.Model;
 using MagicAssistant.Data.Model.NavigatorNodes;
 
@@ -42,9 +43,73 @@ public class FilterViewModel
     {
         foreach (var flag in ColorFilterFlags.All)
             ColorFilters[flag] = false;
+        _committed = Snapshot();
     }
     /// <summary>Fired when Apply() is called — subscribers should re-query.</summary>
     public event Action? Changed;
+
+    // ── Commit tracking (dirty-Apply highlight) ──
+
+    /// <summary>Canonical form of the state at the last Apply(). Snapshot-based: new fields join the
+    /// IsDirty comparison automatically, no per-field bookkeeping.</summary>
+    private string _committed;
+
+    /// <summary>True while any field differs from the last committed state — the dialog lights its
+    /// Apply button until the draft is committed (Apply) or discarded (Cancel).</summary>
+    public bool IsDirty => Snapshot() != _committed;
+
+    /// <summary>Re-baseline the committed snapshot without firing Changed — for internal
+    /// auto-mutations (node-scope auto-fill) that are housekeeping, not user edits.</summary>
+    public void MarkCommitted() => _committed = Snapshot();
+
+    /// <summary>Number of active filters — the badge on the Filters button. Counts filter groups,
+    /// not individual values (any rarity selected = 1). Navigation state (node, sidebar set click,
+    /// sort) is deliberately excluded: it is visible elsewhere and always committed.</summary>
+    public int ActiveFilterCount
+    {
+        get
+        {
+            var n = 0;
+            if (!string.IsNullOrWhiteSpace(SearchQuery)) n++;
+            if (!string.IsNullOrWhiteSpace(NameFilter)) n++;
+            if (LocationNodeIds.Count > 0) n++;
+            if (!SetScopeAuto && FilteredSetCodes.Count > 0) n++;
+            if (Rarity.Count > 0) n++;
+            if (TypeFilter.Count > 0) n++;
+            if (ColorFilters.Any(kv => kv.Value)) n++;
+            if (!string.IsNullOrWhiteSpace(Artist)) n++;
+            if (!string.IsNullOrWhiteSpace(ColorType)) n++;
+            if (!string.IsNullOrWhiteSpace(LayoutFilter)) n++;
+            if (!string.IsNullOrWhiteSpace(LegalityFilter)) n++;
+            if (GameChangerFilter) n++;
+            if (!string.IsNullOrWhiteSpace(PowerValue)) n++;
+            if (!string.IsNullOrWhiteSpace(ToughnessValue)) n++;
+            if (!string.IsNullOrWhiteSpace(CmcValue)) n++;
+            if (Ownership != "all") n++;
+            if (!string.IsNullOrWhiteSpace(MinCount) || !string.IsNullOrWhiteSpace(MaxCount)) n++;
+            if (!string.IsNullOrWhiteSpace(MinPrice) || !string.IsNullOrWhiteSpace(MaxPrice)) n++;
+            if (IsFoil) n++;
+            if (HasForTrade) n++;
+            if (HasComment) n++;
+            return n;
+        }
+    }
+
+    private string Snapshot() => string.Join("|", typeof(FilterViewModel)
+        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.CanRead && p.GetIndexParameters().Length == 0)
+        .Where(p => p.Name is not (nameof(IsDirty) or nameof(ActiveFilterCount) or nameof(ClearGeneration)))
+        .OrderBy(p => p.Name, StringComparer.Ordinal)
+        .Select(p => $"{p.Name}={Canonical(p.GetValue(this))}"));
+
+    private static string Canonical(object? v) => v switch
+    {
+        null => "",
+        string s => s,
+        bool b => b ? "1" : "0",
+        System.Collections.IEnumerable e => string.Join(",", e.Cast<object?>().Select(x => x?.ToString() ?? "")),
+        _ => v.ToString() ?? "",
+    };
 
     /// <summary>Increments on every Clear() call — subscribers use it to detect an external reset
     /// and sync their local input state (e.g. the debounced name-filter buffer in CardsListControl).</summary>
@@ -299,8 +364,13 @@ public class FilterViewModel
         return string.Join(" OR ", Rarity.Where(r => !string.IsNullOrWhiteSpace(r)));
     }
 
-    /// <summary>Notify all subscribers to re-query with current filter/sort state.</summary>
-    public void Apply() => Changed?.Invoke();
+    /// <summary>Notify all subscribers to re-query with current filter/sort state, and re-baseline
+    /// the dirty-tracking snapshot — everything up to this point is committed.</summary>
+    public void Apply()
+    {
+        _committed = Snapshot();
+        Changed?.Invoke();
+    }
 
     /// <summary>Reset all filters and sort to defaults, then notify.</summary>
     public void ClearAndApply()

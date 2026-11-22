@@ -40,7 +40,7 @@
     @* ── Second form: add dialog ── *@
     @if (IsAddDialogOpen)
     {
-        <div class="msl-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" tabindex="0" style="outline:none;">
+        <div class="msl-overlay" @onclick="OnOverlayClick" @onkeydown="OnKeyDown" @onkeydown:stopPropagation tabindex="0" style="outline:none;">
             <div class="msl-dialog" @onclick:stopPropagation>
                 <div class="msl-dialog-header">
                     <span class="msl-dialog-title">Add Item</span>

@@ -96,14 +96,51 @@
     z-index: 10;
     visibility: hidden;
     opacity: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 260px;
     background: #313244;
     border: 1px solid #45475a;
-    border-radius: 4px;
-    padding: 6px 8px;
+    border-radius: 6px;
+    padding: 8px 10px;
     font-size: 11px;
-    white-space: nowrap;
+    white-space: normal;
     pointer-events: none;
     transition: opacity 0.15s;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.hint-title {
+    font-weight: 700;
+    color: #cdd6f4;
+    margin-bottom: 2px;
+}
+
+/* query example | plain-language meaning, two columns aligned on the baseline */
+.hint-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    align-items: baseline;
+    color: #a6adc8;
+}
+
+.hint-row code {
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    color: #f9e2af;
+    white-space: nowrap;
+}
+
+.hint-note {
+    margin-top: 2px;
+    color: #6c7086;
+    font-style: italic;
 }
 
 .syntax-hint:hover .hint-tooltip,

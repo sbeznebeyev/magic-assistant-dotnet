@@ -377,13 +377,71 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
         return cards;
     }
 
+    /// <summary>
+    /// Turns a user-typed FTS5 query into a prefix query: bare words get a trailing '*' so
+    /// "fly" also finds "flying" — the way people expect search to work. Quoted phrases, boolean
+    /// operators, parentheses, column filters (name:fly → name:fly*) and explicit wildcards pass
+    /// through with their semantics intact; a quoted "fly" therefore stays exact-word-only.
+    /// </summary>
+    internal static string BuildPrefixQuery(string? userQuery)
+    {
+        if (string.IsNullOrWhiteSpace(userQuery)) return string.Empty;
+
+        var sb = new System.Text.StringBuilder(userQuery.Length + 8);
+        var i = 0;
+        while (i < userQuery.Length)
+        {
+            var c = userQuery[i];
+            if (c == '"')
+            {
+                var end = userQuery.IndexOf('"', i + 1);
+                if (end < 0)
+                {
+                    sb.Append(userQuery, i, userQuery.Length - i);   // unterminated quote — pass through
+                    break;
+                }
+                sb.Append(userQuery, i, end - i + 1);                // phrase verbatim — no prefixing
+                i = end + 1;
+                continue;
+            }
+            if (char.IsWhiteSpace(c) || c is '(' or ')')
+            {
+                sb.Append(c);
+                i++;
+                continue;
+            }
+            var start = i;
+            while (i < userQuery.Length && !char.IsWhiteSpace(userQuery[i]) && userQuery[i] != '"' && userQuery[i] != '(' && userQuery[i] != ')')
+                i++;
+            sb.Append(PrefixToken(userQuery[start..i]));
+        }
+        return sb.ToString();
+    }
+
+    private static string PrefixToken(string token)
+    {
+        if (token.Length == 0) return token;
+        if (token.ToUpperInvariant() is "AND" or "OR" or "NOT" or "NEAR") return token;
+
+        var colon = token.IndexOf(':');
+        if (colon >= 0)
+            return token[..(colon + 1)] + PrefixWord(token[(colon + 1)..]);   // name:fly → name:fly*
+
+        return PrefixWord(token);
+    }
+
+    private static string PrefixWord(string word) =>
+        word.Length == 0 || word.EndsWith('*') || !word.Any(char.IsLetterOrDigit)
+            ? word
+            : word + "*";
+
     public async Task<ICollection<Card>> SearchAsync(string query, int limit = 100, CancellationToken ct = default)
     {
         using var conn = new SqliteConnection(string.Format(ConnectionStringTemplate, _dbPath));
         await conn.OpenAsync(ct);
 
         // FTS5 full-text search with ranking by relevance.
-        // Query is passed directly to FTS5 — supports:
+        // Bare words get prefix semantics via BuildPrefixQuery (fly → fly*); supports:
         //   - Simple terms: "lightning bolt" → matches cards containing both words in any column
         //   - Column-specific: "name:lightning" → search only Name column
         //   - Phrase: '"lightning bolt"' → exact phrase match
@@ -395,7 +453,7 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             ORDER BY rank
             LIMIT @Limit";
 
-        var rows = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = query, Limit = limit });
+        var rows = await conn.QueryAsync<MagicCardRow>(ftsSql, new { Query = BuildPrefixQuery(query), Limit = limit });
         var cards = rows.Select(MapToMagicCard).ToList();
 
         // Load card faces for all cards
@@ -568,11 +626,12 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
             }
             whereParts.Add("(" + string.Join(" OR ", rarityConditions) + ")");
         }
-        // Text search: FTS5 via CardsFts virtual table (relevance-ranked)
+        // Text search: FTS5 via CardsFts virtual table (relevance-ranked).
+        // Bare words get prefix semantics (fly → fly*, matches flying); quoted phrases stay exact.
         if (!string.IsNullOrWhiteSpace(filter.Query))
         {
             whereParts.Add(@"Id IN (SELECT CardId FROM CardsFts WHERE CardsFts MATCH @QueryFTS ORDER BY rank LIMIT 5000)");
-            parameters.Add("QueryFTS", filter.Query);
+            parameters.Add("QueryFTS", BuildPrefixQuery(filter.Query));
         }
         // Type filters: multiple values combined as OR (item1 OR item2 OR ...)
         if (filter.TypeFilters != null && filter.TypeFilters.Count > 0)
