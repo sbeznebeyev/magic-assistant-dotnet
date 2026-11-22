@@ -12,10 +12,17 @@
     flex: 1 1 0;
     min-height: 0;
     overflow-y: auto;
+    /* Horizontal scroll instead of squeezing: when the right panel steals width the table
+       keeps its natural layout (min-width below) and a slider appears. */
+    overflow-x: auto;
 }
 
 .card-table {
     width: 100%;
+    /* Fixed layout: columns obey the declared default widths below; the table never squeezes
+       past 860px — narrower container means horizontal scroll, not compression. */
+    min-width: 860px;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 13px;
     table-layout: auto;
@@ -192,18 +199,20 @@ tr:hover .count-btn,
     user-select: none;
 }
 
-.col-total  { width: 1%; min-width: 44px; white-space: nowrap; text-align: center; color: #666; }
+.col-total  { width: 56px; text-align: center; color: #666; }
 
 /* Locations multi-chip mode: the same slot as Total, but node names — they can be long,
    so the cell truncates with an ellipsis and the tooltip (title) carries the full list */
-.col-location { min-width: 90px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; text-align: left; color: #b09aa5; }
-.col-num    { width: 1%; white-space: nowrap; text-align: right; color: #666; }
-.col-name   { width: 50%; }
-.col-cost   { width: 1%; white-space: nowrap; }
-.col-type   { width: 1%; white-space: nowrap; }
-.col-set    { width: 1%; white-space: nowrap; }
-.col-rarity { width: 1%; white-space: nowrap; }
-.col-cmc    { width: 1%; white-space: nowrap; text-align: center; font-size: 15px}
+.col-location { width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: #b09aa5; }
+.col-num    { width: 40px; text-align: right; color: #666; }
+/* Name is the flexible column: takes whatever width is left, wraps long names. */
+.col-name   { width: auto; }
+.col-cost   { width: 110px; }
+.col-type   { width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-set    { width: 60px; }
+.col-rarity { width: 70px; }
+.col-cmc    { width: 44px; text-align: center; font-size: 15px; }
+.col-relevance { width: 90px; }
 
 .card-name {
     font-weight: 500;
