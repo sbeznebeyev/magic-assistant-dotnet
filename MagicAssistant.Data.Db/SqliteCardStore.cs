@@ -874,28 +874,19 @@ public class SqliteCardStore : IDbCardStore, IAsyncDisposable
 
         var whereClause = whereParts.Count > 0 ? "WHERE " + string.Join(" AND ", whereParts) : "";
 
-        // Validate sort field. Relevance is only meaningful with an active search — without a
-        // query it degrades to Name rather than ordering by a non-existent column.
+        // Validate sort field — unknown fields (including stale saved settings) degrade to Name.
         var allowedSortFields = new[] { CardListFilter.SortFields.Name, CardListFilter.SortFields.CmcNumber,
-            CardListFilter.SortFields.Type, CardListFilter.SortFields.SetCode, CardListFilter.SortFields.Rarity,
-            CardListFilter.SortFields.Relevance };
+            CardListFilter.SortFields.Type, CardListFilter.SortFields.SetCode, CardListFilter.SortFields.Rarity };
         var sortField = allowedSortFields.Contains(filter.SortField, StringComparer.OrdinalIgnoreCase)
             ? filter.SortField : CardListFilter.SortFields.Name;
-        var isRelevance = useFts
-            && string.Equals(sortField, CardListFilter.SortFields.Relevance, StringComparison.OrdinalIgnoreCase);
-        if (!isRelevance && string.Equals(sortField, CardListFilter.SortFields.Relevance, StringComparison.OrdinalIgnoreCase))
-            sortField = CardListFilter.SortFields.Name;
 
         // Count query
         var countSql = $"SELECT COUNT(*) {fromClause} {whereClause}";
         var totalCount = await conn.QuerySingleAsync<int>(countSql, parameters);
 
-        // Data query with sorting and pagination. Relevance = FTS5 rank (best first — the
-        // SortAsc toggle is meaningless for it, so it is deliberately ignored).
+        // Data query with sorting and pagination.
         var sortDirection = filter.SortAsc ? "ASC" : "DESC";
-        var orderBy = isRelevance
-            ? "ORDER BY (SELECT rank FROM fts_hits WHERE CardRowId = Cards.rowid) ASC"
-            : $"ORDER BY [{sortField}] {sortDirection}";
+        var orderBy = $"ORDER BY [{sortField}] {sortDirection}";
         var dataSql = $@"
             SELECT Cards.* {fromClause}
             {whereClause}

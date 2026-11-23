@@ -312,9 +312,10 @@
     background: #2d2d2d;
     color: #ccc;
     border: 1px solid #555;
-    padding: 3px 26px 3px 8px;
+    /* Same metrics as the sidebar's sets filter (4px/8px, 14px); right inset keeps room for ✕. */
+    padding: 4px 26px 4px 8px;
     border-radius: 3px;
-    font-size: 15px;
+    font-size: 14px;
     box-sizing: border-box;
 }
 

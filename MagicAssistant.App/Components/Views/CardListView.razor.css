@@ -19,13 +19,11 @@
 
 .card-table {
     width: 100%;
-    /* Fixed layout: columns obey the declared default widths below; the table never squeezes
-       past 860px — narrower container means horizontal scroll, not compression. */
-    min-width: 860px;
+    /* Fixed layout: columns obey the declared default widths below. The min-width floor is set
+       inline from C# (TableMinWidth) — it depends on which conditional columns are rendered. */
     table-layout: fixed;
     border-collapse: collapse;
     font-size: 13px;
-    table-layout: auto;
 }
 
 .card-table thead th {
@@ -39,6 +37,8 @@
     letter-spacing: 0.5px;
     padding: 6px 8px;
     text-align: left;
+    vertical-align: middle;  /* one baseline for all headers — no up/down jumps */
+    white-space: nowrap;     /* headers never wrap onto a second line */
     border-bottom: 1px solid #3c3c3c;
     user-select: none;
 }
@@ -120,6 +120,12 @@
     color: #eee;
 }
 
+/* Total = 0: − is invisible and unclickable, but its slot stays — + holds its position. */
+.count-btn-invisible {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 /* Row action badges — gold capsules (pill border, dark gold-tinted ground, glowing on hover).
    Revealed on row hover / selection, as before. */
 .edit-btn,
@@ -199,20 +205,24 @@ tr:hover .count-btn,
     user-select: none;
 }
 
-.col-total  { width: 56px; text-align: center; color: #666; }
+.col-total  { width: 80px; text-align: center; color: #666; }
+/* Fixed layout clips the cell box, not overflowing inline content — the −/+ group
+   (~72px) must never paint over the neighbouring Name cell, and Name must never paint back. */
+.card-table td.col-total,
+.card-table td.col-name { overflow: hidden; }
 
 /* Locations multi-chip mode: the same slot as Total, but node names — they can be long,
    so the cell truncates with an ellipsis and the tooltip (title) carries the full list */
-.col-location { width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: #b09aa5; }
-.col-num    { width: 40px; text-align: right; color: #666; }
-/* Name is the flexible column: takes whatever width is left, wraps long names. */
+/* Width is inline from C# (LocationColWidth — sized to the longest name on the page). */
+.col-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: #b09aa5; }
+/* Name is the flexible column: takes whatever width is left, wraps long names.
+   Its 350px floor is enforced by the table's inline min-width (see TableMinWidth). */
 .col-name   { width: auto; }
 .col-cost   { width: 110px; }
 .col-type   { width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-set    { width: 60px; }
-.col-rarity { width: 70px; }
-.col-cmc    { width: 44px; text-align: center; font-size: 15px; }
-.col-relevance { width: 90px; }
+.col-rarity { width: 80px; }
+.col-cmc    { width: 56px; text-align: center; font-size: 15px; }
 
 .card-name {
     font-weight: 500;

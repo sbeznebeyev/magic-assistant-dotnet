@@ -106,8 +106,6 @@ public class CardListFilter
         public const string Type = "Type";
         public const string SetCode = "SetCode";
         public const string Rarity = "Rarity";
-        /// <summary>FTS5 relevance rank — only meaningful together with a non-empty Query.</summary>
-        public const string Relevance = "Relevance";
     }
 }
 

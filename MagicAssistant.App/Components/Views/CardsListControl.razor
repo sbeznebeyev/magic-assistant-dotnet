@@ -93,7 +93,7 @@
                 <div class="name-filter-area">
                     <div class="name-filter-wrapper">
                         <input value="@_nameInputBuffer" @oninput="OnNameFilterInput" @onkeypress="OnNameFilterKey"
-                               placeholder="Name... (3+)"
+                               placeholder="Filter cards..."
                                class="name-filter-input" />
                         @if (!string.IsNullOrEmpty(_nameInputBuffer))
                         {
@@ -196,7 +196,6 @@
                                   OnNextPage="NextPage"
                                   SortField="@FilterViewModel.SortField"
                                   SortAsc="@FilterViewModel.SortAsc"
-                                  HasSearchQuery="@(!string.IsNullOrWhiteSpace(FilterViewModel.SearchQuery))"
                                   OnSortColumnClicked="ToggleSort" />
                 }
             }
@@ -1144,13 +1143,7 @@
     // ── Sort — through single channel ────────────────────
     private void ToggleSort(string field)
     {
-        // Relevance has one meaningful order (best first) — the store ignores SortAsc for it; no
-        // ascending flip here, so the header arrow never lies about a direction that isn't applied.
-        if (field == CardListFilter.SortFields.Relevance)
-        {
-            FilterViewModel.SortField = field;
-        }
-        else if (FilterViewModel.SortField == field)
+        if (FilterViewModel.SortField == field)
             FilterViewModel.SortAsc = !FilterViewModel.SortAsc;
         else
         {

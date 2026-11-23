@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace MagicAssistant.Tests.DataDb;
 
 /// <summary>
-/// FTS5 reliability: diacritic-insensitive search, syntax-error fallback, relevance ordering.
+/// FTS5 reliability: diacritic-insensitive search, syntax-error fallback.
 /// </summary>
 [TestFixture]
 public class FtsReliabilityTests
@@ -77,44 +77,5 @@ public class FtsReliabilityTests
         var result = await Search("color:red bolt");
 
         Assert.That(result.Cards, Is.Not.Null);
-    }
-
-    [Test]
-    public async Task Relevance_BetterMatchRanksFirst()
-    {
-        var weak = Guid.NewGuid();
-        var strong = Guid.NewGuid();
-        await _store.AddAllAsync(new[]
-        {
-            new Card { Id = weak, Name = "Bolt", ManaCost = "{R}", Type = "Instant", SetCode = "m19", Rarity = "Common", OracleText = "Deal 3 damage. Lightning flavor." },
-            new Card { Id = strong, Name = "Lightning Bolt of Lightning", ManaCost = "{R}", Type = "Lightning Instant", SetCode = "m19", Rarity = "Common" },
-        });
-
-        var result = await _store.GetPagedAsync(new CardListFilter
-        {
-            Page = 1, PageSize = 50, Query = "lightning", SortField = CardListFilter.SortFields.Relevance,
-        });
-
-        Assert.That(result.Cards.First().Id, Is.EqualTo(strong),
-            "card with more lightning occurrences must rank above the single mention");
-    }
-
-    [Test]
-    public async Task Relevance_WithoutQuery_DegradesToName()
-    {
-        var b = Guid.NewGuid();
-        var a = Guid.NewGuid();
-        await _store.AddAllAsync(new[]
-        {
-            new Card { Id = b, Name = "Bolt", ManaCost = "{R}", Type = "Instant", SetCode = "m19", Rarity = "Common" },
-            new Card { Id = a, Name = "Ancestral Recall", ManaCost = "{U}", Type = "Instant", SetCode = "m19", Rarity = "Common" },
-        });
-
-        var result = await _store.GetPagedAsync(new CardListFilter
-        {
-            Page = 1, PageSize = 50, SortField = CardListFilter.SortFields.Relevance, SortAsc = true,
-        });
-
-        Assert.That(result.Cards.First().Id, Is.EqualTo(a), "no query → alphabetical, no crash");
     }
 }

@@ -8,16 +8,12 @@
 
 <div class="card-list-view">
     <div class="table-wrapper">
-        <table class="card-table">
+        <table class="card-table" style="min-width:@(TableMinWidth)px">
             <thead>
                 <tr>
-                    @if (IsDeckMode || PinnedCounts != null || LocationNames != null)
+                    @if (IsDeckMode || PinnedCounts != null)
                     {
-                        <th class="col-total">@(LocationNames != null ? "Location" : "Total")</th>
-                    }
-                    @if (!IsDeckMode && LocationNames == null)
-                    {
-                        <th class="col-num">#</th>
+                        <th class="col-total">Total</th>
                     }
                     @* Sortable headers: click = switch sort to this column (ascending if new),
                        repeat click on the same header toggles the direction. *@
@@ -32,11 +28,10 @@
                         @onclick="@(() => SortHeader(CardListFilter.SortFields.SetCode))">Set<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.SetCode)</span></th>
                     <th class="col-type sortable @(IsSorted(CardListFilter.SortFields.Type) ? "sorted" : "")"
                         @onclick="@(() => SortHeader(CardListFilter.SortFields.Type))">Type<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Type)</span></th>
-                    @* Relevance appears only while a search is active — it is the FTS5 rank order. *@
-                    @if (HasSearchQuery)
+                    @* Location rides the far right — "where is this card from" reads last. *@
+                    @if (LocationNames != null)
                     {
-                        <th class="col-relevance sortable @(IsSorted(CardListFilter.SortFields.Relevance) ? "sorted" : "")"
-                            @onclick="@(() => SortHeader(CardListFilter.SortFields.Relevance))">Relevance<span class="sort-arrow">@SortIndicator(CardListFilter.SortFields.Relevance)</span></th>
+                        <th class="col-total col-location" style="width:@(LocationColWidth)px">Location</th>
                     }
                 </tr>
             </thead>
@@ -79,11 +74,11 @@
                                 @if (!PinnedLocked)
                                 {
                                     <div class="count-control">
-                                        @if (pinnedTotal > 0)
-                                        {
-                                            <button class="count-btn" @onclick:stopPropagation="true"
-                                                    @onclick="() => RemoveFromFixed(card)" title="Remove from fixed collection">−</button>
-                                        }
+                                        @* − keeps its 24px slot when total is 0 (visibility, not
+                                           removal) so + never shifts horizontally *@
+                                        <button class="count-btn @(pinnedTotal == 0 ? "count-btn-invisible" : "")"
+                                                @onclick:stopPropagation="true"
+                                                @onclick="() => RemoveFromFixed(card)" title="Remove from fixed collection">−</button>
                                         <span class="count-value">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</span>
                                         <button class="count-btn" @onclick:stopPropagation="true"
                                                 @onclick="() => AddToFixed(card)" title="Add to fixed collection">+</button>
@@ -94,18 +89,6 @@
                                     <span class="count-value">@(pinnedTotal > 0 ? pinnedTotal.ToString() : "")</span>
                                 }
                             </td>
-                        }
-                        else if (LocationNames != null)
-                        {
-                            @* Locations multi-chip / all-locations: which selected nodes the card lives in —
-                               "where is this card from"; a card in two decks shows both names. No −/+ here:
-                               the row has no single node to aim them at *@
-                            var from = LocationNames.GetValueOrDefault(card.Id, "");
-                            <td class="col-total col-location" title="@from">@from</td>
-                        }
-                        @if (!IsDeckMode && LocationNames == null)
-                        {
-                            <td class="col-num">@((CurrentPage - 1) * PageSize + i + 1)</td>
                         }
                         <td class="col-name">
                             <span class="card-name">@(card.PrintedName ?? card.Name)</span>
@@ -139,6 +122,14 @@
                         </td>
                         <td class="col-set">@(card.SetCode ?? "—")</td>
                         <td class="col-type" title="@(card.PrintedTypeLine ?? card.Type)">@Truncate(card.PrintedTypeLine ?? card.Type, 28)</td>
+                        @if (LocationNames != null)
+                        {
+                            @* Locations multi-chip / all-locations: which selected nodes the card lives in —
+                               "where is this card from"; a card in two decks shows both names. No −/+ here:
+                               the row has no single node to aim them at *@
+                            var from = LocationNames.GetValueOrDefault(card.Id, "");
+                            <td class="col-total col-location" title="@from">@from</td>
+                        }
                     </tr>
                 }
             </tbody>
@@ -230,8 +221,32 @@
     /// <summary>Active sort field (internal name from CardListFilter.SortFields) — the matching header shows the indicator.</summary>
     [Parameter] public string SortField { get; set; } = "";
 
-    /// <summary>True while an FTS search is active — shows the Relevance sort column.</summary>
-    [Parameter] public bool HasSearchQuery { get; set; }
+    /// <summary>Location column width sized to the longest location name on the current page
+    /// (13px font ≈ 7px/char + cell padding), clamped 150–420px. Fixed table layout ignores
+    /// content, so the width must be declared explicitly on the header cell.</summary>
+    private int LocationColWidth
+    {
+        get
+        {
+            if (LocationNames is null) return 150;
+            var maxLen = 0;
+            foreach (var card in Cards)
+            {
+                var len = LocationNames.GetValueOrDefault(card.Id, "").Length;
+                if (len > maxLen) maxLen = len;
+            }
+            return Math.Clamp(16 + maxLen * 7, 150, 420);
+        }
+    }
+
+    /// <summary>Table floor so Name never squeezes below 350px: sum of the fixed column widths
+    /// (CMC 56 + Cost 110 + Rarity 80 + Set 60 + Type 240) + Name 350, plus the conditional
+    /// columns actually rendered (Total 80 / Location = LocationColWidth). Narrower container
+    /// → horizontal scroll in .table-wrapper, not compression.</summary>
+    private int TableMinWidth =>
+        56 + 110 + 80 + 60 + 240 + 350
+        + ((IsDeckMode || PinnedCounts != null) ? 80 : 0)
+        + (LocationNames != null ? LocationColWidth : 0);
 
     /// <summary>Sort direction for the active field (true = ascending).</summary>
     [Parameter] public bool SortAsc { get; set; } = true;
