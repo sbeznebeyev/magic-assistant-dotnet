@@ -71,7 +71,10 @@
             {
                 var deck = await DeckManagement!.GetByIdAsync(DeckId!.Value);
                 _deckName = deck?.Name ?? "Unknown Deck";
-                _fileName = $"{_deckName.Replace(" ", "_")}.json";
+                // Naming template: <coll name>_<count>.json — count is the collection's card
+                // count (the same number DeckNavigator shows right of the name; GetNodeById
+                // attaches it via SqliteCollectionStore.AttachCardCountsAsync).
+                _fileName = $"{_deckName.Replace(" ", "_")}_{deck?.CardCount ?? 0}.json";
             }
             catch (Exception ex)
             {
